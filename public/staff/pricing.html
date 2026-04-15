@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NORP Pricing & Market Tracker</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-height:100vh;padding:0;font-size:17px}
+
+/* Nav */
+.nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:12px 32px;display:flex;gap:24px;align-items:center;position:sticky;top:0;z-index:100}
+.nav a{color:#6a6858;text-decoration:none;font-size:14px;font-weight:500;padding:6px 12px;border-radius:6px;transition:all .2s}
+.nav a:hover{color:#e4e2d8;background:#1a1d24}
+.nav a.active{color:#5DCAA5;background:#0a1a15;border:1px solid #1a3a2a}
+.nav-brand{font-weight:700;color:#f5f3e8;font-size:16px;margin-right:auto}
+
+.content{padding:32px}
+
+h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:#f5f3e8}
+.subtitle{font-size:18px;color:#8a8878;margin-bottom:8px;font-family:'Space Mono',monospace}
+.last-updated{font-size:12px;color:#4a4843;font-family:'Space Mono',monospace;margin-bottom:32px}
+
+/* Signal cards */
+.signal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin-bottom:32px}
+.signal-card{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:20px;position:relative;overflow:hidden}
+.signal-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
+.signal-card.green::before{background:#5cba5c}
+.signal-card.yellow::before{background:#F2A623}
+.signal-card.red::before{background:#E8593C}
+
+.signal-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-family:'Space Mono',monospace}
+.signal-card.green .signal-label{color:#5cba5c}
+.signal-card.yellow .signal-label{color:#F2A623}
+.signal-card.red .signal-label{color:#E8593C}
+
+.signal-value{font-size:28px;font-weight:700;color:#f5f3e8;margin-bottom:4px;font-family:'Space Mono',monospace}
+.signal-detail{font-size:13px;color:#8a8878;line-height:1.5}
+.signal-trend{font-size:13px;font-weight:600;margin-top:8px}
+.signal-card.green .signal-trend{color:#5cba5c}
+.signal-card.yellow .signal-trend{color:#F2A623}
+.signal-card.red .signal-trend{color:#E8593C}
+
+.signal-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:0.5px}
+.badge-green{background:#1a3a1a;color:#5cba5c;border:1px solid #2a5a2a}
+.badge-yellow{background:#3a2a1a;color:#F2A623;border:1px solid #5a3a2a}
+.badge-red{background:#3a1a1a;color:#E8593C;border:1px solid #5a2a2a}
+
+/* Sections */
+.section{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden}
+.section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
+.section.supply::before{background:linear-gradient(90deg,#E8593C,#F2A623)}
+.section.pricing::before{background:linear-gradient(90deg,#7F77DD,#5DCAA5)}
+.section.market::before{background:linear-gradient(90deg,#3B8BD4,#97C459)}
+.section.tariff::before{background:linear-gradient(90deg,#ED93B1,#E8593C)}
+.section.action::before{background:linear-gradient(90deg,#5DCAA5,#97C459)}
+
+.section-title{font-size:20px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* Data rows */
+.data-row{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;margin-bottom:8px;font-size:14px}
+.data-row:hover{border-color:#4a4c53}
+.data-label{color:#8a8878;font-weight:500}
+.data-value{font-family:'Space Mono',monospace;color:#e4e2d8;font-weight:600}
+.data-change{font-size:12px;margin-left:8px}
+.data-change.up{color:#E8593C}
+.data-change.down{color:#5cba5c}
+.data-change.flat{color:#8a8878}
+
+/* Alert boxes */
+.alert{padding:14px 16px;border-radius:8px;margin-bottom:12px;font-size:14px;line-height:1.6}
+.alert-red{background:#1a0a0a;border:1px solid #3a1a1a;color:#e4a0a0}
+.alert-yellow{background:#1a1a0a;border:1px solid #3a3a1a;color:#e4d4a0}
+.alert-green{background:#0a1a0a;border:1px solid #1a3a1a;color:#a0e4a0}
+.alert strong{display:block;margin-bottom:4px}
+
+/* Action items */
+.action-item{display:flex;align-items:flex-start;gap:12px;padding:12px;background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;margin-bottom:8px}
+.action-priority{flex-shrink:0;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.action-priority.urgent{background:#3a1a1a;color:#E8593C;border:1px solid #5a2a2a}
+.action-priority.soon{background:#3a2a1a;color:#F2A623;border:1px solid #5a3a2a}
+.action-priority.plan{background:#1a3a1a;color:#5cba5c;border:1px solid #2a5a2a}
+.action-text{flex:1;font-size:14px;line-height:1.5}
+.action-text strong{color:#e4e2d8}
+.action-text span{color:#8a8878}
+
+.note{font-size:13px;color:#6a6858;font-style:italic;margin-top:8px}
+
+/* Legend */
+.legend-bar{display:flex;gap:20px;margin-bottom:24px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:13px;color:#8a8878}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+.legend-dot.g{background:#5cba5c}
+.legend-dot.y{background:#F2A623}
+.legend-dot.r{background:#E8593C}
+
+@media(max-width:768px){.signal-grid{grid-template-columns:1fr}.content{padding:16px}.nav{padding:12px 16px;gap:12px;flex-wrap:wrap}}
+</style>
+</head>
+<body>
+
+<div class="nav">
+<span class="nav-brand">NORP Staff Tools</span>
+<a href="/staff">Operations Guide</a>
+<a href="/staff/pricing" class="active">Pricing & Market</a>
+</div>
+
+<div class="content">
+
+<h1>Pricing & Market Tracker</h1>
+<div class="subtitle">Industry pricing intelligence for New Orleans Record Press</div>
+<div class="last-updated" id="lastUpdated">Last updated: April 15, 2026 · Updated daily at 2:00 AM CDT</div>
+
+<div class="legend-bar">
+<div class="legend-item"><div class="legend-dot g"></div> Favorable — good time to buy / lock in</div>
+<div class="legend-item"><div class="legend-dot y"></div> Caution — prices rising or uncertain</div>
+<div class="legend-item"><div class="legend-dot r"></div> Alert — prices high / supply tight / act now</div>
+</div>
+
+<!-- SIGNAL CARDS -->
+<div class="signal-grid">
+
+<div class="signal-card yellow">
+<div class="signal-label">PVC Compound (US Domestic)</div>
+<div class="signal-value">~$0.52/lb</div>
+<div class="signal-detail">~$1,145/metric ton · US market price<br>Up ~3¢/lb in April. Suppliers pushed for 5¢/lb.</div>
+<div class="signal-trend">↑ Rising — was at cycle lows Q4 2025</div>
+</div>
+
+<div class="signal-card red">
+<div class="signal-label">PVC Import Risk</div>
+<div class="signal-value">ELEVATED</div>
+<div class="signal-detail">China canceled 13% PVC export rebate (April 1).<br>INEOS closing 2 German PVC plants. Strait of Hormuz disruption.</div>
+<div class="signal-trend">⚠ Multiple supply shocks simultaneously</div>
+</div>
+
+<div class="signal-card yellow">
+<div class="signal-label">12" LP Per-Unit (Industry Avg)</div>
+<div class="signal-value">$3.50–$6.50</div>
+<div class="signal-detail">Standard black, 100–500 unit runs.<br>Higher for colored, gatefold, special packaging.</div>
+<div class="signal-trend">→ Stable — capacity surplus keeping prices competitive</div>
+</div>
+
+<div class="signal-card green">
+<div class="signal-label">Retail Vinyl Pricing</div>
+<div class="signal-value">$35–$45</div>
+<div class="signal-detail">Standard new release (was $25–$35). Limited/colored: $55–$75+.<br>25–35% increase absorbed by consumers.</div>
+<div class="signal-trend">↑ Consumers paying more — margin opportunity</div>
+</div>
+
+<div class="signal-card green">
+<div class="signal-label">Plant Capacity</div>
+<div class="signal-value">SURPLUS</div>
+<div class="signal-detail">US capacity now exceeds demand. Plants dropping shifts.<br>Turnaround: 6–8 wks (boutique), 12–20 wks (standard).</div>
+<div class="signal-trend">↓ Buyers market — compete on speed & quality</div>
+</div>
+
+<div class="signal-card red">
+<div class="signal-label">Tariff Asymmetry</div>
+<div class="signal-value">UNFAVORABLE</div>
+<div class="signal-detail">Finished records EXEMPT from tariffs.<br>Raw materials (PVC, nickel, paperboard) TAXED.<br>Foreign plants have lower input costs than US plants.</div>
+<div class="signal-trend">⚠ VRMA lobbying Washington — join effort</div>
+</div>
+
+</div>
+
+<!-- RAW MATERIAL PRICING -->
+<div class="section pricing">
+<div class="section-title"><span class="dot" style="background:#7F77DD"></span> Raw Material Pricing</div>
+
+<div class="data-row">
+<span class="data-label">PVC compound (US domestic)</span>
+<span><span class="data-value">~$0.52/lb</span><span class="data-change up">↑ +3¢ Apr</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">PVC compound (per metric ton)</span>
+<span><span class="data-value">~$1,145/MT</span><span class="data-change up">↑ recovering</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">PVC Q4 2025 low (cycle bottom)</span>
+<span><span class="data-value">~$643/MT</span><span class="data-change flat">— baseline</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">PVC Q4 2024 (prior year)</span>
+<span><span class="data-value">~$697/MT</span><span class="data-change flat">— reference</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">Natural gas (Gulf region)</span>
+<span><span class="data-value">Monitor</span><span class="data-change yellow">— affects boiler cost</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">Nickel (electroplating)</span>
+<span><span class="data-value">Tariffed</span><span class="data-change up">↑ elevated import cost</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">Lacquer discs (imported)</span>
+<span><span class="data-value">No US source</span><span class="data-change up">↑ supply risk</span></span>
+</div>
+
+<div class="note">PVC prices were at cycle lows Q4 2025/Q1 2026. Now recovering. Lock in contracts while still favorable.</div>
+</div>
+
+<!-- PRESSING COST BENCHMARKS -->
+<div class="section market">
+<div class="section-title"><span class="dot" style="background:#3B8BD4"></span> Pressing Cost Benchmarks (Industry Averages)</div>
+
+<div class="data-row">
+<span class="data-label">12" LP — 100 units (minimum run)</span>
+<span><span class="data-value">$5.50–$6.50/unit</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">12" LP — 300 units</span>
+<span><span class="data-value">$4.00–$5.50/unit</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">12" LP — 500 units</span>
+<span><span class="data-value">$3.50–$4.50/unit</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">12" LP — 1,000+ units</span>
+<span><span class="data-value">$2.50–$3.50/unit</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">7" single — 100 units</span>
+<span><span class="data-value">$3.50–$4.50/unit</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">Colored vinyl premium</span>
+<span><span class="data-value">+$0.50–$1.50/unit</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">Gatefold jacket</span>
+<span><span class="data-value">+$1.00–$2.00/unit</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">Test pressing (5 copies)</span>
+<span><span class="data-value">$75–$150</span></span>
+</div>
+
+<div class="note">Industry averages from publicly listed plant pricing (2025–2026). Actual NORP pricing may vary. Capacity surplus is putting downward pressure on per-unit costs at competitors.</div>
+</div>
+
+<!-- SUPPLY CHAIN ALERTS -->
+<div class="section supply">
+<div class="section-title"><span class="dot" style="background:#E8593C"></span> Supply Chain Alerts</div>
+
+<div class="alert alert-red">
+<strong>🔴 China PVC Export Rebate Canceled — April 1, 2026</strong>
+China eliminated its 13% PVC export rebate. Chinese PVC to US is now more expensive. Plants relying on imported Chinese compound will see cost increases.
+</div>
+
+<div class="alert alert-red">
+<strong>🔴 INEOS Closing 2 German PVC Plants</strong>
+Citing energy costs and lack of tariff protection. Reduces European supply — may push EU buyers toward US/Asian suppliers, tightening global availability.
+</div>
+
+<div class="alert alert-yellow">
+<strong>🟡 Strait of Hormuz Disruption</strong>
+US-Israel-Iran conflict disrupting shipping. ICIS reports Middle East petrochemical feedstocks tightening. Indirect impact on PVC precursors.
+</div>
+
+<div class="alert alert-yellow">
+<strong>🟡 Westlake Fuel Surcharges — April 1, 2026</strong>
+Westlake Chemicals (NORP's primary PVC supplier) implementing fuel surcharges on all shipments. Adds to delivered cost.
+</div>
+
+<div class="alert alert-green">
+<strong>🟢 US Domestic Supply Remains Adequate</strong>
+Despite global disruptions, US domestic PVC production is stable. Westlake has 4 Mississippi plants + Matamoros. Housing weakness keeping industrial demand low = more supply available for specialty uses like vinyl records.
+</div>
+</div>
+
+<!-- TARIFF IMPACT -->
+<div class="section tariff">
+<div class="section-title"><span class="dot" style="background:#ED93B1"></span> Tariff Impact on NORP</div>
+
+<div class="alert alert-red">
+<strong>⚠ The Core Problem</strong>
+Finished vinyl records are <strong>EXEMPT</strong> from US tariffs (protected as "informational materials").<br>
+Raw materials to <strong>MAKE</strong> records (PVC, nickel, paperboard, steel) are <strong>SUBJECT to tariffs</strong>.<br><br>
+This means a record pressed in Germany or Czech Republic has <strong>lower input costs</strong> than one pressed in the US. GZ Media (Czech) and Optimal Media (Germany) benefit directly from this asymmetry.
+</div>
+
+<div class="data-row">
+<span class="data-label">Finished vinyl records (import)</span>
+<span><span class="data-value">0% tariff</span><span class="data-change down"> exempt</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">PVC compound (import)</span>
+<span><span class="data-value">Elevated tariff</span><span class="data-change up">↑ cost to NORP</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">Nickel for electroplating</span>
+<span><span class="data-value">Elevated tariff</span><span class="data-change up">↑ cost to NORP</span></span>
+</div>
+<div class="data-row">
+<span class="data-label">Paperboard (jackets/sleeves)</span>
+<span><span class="data-value">Tariffed</span><span class="data-change up">↑ packaging cost</span></span>
+</div>
+
+<div class="note">VRMA is actively lobbying Washington to fix this asymmetry. NORP should participate in advocacy. Contact: VRMA board via Making Vinyl conference.</div>
+</div>
+
+<!-- COMPETITIVE INTELLIGENCE -->
+<div class="section market">
+<div class="section-title"><span class="dot" style="background:#97C459"></span> Competitive Landscape</div>
+
+<div class="alert alert-yellow">
+<strong>🟡 Capacity Surplus = Price War Risk</strong>
+US pressing capacity now exceeds demand. Plants dropping to 1–2 shifts. "Dead air" discounts appearing. Compete on speed, quality, and service — not just price.
+</div>
+
+<div class="alert alert-green">
+<strong>🟢 Softwax (Philadelphia) CLOSED — Oct 2024</strong>
+Bankruptcy + equipment failure. Their clients need a new plant. Opportunity for NORP to pick up displaced indie labels.
+</div>
+
+<div class="alert alert-green">
+<strong>🟢 Classic City Vinyl Works (Athens, GA) — CLOSED</strong>
+Left a gap in the Southeast. Atlanta labels and Nashville independents looking for alternatives. NORP is well-positioned geographically.
+</div>
+
+<div class="alert alert-yellow">
+<strong>🟡 GZ Media Expanding US Presence</strong>
+World's largest presser (Czech Republic) is acquiring US operations. Using inter-company structures to route materials and bypass tariffs. Watch for further acquisitions.
+</div>
+</div>
+
+<!-- ACTION ITEMS -->
+<div class="section action">
+<div class="section-title"><span class="dot" style="background:#5DCAA5"></span> Action Items</div>
+
+<div class="action-item">
+<div class="action-priority urgent">!</div>
+<div class="action-text"><strong>Lock in PVC supply contracts with Westlake</strong><br><span>Prices recovering from cycle lows. Every month of delay = higher cost. Push existing rep for volume pricing. Check all 4 MS plants + Matamoros for stock.</span></div>
+</div>
+
+<div class="action-item">
+<div class="action-priority urgent">!</div>
+<div class="action-text"><strong>Register for Making Vinyl USA</strong><br><span>May 27–29, Westin Old Town Alexandria, VA. Plant tour at Furnace Record Pressing. Networking + VRMA advocacy. Register now.</span></div>
+</div>
+
+<div class="action-item">
+<div class="action-priority soon">→</div>
+<div class="action-text"><strong>RSD Black Friday 2026 outreach</strong><br><span>Labels plan June/July. Target Atlanta + Nashville indie labels displaced by Classic City Vinyl Works closure. Start conversations now.</span></div>
+</div>
+
+<div class="action-item">
+<div class="action-priority soon">→</div>
+<div class="action-text"><strong>Join VRMA tariff advocacy</strong><br><span>Raw material tariffs hurt US plants while finished imports enter free. VRMA is lobbying Washington. NORP was filmed for VRMA 2025 — leverage that relationship.</span></div>
+</div>
+
+<div class="action-item">
+<div class="action-priority plan">○</div>
+<div class="action-text"><strong>Price positioned against surplus capacity</strong><br><span>Competitors offering "dead air" discounts. Don't race to the bottom. Compete on turnaround speed (6–8 weeks), colored vinyl capability, and full-service (cut → plate → press → package).</span></div>
+</div>
+
+</div>
+
+<div style="text-align:center;padding:24px 0;font-size:11px;color:#3a3a33;font-family:'Space Mono',monospace">
+New Orleans Record Press LLC | Pricing & Market Tracker | Updated Daily<br>
+Confidential — Internal use only
+</div>
+
+</div>
+</body>
+</html>
