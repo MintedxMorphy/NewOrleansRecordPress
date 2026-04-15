@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NORP Pressing Plant Directory</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-height:100vh;padding:0;font-size:17px}
+.nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:16px 32px;display:flex;gap:16px;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;flex-wrap:wrap}
+.nav a{color:#6a6858;text-decoration:none;font-size:18px;font-weight:600;padding:10px 20px;border-radius:8px;transition:all .2s}
+.nav a:hover{color:#e4e2d8;background:#1a1d24}
+.nav a.active{color:#5DCAA5;background:#0a1a15;border:1px solid #1a3a2a}
+.content{padding:32px}
+h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:#f5f3e8}
+.subtitle{font-size:18px;color:#8a8878;margin-bottom:32px;font-family:'Space Mono',monospace}
+.section{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden}
+.section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
+.section.se::before{background:linear-gradient(90deg,#E8593C,#F2A623)}
+.section.ne::before{background:linear-gradient(90deg,#3B8BD4,#AFA9EC)}
+.section.mw::before{background:linear-gradient(90deg,#97C459,#5DCAA5)}
+.section.sw::before{background:linear-gradient(90deg,#EF9F27,#F0997B)}
+.section.west::before{background:linear-gradient(90deg,#AFA9EC,#7F77DD)}
+.section.canada::before{background:linear-gradient(90deg,#ED93B1,#E8593C)}
+.section.mexico::before{background:linear-gradient(90deg,#D85A30,#F2A623)}
+.section.latam::before{background:linear-gradient(90deg,#5DCAA5,#97C459)}
+.section.carib::before{background:linear-gradient(90deg,#EF9F27,#E8593C)}
+.section-title{font-size:20px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.equip{display:flex;align-items:center;gap:12px;padding:10px 12px;background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;margin-bottom:8px;font-size:13px;transition:border-color .2s}
+.equip:hover{border-color:#4a4c53}
+.equip .icon{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.equip .info{flex:1;min-width:0}
+.equip .name{font-weight:500;font-size:17px;color:#e4e2d8}
+.equip .detail{font-size:14px;color:#6a6858;font-family:'Space Mono',monospace;line-height:1.4}
+.equip .detail a{color:#5DCAA5}
+.note{font-size:13px;color:#6a6858;font-style:italic;margin-top:8px}
+.plant-count{font-size:13px;color:#5DCAA5;font-family:'Space Mono',monospace;margin-left:auto}
+@media(max-width:768px){
+.content{padding:16px}
+.nav{padding:12px 16px;gap:8px}
+.nav a{font-size:14px;padding:8px 12px}
+h1{font-size:26px}
+.subtitle{font-size:14px;margin-bottom:20px}
+.section{padding:16px}
+.section-title{font-size:17px}
+.equip{flex-wrap:wrap;gap:8px}
+.equip .name{font-size:15px}
+.equip .detail{font-size:12px;word-break:break-word}
+.equip .icon{width:30px;height:30px;font-size:14px}
+}
+</style>
+</head>
+<body>
+
+<div class="nav">
+<a href="/staff">Operations Guide</a>
+<a href="/staff/pricing">Pricing & Market</a>
+<a href="/staff/suppliers">PVC Suppliers</a>
+<a href="/staff/plants" class="active">Plant Directory</a>
+</div>
+
+<div class="content">
+
+<h1>Pressing Plant Directory</h1>
+<div class="subtitle">Vinyl record pressing plants — Americas · Plants marked * run WarmTone presses (same platform as NORP)</div>
+
+<!-- SOUTHEAST US -->
+<div class="section se">
+<div class="section-title"><span class="dot" style="background:#E8593C"></span> Southeast US <span class="plant-count">12 plants</span></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">U</div><div class="info"><div class="name">United Record Pressing</div><div class="detail">Nashville, TN | <a href="https://unitedrecordpressing.com" target="_blank">unitedrecordpressing.com</a> | Largest US plant</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">F</div><div class="info"><div class="name">Furnace Record Pressing</div><div class="detail">Fairfax, VA | <a href="https://furnacemfg.com" target="_blank">furnacemfg.com</a> | Large, 10+ presses incl WarmTone*</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">K</div><div class="info"><div class="name">Kindercore Vinyl</div><div class="detail">Athens, GA | <a href="https://kindercore.com" target="_blank">kindercore.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">E</div><div class="info"><div class="name">Echo Base</div><div class="detail">Athens, GA | <a href="https://echobase.com" target="_blank">echobase.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">C</div><div class="info"><div class="name">Citizen Vinyl</div><div class="detail">Asheville, NC | <a href="https://citizenvinyl.com" target="_blank">citizenvinyl.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">D</div><div class="info"><div class="name">Donaldson Record Pressing</div><div class="detail">Weaverville, NC | <a href="https://drpcvinyl.com" target="_blank">drpcvinyl.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">P</div><div class="info"><div class="name">Pour House Pressing</div><div class="detail">Raleigh, NC | <a href="https://pourhousepressing.com" target="_blank">pourhousepressing.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">A</div><div class="info"><div class="name">Audiodrome Record Pressing</div><div class="detail">Gainesville, FL | <a href="https://audiodromevinyl.com" target="_blank">audiodromevinyl.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">N</div><div class="info"><div class="name">New Press Vinyl</div><div class="detail">Opa-Locka, FL | <a href="https://newpressvinyl.com" target="_blank">newpressvinyl.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">S</div><div class="info"><div class="name">Sunpress Vinyl</div><div class="detail">Miami, FL | <a href="https://sunpressvinyl.com" target="_blank">sunpressvinyl.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">V</div><div class="info"><div class="name">Violet Vinyl</div><div class="detail">Daytona Beach, FL | <a href="https://violetvinyl.com" target="_blank">violetvinyl.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">B</div><div class="info"><div class="name">Blue Sprocket Pressing</div><div class="detail">Harrisonburg, VA | <a href="https://bluesprocketpressing.com" target="_blank">bluesprocketpressing.com</a></div></div></div>
+</div>
+
+<!-- NORTHEAST US -->
+<div class="section ne">
+<div class="section-title"><span class="dot" style="background:#3B8BD4"></span> Northeast US <span class="plant-count">6 plants</span></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">H</div><div class="info"><div class="name">Hellbender Vinyl</div><div class="detail">Philadelphia, PA | <a href="https://hellbenderphilly.com" target="_blank">hellbenderphilly.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">S</div><div class="info"><div class="name">Softwax Record Pressing</div><div class="detail">Philadelphia, PA | Artist-run plant | ⚠️ CLOSED (Oct 2024 — bankruptcy)</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">I</div><div class="info"><div class="name">Independent Record Pressing</div><div class="detail">Bordentown, NJ | <a href="https://independentrecordpressing.com" target="_blank">independentrecordpressing.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">B</div><div class="info"><div class="name">Brooklynphono</div><div class="detail">Brooklyn, NY | <a href="https://brooklynphono.myshopify.com" target="_blank">brooklynphono.myshopify.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">S</div><div class="info"><div class="name">Studio 4 Vinyl</div><div class="detail">Nottingham, PA | <a href="https://studio4vinyl.com" target="_blank">studio4vinyl.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">B</div><div class="info"><div class="name">Burlington Record Plant</div><div class="detail">Albany, NY | <a href="https://burlingtonrecordplant.com" target="_blank">burlingtonrecordplant.com</a></div></div></div>
+</div>
+
+<!-- MIDWEST US -->
+<div class="section mw">
+<div class="section-title"><span class="dot" style="background:#97C459"></span> Midwest US <span class="plant-count">7 plants</span></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">G</div><div class="info"><div class="name">Gotta Groove Records</div><div class="detail">Cleveland, OH | <a href="https://gottagrooverecords.com" target="_blank">gottagrooverecords.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">S</div><div class="info"><div class="name">Smashed Plastic</div><div class="detail">Chicago, IL | <a href="https://smashedplastic.com" target="_blank">smashedplastic.com</a> | WarmTone Steamless*</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">2</div><div class="info"><div class="name">2424 Vinyl Pressing</div><div class="detail">Detroit, MI | <a href="https://2424vinylpressing.com" target="_blank">2424vinylpressing.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">A</div><div class="info"><div class="name">Archer Record Pressing</div><div class="detail">Detroit, MI | <a href="https://archerrecordpressing.com" target="_blank">archerrecordpressing.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">M</div><div class="info"><div class="name">Musicol Recording</div><div class="detail">Columbus, OH | Pressing since 1971</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">O</div><div class="info"><div class="name">Outta Wax</div><div class="detail">Minneapolis, MN | Boutique, specialty</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">Q</div><div class="info"><div class="name">Quality Record Pressings</div><div class="detail">Salina, KS | <a href="https://qualityrecordpressings.com" target="_blank">qualityrecordpressings.com</a> | 13+ presses, Toolex/SMT/Finebilt</div></div></div>
+</div>
+
+<!-- SOUTH / SOUTHWEST US -->
+<div class="section sw">
+<div class="section-title"><span class="dot" style="background:#EF9F27"></span> South / Southwest US <span class="plant-count">3 plants</span></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">G</div><div class="info"><div class="name">Gold Rush Vinyl</div><div class="detail">Austin, TX | <a href="https://goldrushvinyl.com" target="_blank">goldrushvinyl.com</a> | Founded by Caren Kelleher (ex-Google). 100% woman-owned. Forbes Next 1000.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">H</div><div class="info"><div class="name">Hand Drawn Pressing</div><div class="detail">Addison, TX | <a href="https://handdrawpressing.com" target="_blank">handdrawpressing.com</a> | WarmTone* (first install)</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">M</div><div class="info"><div class="name">Memphis Record Pressing</div><div class="detail">Memphis, TN | <a href="https://memphisrecordpressing.com" target="_blank">memphisrecordpressing.com</a></div></div></div>
+</div>
+
+<!-- WEST US -->
+<div class="section west">
+<div class="section-title"><span class="dot" style="background:#AFA9EC"></span> West US <span class="plant-count">4 plants</span></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">R</div><div class="info"><div class="name">Record Technology Inc (RTI)</div><div class="detail">Camarillo, CA | Major audiophile operation</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">C</div><div class="info"><div class="name">Cascade Record Pressing</div><div class="detail">Portland, OR | <a href="https://cascaderecordpressing.com" target="_blank">cascaderecordpressing.com</a> | WarmTone*</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">L</div><div class="info"><div class="name">Licorice Pizza Pressing</div><div class="detail">Los Angeles + Miami | Vintage SMT + Hamilton presses</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">V</div><div class="info"><div class="name">Vinyl Ceremony</div><div class="detail">Pasadena, CA | Newbilt press. Opened 2024.</div></div></div>
+</div>
+
+<!-- CANADA -->
+<div class="section canada">
+<div class="section-title"><span class="dot" style="background:#ED93B1"></span> Canada <span class="plant-count">9 plants</span></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">P</div><div class="info"><div class="name">Precision Record Pressing</div><div class="detail">Burlington, ON | <a href="https://precisionpressing.com" target="_blank">precisionpressing.com</a> | GZ Media subsidiary. 120+ staff. 35K sqft.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">M</div><div class="info"><div class="name">Microforum Vinyl</div><div class="detail">Toronto, ON | <a href="https://microforum.ca" target="_blank">microforum.ca</a> | WarmTone* presses. RSD Canada sponsor.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">C</div><div class="info"><div class="name">Canadian Vinyl Records</div><div class="detail">Calgary, AB | <a href="https://canadianvinylrecords.com" target="_blank">canadianvinylrecords.com</a> | W. Canada only full-service plant.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">W</div><div class="info"><div class="name">Wrecking Crew Studios</div><div class="detail">Vancouver, BC | NewBilt presses. Opened 2025.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">D</div><div class="info"><div class="name">Drummond Vinyl</div><div class="detail">Drummondville, QC | <a href="https://drummondvinyl.com" target="_blank">drummondvinyl.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">K</div><div class="info"><div class="name">Kaneshii Vinyl Press</div><div class="detail">Charlottetown, PE | <a href="https://kaneshiivinyl.com" target="_blank">kaneshiivinyl.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">F</div><div class="info"><div class="name">Flashback Records</div><div class="detail">Edmonton, AB | <a href="https://flashbackrecords.ca" target="_blank">flashbackrecords.ca</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">L</div><div class="info"><div class="name">Le Vinylist</div><div class="detail">Quebec City, QC | <a href="https://levinylist.com" target="_blank">levinylist.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">M</div><div class="info"><div class="name">Moonshot Vinyl</div><div class="detail">Canada | WarmTone* press</div></div></div>
+</div>
+
+<!-- MEXICO -->
+<div class="section mexico">
+<div class="section-title"><span class="dot" style="background:#D85A30"></span> Mexico <span class="plant-count">2 plants</span></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#D85A30">V</div><div class="info"><div class="name">Vantiva / Conectiv</div><div class="detail">Guadalajara, Jalisco | <a href="https://vantiva.com/vinyl" target="_blank">vantiva.com/vinyl</a><br>273K sqft. 30 presses. 23M+ albums/yr. 2-day ship to 80% of US.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#D85A30">R</div><div class="info"><div class="name">Rey Vinilo</div><div class="detail">Mexico City | <a href="https://reyvinilo.com" target="_blank">reyvinilo.com</a><br>Neumann VMS80 lacquer cutting. Pressing network across LATAM, US, Europe.</div></div></div>
+<div class="note">Westlake Global Compounds also has a PVC compound plant in Matamoros, Mexico.</div>
+</div>
+
+<!-- SOUTH AMERICA -->
+<div class="section latam">
+<div class="section-title"><span class="dot" style="background:#5DCAA5"></span> South America <span class="plant-count">2 plants</span></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">P</div><div class="info"><div class="name">Polysom</div><div class="detail">Rio de Janeiro, Brazil | <a href="https://polysom.com.br" target="_blank">polysom.com.br</a><br>3 Hamilton + 1 Toolex Alpha. In-house lacquer cutting. Oldest active LATAM plant.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">V</div><div class="info"><div class="name">Vinil Brasil</div><div class="detail">São Paulo, Brazil | <a href="https://vinilbrasil.com.br" target="_blank">vinilbrasil.com.br</a><br>Largest LATAM plant. Capacity 140K units/month.</div></div></div>
+</div>
+
+<!-- CARIBBEAN -->
+<div class="section carib">
+<div class="section-title"><span class="dot" style="background:#EF9F27"></span> Caribbean <span class="plant-count">1 plant</span></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">T</div><div class="info"><div class="name">Tuff Gong International</div><div class="detail">Kingston, Jamaica | <a href="https://tuffgongmusic.com/vinyl" target="_blank">tuffgongmusic.com/vinyl</a><br>Bob Marley family operation. Pressing + mastering.</div></div></div>
+</div>
+
+<div style="text-align:center;padding:24px 0;font-size:11px;color:#3a3a33;font-family:'Space Mono',monospace">
+New Orleans Record Press LLC | Pressing Plant Directory | Updated April 2026<br>
+Confidential — Internal use only
+</div>
+
+</div>
+</body>
+</html>

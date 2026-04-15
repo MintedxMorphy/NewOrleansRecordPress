@@ -20,6 +20,10 @@ const nextConfig = {
         source: '/staff/suppliers',
         destination: '/staff/suppliers.html',
       },
+      {
+        source: '/staff/plants',
+        destination: '/staff/plants.html',
+      },
     ]
   },
 }
