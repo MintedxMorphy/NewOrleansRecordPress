@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NORP PVC Supplier Directory</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-height:100vh;padding:0;font-size:17px}
+.nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:16px 32px;display:flex;gap:16px;align-items:center;justify-content:center;position:sticky;top:0;z-index:100}
+.nav a{color:#6a6858;text-decoration:none;font-size:18px;font-weight:600;padding:10px 20px;border-radius:8px;transition:all .2s}
+.nav a:hover{color:#e4e2d8;background:#1a1d24}
+.nav a.active{color:#5DCAA5;background:#0a1a15;border:1px solid #1a3a2a}
+.content{padding:32px}
+h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:#f5f3e8}
+.subtitle{font-size:18px;color:#8a8878;margin-bottom:32px;font-family:'Space Mono',monospace}
+.section{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden}
+.section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
+.section.current::before{background:linear-gradient(90deg,#E8593C,#F2A623)}
+.section.us::before{background:linear-gradient(90deg,#7F77DD,#AFA9EC)}
+.section.eu::before{background:linear-gradient(90deg,#5DCAA5,#3B8BD4)}
+.section.apac::before{background:linear-gradient(90deg,#EF9F27,#F0997B)}
+.section.callorder::before{background:linear-gradient(90deg,#E8593C,#ED93B1,#5DCAA5)}
+.section-title{font-size:20px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.equip{display:flex;align-items:center;gap:12px;padding:10px 12px;background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;margin-bottom:8px;font-size:13px;transition:border-color .2s}
+.equip:hover{border-color:#4a4c53}
+.equip .icon{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.equip .info{flex:1;min-width:0}
+.equip .name{font-weight:500;font-size:17px;color:#e4e2d8}
+.equip .detail{font-size:14px;color:#6a6858;font-family:'Space Mono',monospace;line-height:1.4}
+.equip .detail a{color:#5DCAA5}
+.note{font-size:13px;color:#6a6858;font-style:italic;margin-top:8px}
+.call-step{display:flex;align-items:flex-start;gap:12px;padding:12px;background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;margin-bottom:8px}
+.call-num{flex-shrink:0;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:#1a2a1a;color:#5DCAA5;border:1px solid #2a5a2a;font-family:'Space Mono',monospace}
+.call-text{flex:1;font-size:14px;line-height:1.5;color:#c4c2b8}
+.call-text strong{color:#e4e2d8}
+@media(max-width:768px){
+.content{padding:16px}
+.nav{padding:12px 16px;gap:8px;flex-wrap:wrap}
+.nav a{font-size:15px;padding:8px 14px}
+h1{font-size:26px}
+.subtitle{font-size:14px;margin-bottom:20px}
+.section{padding:16px}
+.section-title{font-size:17px}
+.equip{flex-wrap:wrap;gap:8px}
+.equip .name{font-size:15px}
+.equip .detail{font-size:12px;word-break:break-word}
+.equip .icon{width:30px;height:30px;font-size:14px}
+}
+</style>
+</head>
+<body>
+
+<div class="nav">
+<a href="/staff">Operations Guide</a>
+<a href="/staff/pricing">Pricing & Market</a>
+<a href="/staff/suppliers" class="active">PVC Suppliers</a>
+</div>
+
+<div class="content">
+
+<h1>PVC Compound Supplier Directory</h1>
+<div class="subtitle">Record-grade PVC compound suppliers · Current NORP suppliers first, then domestic US, then international</div>
+
+<!-- CURRENT NORP SUPPLIERS -->
+<div class="section current">
+<div class="section-title"><span class="dot" style="background:#E8593C"></span> Current NORP Suppliers</div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#F0997B">W</div><div class="info"><div class="name">Westlake Global Compounds</div><div class="detail">HQ: Houston, TX | Plants: Madison, Hazlehurst, Aberdeen, Prairie, MS + Matamoros, MX<br>713-960-9111 | compoundsportal@westlake.com | <a href="https://westlakeglobalcompounds.com" target="_blank">westlakeglobalcompounds.com</a></div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#F0997B">A</div><div class="info"><div class="name">Acoustic Sounds / Quality Record Pressings</div><div class="detail">543 N. 10th St, Salina, KS 67401 | 785-820-2931<br><a href="https://qualityrecordpressings.com" target="_blank">qualityrecordpressings.com</a> | Chad Kassem. Toolex Alpha, SMT, Finebilt presses. Quiex SV-P compound tech.</div></div></div>
+</div>
+
+<!-- OTHER US SUPPLIERS -->
+<div class="section us">
+<div class="section-title"><span class="dot" style="background:#7F77DD"></span> Other US Suppliers</div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">C</div><div class="info"><div class="name">Color Master Inc.</div><div class="detail">810 S Broadway, Kendallville, IN 46755<br><a href="https://color-master.com" target="_blank">color-master.com</a> | Rigid + flexible PVC pellet/powder. Custom color match.</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">S</div><div class="info"><div class="name">Sylvin Technologies</div><div class="detail">Various US locations | <a href="https://sylvin.com" target="_blank">sylvin.com</a> | PVC resin/pellet compounder.</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">B</div><div class="info"><div class="name">Benvic / Chemres (US arm of Benvic Group)</div><div class="detail">Princeton, NJ (HQ) | West Unity, OH (plant)<br><a href="https://benvic.com" target="_blank">benvic.com</a> | Custom PVC compounding.</div></div></div>
+</div>
+
+<!-- EUROPEAN SUPPLIERS -->
+<div class="section eu">
+<div class="section-title"><span class="dot" style="background:#5DCAA5"></span> European Suppliers (proven record-grade)</div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">B</div><div class="info"><div class="name">Benvic Group (France)</div><div class="detail">57 Ave de Tavaux, 21800 Chevigny-Saint-Sauveur, France | +33 3 80 46 73 00<br><a href="https://benvic.com" target="_blank">benvic.com</a> | Parent of Dugdale UK. 200K+ tonne capacity. 8 EU/UK/US sites.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">B</div><div class="info"><div class="name">Benvic Italy (Ferrara)</div><div class="detail">Ferrara, Italy | Via Benvic Group HQ<br><a href="https://benvic.com" target="_blank">benvic.com</a> | Former VinyLoop site. PVC compounding + biopolymers.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">D</div><div class="info"><div class="name">Dugdale / Benvic UK</div><div class="detail">Holmes Road, Sowerby Bridge, West Yorkshire HX6 2AA, UK | +44 7443 254469<br>sales@dugdalepvcuk.com | <a href="https://dugdalepvc.com" target="_blank">dugdalepvc.com</a> | Industry-leading vinyl record PVC since 1950s.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">N</div><div class="info"><div class="name">Northern Polymers &amp; Plastics (UK)</div><div class="detail"><a href="https://northernpolymersandplastics.com" target="_blank">northernpolymersandplastics.com</a><br>100K+ tonnes/yr. Prime + Hybrid recycled PVC. Specific vinyl record compound.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">R</div><div class="info"><div class="name">Record Compounds (Netherlands)</div><div class="detail">Hardenberg, Netherlands | <a href="https://recordcompounds.com" target="_blank">recordcompounds.com</a><br>30+ years specializing in PVC for record pressing.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">P</div><div class="info"><div class="name">PlastChem (Netherlands)</div><div class="detail"><a href="https://plastchem.nl" target="_blank">plastchem.nl</a> | Premium vinyl record compounds as listed product line.</div></div></div>
+</div>
+
+<!-- ASIA-PACIFIC SUPPLIERS -->
+<div class="section apac">
+<div class="section-title"><span class="dot" style="background:#EF9F27"></span> Asia-Pacific Suppliers</div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">N</div><div class="info"><div class="name">Nanya PVC Compounds (Taiwan)</div><div class="detail"><a href="https://nanya-pvc-compound.com" target="_blank">nanya-pvc-compound.com</a><br>Black, colored, transparent vinyl record compound. REACH/RoHS compliant.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">T</div><div class="info"><div class="name">Thai Vinyl Compounds (Thailand)</div><div class="detail">Samutsakhon, Thailand | <a href="https://tvcpd.com" target="_blank">tvcpd.com</a><br>Major global supplier. ~50% of US pressed vinyl reportedly uses Thai compound.</div></div></div>
+</div>
+
+<!-- URGENT CALL ORDER -->
+<div class="section callorder">
+<div class="section-title"><span class="dot" style="background:#E8593C"></span> Urgent Black PVC Sourcing — Call Order</div>
+<div class="call-step"><div class="call-num">1</div><div class="call-text"><strong>Westlake</strong> — Push existing rep. Check all 4 MS plants + Matamoros for stock.</div></div>
+<div class="call-step"><div class="call-num">2</div><div class="call-text"><strong>Precision / GZ Media</strong> — World's largest presser, massive PVC purchasing power.</div></div>
+<div class="call-step"><div class="call-num">3</div><div class="call-text"><strong>United Record Pressing</strong> — Largest US plant, bulk buyer.</div></div>
+<div class="call-step"><div class="call-num">4</div><div class="call-text"><strong>Microforum</strong> — Same WarmTone press, compatible compound.</div></div>
+<div class="call-step"><div class="call-num">5</div><div class="call-text"><strong>Quality Record Pressings / Acoustic Sounds</strong> — Multiple presses, own compound tech.</div></div>
+<div class="call-step"><div class="call-num">6</div><div class="call-text"><strong>Vantiva/Conectiv (Guadalajara)</strong> — 30 presses, likely large PVC reserves.</div></div>
+<div class="call-step"><div class="call-num">7</div><div class="call-text"><strong>Record Compounds (NL) or Dugdale/Benvic (UK/FR)</strong> — Specialists, can air freight.</div></div>
+<div class="call-step"><div class="call-num">8</div><div class="call-text"><strong>Thai Vinyl Compounds</strong> — Major global supplier, ~50% of US market.</div></div>
+<div class="call-step"><div class="call-num">9</div><div class="call-text"><strong>VRMA network</strong> — NORP appeared in their 2025 video. Plant operators share supply chain intel.</div></div>
+</div>
+
+<div style="text-align:center;padding:24px 0;font-size:11px;color:#3a3a33;font-family:'Space Mono',monospace">
+New Orleans Record Press LLC | PVC Supplier Directory | Updated April 2026<br>
+Confidential — Internal use only
+</div>
+
+</div>
+</body>
+</html>

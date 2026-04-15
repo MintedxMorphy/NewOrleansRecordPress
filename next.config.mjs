@@ -16,6 +16,10 @@ const nextConfig = {
         source: '/staff/pricing',
         destination: '/staff/pricing.html',
       },
+      {
+        source: '/staff/suppliers',
+        destination: '/staff/suppliers.html',
+      },
     ]
   },
 }
