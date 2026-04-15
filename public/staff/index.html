@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NORP Operations Guide</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-height:100vh;padding:32px}
+h1{font-size:28px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:#f5f3e8}
+.subtitle{font-size:14px;color:#8a8878;margin-bottom:32px;font-family:'Space Mono',monospace}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px}
+.section{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;position:relative;overflow:hidden}
+.section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
+.section.steam::before{background:linear-gradient(90deg,#E8593C,#F2A623)}
+.section.cold::before{background:linear-gradient(90deg,#3B8BD4,#5DCAA5)}
+.section.press::before{background:linear-gradient(90deg,#7F77DD,#ED93B1)}
+.section.post::before{background:linear-gradient(90deg,#97C459,#5DCAA5)}
+.section.air::before{background:linear-gradient(90deg,#888780,#B4B2A9)}
+.section.recycle::before{background:linear-gradient(90deg,#F0997B,#EF9F27)}
+.section-title{font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.section-title .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.steam .dot{background:#E8593C}
+.cold .dot{background:#3B8BD4}
+.press .dot{background:#7F77DD}
+.post .dot{background:#97C459}
+.air .dot{background:#888780}
+.recycle .dot{background:#F0997B}
+.equip{display:flex;align-items:center;gap:12px;padding:10px 12px;background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;margin-bottom:8px;font-size:13px;transition:border-color .2s}
+.equip:hover{border-color:#4a4c53}
+.equip .icon{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.equip .info{flex:1;min-width:0}
+.equip .name{font-weight:500;font-size:13px;color:#e4e2d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.equip .detail{font-size:11px;color:#6a6858;font-family:'Space Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.equip .status{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0}
+.status.on{background:#1a3a1a;color:#5cba5c;border:1px solid #2a5a2a}
+.status.off{background:#3a1a1a;color:#ba5c5c;border:1px solid #5a2a2a}
+.status.backup{background:#3a2a1a;color:#ba8a5c;border:1px solid #5a3a2a}
+.flow-section{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden}
+.flow-section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#7F77DD,#97C459,#5DCAA5,#F2A623);border-radius:12px 12px 0 0}
+.flow-row{display:flex;align-items:center;gap:0;flex-wrap:wrap;justify-content:center;margin:16px 0}
+.flow-box{background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;padding:10px 14px;text-align:center;min-width:100px;position:relative}
+.flow-box .fb-title{font-size:12px;font-weight:600;color:#e4e2d8}
+.flow-box .fb-sub{font-size:10px;color:#6a6858;font-family:'Space Mono',monospace;margin-top:2px}
+.flow-arrow{color:#4a4c53;font-size:20px;padding:0 4px;flex-shrink:0;font-weight:300}
+.flow-box.highlight{border-color:#7F77DD;background:#1a1a2a}
+.flow-box.highlight .fb-title{color:#AFA9EC}
+.legend{display:flex;gap:24px;margin-top:16px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:#6a6858}
+.legend-item .ldot{width:8px;height:8px;border-radius:50%}
+.full-width{grid-column:1/-1}
+.value-table{width:100%;border-collapse:collapse;margin-top:16px;font-size:12px}
+.value-table th{text-align:left;color:#6a6858;font-weight:500;padding:8px 12px;border-bottom:1px solid #2a2c33;font-family:'Space Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+.value-table td{padding:8px 12px;border-bottom:1px solid #1a1d24;color:#c4c2b8}
+.value-table tr:hover td{background:#1a1d24}
+.value-table .val{text-align:right;font-family:'Space Mono',monospace;color:#5DCAA5}
+.value-table .total td{font-weight:700;border-top:2px solid #2a2c33;color:#f5f3e8}
+.value-table .total .val{color:#97C459;font-size:14px}
+.note{font-size:11px;color:#6a6858;font-style:italic;margin-top:8px}
+.pipe{display:flex;align-items:center;gap:0;margin:12px 0}
+.pipe-line{height:2px;flex:1;position:relative}
+.pipe-line.hot{background:linear-gradient(90deg,#E8593C,#F2A623)}
+.pipe-line.cold{background:linear-gradient(90deg,#3B8BD4,#5DCAA5)}
+.pipe-label{font-size:10px;color:#6a6858;font-family:'Space Mono',monospace;padding:0 8px;white-space:nowrap}
+.stamp{position:absolute;bottom:12px;right:16px;font-size:10px;color:#3a3a33;font-family:'Space Mono',monospace}
+.header-row{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:32px}
+.addr{font-size:11px;color:#4a4843;font-family:'Space Mono',monospace;text-align:right;line-height:1.5}
+@media(max-width:768px){.grid{grid-template-columns:1fr}.flow-row{flex-direction:column}.flow-arrow{transform:rotate(90deg)}}
+</style>
+</head>
+<body>
+<div class="header-row">
+<div>
+<h1>New Orleans Record Press</h1>
+<div class="subtitle">Operations Guide | April 2026</div>
+</div>
+<div class="addr">1336 Montegut Street<br>New Orleans, LA 70117</div>
+</div>
+
+<div class="flow-section">
+<div class="section-title" style="margin-bottom:20px"><span class="dot" style="background:#7F77DD"></span> Production workflow</div>
+<div class="flow-row">
+<div class="flow-box"><div class="fb-title">Raw materials</div><div class="fb-sub">PVC compound</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box"><div class="fb-title">Extruder</div><div class="fb-sub">Biscuit formation</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box highlight"><div class="fb-title">Record press</div><div class="fb-sub">Steam + hydraulic</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box"><div class="fb-title">Edge trim</div><div class="fb-sub">Auto / manual</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box"><div class="fb-title">QC / listen</div><div class="fb-sub">Test play + visual</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box"><div class="fb-title">Assembly</div><div class="fb-sub">Jacket + sleeve</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box"><div class="fb-title">Shrink wrap</div><div class="fb-sub">Heat tunnel</div></div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box"><div class="fb-title">Ship</div><div class="fb-sub">FedEx / UPS</div></div>
+</div>
+<div class="legend">
+<div class="legend-item"><div class="ldot" style="background:#E8593C"></div> Steam loop feeds press (heat)</div>
+<div class="legend-item"><div class="ldot" style="background:#3B8BD4"></div> Cold loop feeds press (cooling)</div>
+<div class="legend-item"><div class="ldot" style="background:#888780"></div> Compressed air feeds press (pneumatics)</div>
+<div class="legend-item"><div class="ldot" style="background:#F0997B"></div> Trim scrap recycled back to extruder</div>
+</div>
+</div>
+
+<div class="grid">
+
+<div class="section press">
+<div class="section-title"><span class="dot"></span> Pressing equipment</div>
+<div class="equip">
+<div class="icon" style="background:#1a1a2a;color:#AFA9EC">W</div>
+<div class="info"><div class="name">WarmTone MK1 (Viryl Technologies)</div><div class="detail">S/N PRS00007 | CEC Controls VT-PRS-001 | 2017</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a1a2a;color:#AFA9EC">F</div>
+<div class="info"><div class="name">Finebilt hydraulic press (dual platen)</div><div class="detail">Los Angeles | 1 of 2 platens active</div></div>
+<div class="status on">Partial</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a1a2a;color:#AFA9EC">E</div>
+<div class="info"><div class="name">Ballet City extruder</div><div class="detail">Digital temp control | Feeds Finebilt</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a1a2a;color:#AFA9EC">E</div>
+<div class="info"><div class="name">Standalone extruder (mobile)</div><div class="detail">Older unit on casters | Timer + gauge controls</div></div>
+<div class="status backup">Spare</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a1a2a;color:#AFA9EC">T</div>
+<div class="info"><div class="name">Boston gear edge trimmer</div><div class="detail">For Finebilt manual trimming | Dymo scale</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="note">WarmTone has integrated auto edge trimmer + dual stacking</div>
+</div>
+
+<div class="section steam">
+<div class="section-title"><span class="dot"></span> Steam loop (heating)</div>
+<div class="pipe"><div class="pipe-label">City water</div><div class="pipe-line hot"></div><div class="pipe-label">Press platens</div></div>
+<div class="equip">
+<div class="icon" style="background:#2a1a1a;color:#E8593C">B</div>
+<div class="info"><div class="name">Bryan CLM300-S-150-GI boiler</div><div class="detail">3000 MBH input | 2400 output | 150 PSI | 2014</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#2a1a1a;color:#E8593C">B</div>
+<div class="info"><div class="name">Fulton vertical boiler</div><div class="detail">Backup unit | Not currently operational</div></div>
+<div class="status off">Down</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#2a1a1a;color:#E8593C">T</div>
+<div class="info"><div class="name">Return tank</div><div class="detail">Condensate return | Insulated</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#2a1a1a;color:#E8593C">W</div>
+<div class="info"><div class="name">Water treatment system</div><div class="detail">Chemical treatment for boiler feed</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="note">Steam heats press platens to ~300&deg;F for PVC molding</div>
+</div>
+
+<div class="section cold">
+<div class="section-title"><span class="dot"></span> Cold loop (cooling)</div>
+<div class="pipe"><div class="pipe-label">Press</div><div class="pipe-line cold"></div><div class="pipe-label">Cooling tower</div></div>
+<div class="equip">
+<div class="icon" style="background:#1a2a3a;color:#3B8BD4">C</div>
+<div class="info"><div class="name">Trane air-cooled chiller</div><div class="detail">S/N U1AG17755 | 208V/3ph | R-410A</div></div>
+<div class="status off">Down</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a2a3a;color:#3B8BD4">T</div>
+<div class="info"><div class="name">BAC evaporative cooling tower</div><div class="detail">Dual-fan | Elevated steel frame | Exterior</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a2a3a;color:#3B8BD4">T</div>
+<div class="info"><div class="name">Insulated water/cooling tanks (x2)</div><div class="detail">Indoor | Behind pressing room</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a2a3a;color:#3B8BD4">P</div>
+<div class="info"><div class="name">Circulation pumps</div><div class="detail">Cold loop + steam loop circulation</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="note">Chiller down &mdash; cooling tower handling load alone. Chiller repair is a priority.</div>
+</div>
+
+<div class="section air">
+<div class="section-title"><span class="dot"></span> Compressed air</div>
+<div class="equip">
+<div class="icon" style="background:#1a1a1a;color:#888780">A</div>
+<div class="info"><div class="name">Ingersoll Rand rotary screw (large)</div><div class="detail">Advanced Rotary Tech | Service records on file</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a1a1a;color:#888780">A</div>
+<div class="info"><div class="name">Ingersoll Rand rotary screw (#2)</div><div class="detail">Smaller unit | Non-operational</div></div>
+<div class="status off">Down</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a1a1a;color:#888780">A</div>
+<div class="info"><div class="name">Air compressor (#3)</div><div class="detail">Non-operational</div></div>
+<div class="status off">Down</div>
+</div>
+<div class="note">Only 1 of 3 compressors operational. Single point of failure for press pneumatics.</div>
+</div>
+
+<div class="section cold">
+<div class="section-title"><span class="dot" style="background:#378ADD"></span> HVAC (facility climate control)</div>
+<div class="equip">
+<div class="icon" style="background:#1a2a3a;color:#3B8BD4">H</div>
+<div class="info"><div class="name">Goodman ASPT61D14AD air handler (x2)</div><div class="detail">5-ton each | 60,000 BTU/hr | ECM motor | R-410A | + condensers</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a2a3a;color:#3B8BD4">H</div>
+<div class="info"><div class="name">Goodman ARUF37C14AD air handler (x1)</div><div class="detail">3-ton | 36,000 BTU/hr | PSC motor | R-410A | + condenser</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="note">Total facility HVAC: 13 tons cooling capacity. Critical for press room temp consistency.</div>
+</div>
+
+<div class="section post">
+<div class="section-title"><span class="dot"></span> Post-production & fulfillment</div>
+<div class="equip">
+<div class="icon" style="background:#1a2a1a;color:#97C459">S</div>
+<div class="info"><div class="name">Shrink wrap / heat tunnel</div><div class="detail">S/N ST201106 | Packaging line</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a2a1a;color:#97C459">O</div>
+<div class="info"><div class="name">Lab oven (Model 40)</div><div class="detail">Stamper baking | Temp-controlled cure</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a2a1a;color:#97C459">Q</div>
+<div class="info"><div class="name">QC / listening station</div><div class="detail">Studio monitors + headphones + turntable</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#1a2a1a;color:#97C459">A</div>
+<div class="info"><div class="name">Assembly workbench (12ft)</div><div class="detail">Jacketing, sleeving, boxing | Brick wall</div></div>
+<div class="status on">Active</div>
+</div>
+</div>
+
+<div class="section recycle">
+<div class="section-title"><span class="dot"></span> Recycling & material handling</div>
+<div class="equip">
+<div class="icon" style="background:#2a1a0a;color:#F0997B">G</div>
+<div class="info"><div class="name">Conair Wortex JC-10 granulator</div><div class="detail">Vinyl regrind | Siemens disconnect</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#2a1a0a;color:#F0997B">P</div>
+<div class="info"><div class="name">Pneumatic label punch</div><div class="detail">Centers out labels from scrap records</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="equip">
+<div class="icon" style="background:#2a1a0a;color:#F0997B">H</div>
+<div class="info"><div class="name">Hyster 45 electric forklift</div><div class="detail">Unit 043-B | Hawker Powerline battery | 4,500 lb</div></div>
+<div class="status on">Active</div>
+</div>
+<div class="note">Scrap vinyl &rarr; label punch &rarr; granulator &rarr; regrind back into extruder hopper</div>
+</div>
+
+<div class="section full-width" style="background:#14161b">
+<div class="section-title"><span class="dot" style="background:#5DCAA5"></span> Equipment valuation summary</div>
+<table class="value-table">
+<thead>
+<tr><th>Equipment</th><th>Make / Model</th><th>Year</th><th>Condition</th><th class="val">Est. value (USD)</th></tr>
+</thead>
+<tbody>
+<tr><td>WarmTone MK1 automated press</td><td>Viryl Technologies VT-PRS-001</td><td>2017</td><td>Operational / Good</td><td class="val">$125,000 &ndash; $165,000</td></tr>
+<tr><td>Finebilt hydraulic press (dual)</td><td>Finebilt, Los Angeles</td><td>~1970s</td><td>1 of 2 platens active</td><td class="val">$15,000 &ndash; $25,000</td></tr>
+<tr><td>Ballet City extruder</td><td>Ballet City</td><td>Unknown</td><td>Operational</td><td class="val">$12,000 &ndash; $18,000</td></tr>
+<tr><td>Standalone extruder (mobile)</td><td>Unknown</td><td>Vintage</td><td>Spare / functional</td><td class="val">$3,000 &ndash; $6,000</td></tr>
+<tr><td>Bryan steam boiler</td><td>CLM300-S-150-GI</td><td>2014</td><td>Operational / Primary</td><td class="val">$18,000 &ndash; $28,000</td></tr>
+<tr><td>Fulton vertical boiler</td><td>Fulton</td><td>Unknown</td><td>Backup / Not running</td><td class="val">$3,000 &ndash; $8,000</td></tr>
+<tr><td>Trane air-cooled chiller</td><td>CGAM 060A series</td><td>~2017</td><td>Down / Needs repair</td><td class="val">$8,000 &ndash; $15,000</td></tr>
+<tr><td>BAC cooling tower</td><td>BAC (dual-fan)</td><td>Unknown</td><td>Operational / weathered</td><td class="val">$4,000 &ndash; $8,000</td></tr>
+<tr><td>Ingersoll Rand compressor (large)</td><td>IR rotary screw</td><td>Unknown</td><td>Operational / Primary</td><td class="val">$5,000 &ndash; $10,000</td></tr>
+<tr><td>Ingersoll Rand compressor (#2)</td><td>IR rotary screw</td><td>Unknown</td><td>Non-operational</td><td class="val">$1,500 &ndash; $3,500</td></tr>
+<tr><td>Air compressor (#3)</td><td>Unknown</td><td>Unknown</td><td>Non-operational</td><td class="val">$500 &ndash; $2,000</td></tr>
+<tr><td>Conair Wortex JC-10 granulator</td><td>Conair Wortex</td><td>Unknown</td><td>Operational</td><td class="val">$3,000 &ndash; $6,000</td></tr>
+<tr><td>Shrink wrap / heat tunnel</td><td>Unknown (S/N ST201106)</td><td>~2011</td><td>Operational</td><td class="val">$2,000 &ndash; $4,000</td></tr>
+<tr><td>Lab oven (Model 40)</td><td>Quincy / similar</td><td>Unknown</td><td>Operational</td><td class="val">$500 &ndash; $1,200</td></tr>
+<tr><td>Boston gear edge trimmer</td><td>Boston Gear motor</td><td>Unknown</td><td>Operational</td><td class="val">$2,000 &ndash; $4,000</td></tr>
+<tr><td>Pneumatic label punch</td><td>Custom / purpose-built</td><td>Unknown</td><td>Operational</td><td class="val">$500 &ndash; $1,500</td></tr>
+<tr><td>Hyster 45 electric forklift</td><td>Hyster E45 / Hawker battery</td><td>Unknown</td><td>Operational / worn</td><td class="val">$4,000 &ndash; $8,000</td></tr>
+<tr><td>Insulated water tanks (x2)</td><td>Custom</td><td>Unknown</td><td>Operational</td><td class="val">$1,500 &ndash; $3,000</td></tr>
+<tr><td>Circulation pumps, piping, valves</td><td>Various</td><td>Various</td><td>Operational</td><td class="val">$3,000 &ndash; $6,000</td></tr>
+<tr><td>Molds, stampers, cooling plates</td><td>Viryl + misc</td><td>Various</td><td>Active inventory</td><td class="val">$8,000 &ndash; $15,000</td></tr>
+<tr><td>CEC Controls press panel</td><td>CEC Controls, Burlington ON</td><td>2017</td><td>Operational (WarmTone)</td><td class="val">Incl. w/ WarmTone</td></tr>
+<tr><td>Ersteel hydraulic power unit</td><td>Ersteel Hydraulics</td><td>2017</td><td>Operational (WarmTone)</td><td class="val">Incl. w/ WarmTone</td></tr>
+<tr><td>Goodman air handler 5-ton (x2)</td><td>Goodman ASPT61D14AD</td><td>Unknown</td><td>Operational + condensers</td><td class="val">$2,400 &ndash; $5,000</td></tr>
+<tr><td>Goodman air handler 3-ton (x1)</td><td>Goodman ARUF37C14AD</td><td>Unknown</td><td>Operational + condenser</td><td class="val">$800 &ndash; $1,500</td></tr><tr class="total"><td colspan="4">Estimated total equipment value (midpoint)</td><td class="val">$284,000 &ndash; $407,000</td></tr>
+</tbody>
+</table>
+<div class="note" style="margin-top:12px">Valuations are estimated fair market values based on comparable used equipment sales, condition observed on-site 4/13/2026, and current market demand for vinyl pressing equipment. WarmTone new list price was ~$195K in 2017; current new pricing from Viryl is higher. The WarmTone represents approximately 40-50% of total equipment value. Formal appraisal recommended for insurance and partnership documentation purposes.</div>
+</div>
+
+</div>
+
+<div style="text-align:center;padding:24px 0;font-size:11px;color:#3a3a33;font-family:'Space Mono',monospace">
+New Orleans Record Press LLC | Operations Guide | Prepared April 2026<br>
+Document for internal partnership use only &mdash; not for distribution
+</div>
+
+<div style="background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden">
+<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#E8593C,#3B8BD4,#97C459);border-radius:12px 12px 0 0"></div>
+<div class="section-title"><span class="dot" style="background:#E8593C"></span> PVC compound supplier directory</div>
+
+<div style="font-size:12px;color:#8a8878;margin-bottom:16px">Record-grade PVC compound suppliers. Current NORP suppliers first, then domestic US, then international.</div>
+
+<div style="font-size:13px;font-weight:700;color:#F0997B;margin:12px 0 8px">Current NORP suppliers</div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#F0997B">W</div><div class="info"><div class="name">Westlake Global Compounds</div><div class="detail">HQ: Houston, TX | Plants: Madison, Hazlehurst, Aberdeen, Prairie, MS + Matamoros, MX | 713-960-9111 | compoundsportal@westlake.com | westlakeglobalcompounds.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#F0997B">A</div><div class="info"><div class="name">Acoustic Sounds / Quality Record Pressings</div><div class="detail">543 N. 10th St, Salina, KS 67401 | 785-820-2931 | qualityrecordpressings.com | Chad Kassem. Toolex Alpha, SMT, Finebilt presses. Quiex SV-P compound tech.</div></div></div>
+
+<div style="font-size:13px;font-weight:700;color:#AFA9EC;margin:16px 0 8px">Other US suppliers</div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">C</div><div class="info"><div class="name">Color Master Inc.</div><div class="detail">810 S Broadway, Kendallville, IN 46755 | color-master.com | Rigid + flexible PVC pellet/powder. Custom color match.</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">S</div><div class="info"><div class="name">Sylvin Technologies</div><div class="detail">Various US locations | sylvin.com | PVC resin/pellet compounder.</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">B</div><div class="info"><div class="name">Benvic / Chemres (US arm of Benvic Group)</div><div class="detail">Princeton, NJ (HQ) | West Unity, OH (plant) | benvic.com | Custom PVC compounding.</div></div></div><div style="font-size:13px;font-weight:700;color:#5DCAA5;margin:16px 0 8px">European suppliers (proven record-grade)</div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">B</div><div class="info"><div class="name">Benvic Group (France)</div><div class="detail">57 Ave de Tavaux, 21800 Chevigny-Saint-Sauveur, France | +33 3 80 46 73 00 | benvic.com | Parent of Dugdale UK. 200K+ tonne capacity. 8 EU/UK/US sites.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">B</div><div class="info"><div class="name">Benvic Italy (Ferrara)</div><div class="detail">Ferrara, Italy | Via Benvic Group HQ | benvic.com | Former VinyLoop site. PVC compounding + biopolymers.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">D</div><div class="info"><div class="name">Dugdale / Benvic UK</div><div class="detail">Holmes Road, Sowerby Bridge, West Yorkshire HX6 2AA, UK | +44 7443 254469 | sales@dugdalepvcuk.com | dugdalepvc.com | Industry-leading vinyl record PVC since 1950s.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">N</div><div class="info"><div class="name">Northern Polymers &amp; Plastics (UK)</div><div class="detail">northernpolymersandplastics.com | 100K+ tonnes/yr. Prime + Hybrid recycled PVC. Specific vinyl record compound.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">R</div><div class="info"><div class="name">Record Compounds (Netherlands)</div><div class="detail">Hardenberg, Netherlands | recordcompounds.com | 30+ years specializing in PVC for record pressing.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">P</div><div class="info"><div class="name">PlastChem (Netherlands)</div><div class="detail">plastchem.nl | Premium vinyl record compounds as listed product line.</div></div></div>
+
+<div style="font-size:13px;font-weight:700;color:#EF9F27;margin:16px 0 8px">Asia-Pacific suppliers</div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">N</div><div class="info"><div class="name">Nanya PVC Compounds (Taiwan)</div><div class="detail">nanya-pvc-compound.com | Black, colored, transparent vinyl record compound. REACH/RoHS compliant.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">T</div><div class="info"><div class="name">Thai Vinyl Compounds (Thailand)</div><div class="detail">Samutsakhon, Thailand | tvcpd.com | Major global supplier. ~50% of US pressed vinyl reportedly uses Thai compound.</div></div></div>
+</div>
+
+<div style="background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden">
+<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#7F77DD,#ED93B1,#5DCAA5);border-radius:12px 12px 0 0"></div>
+<div class="section-title"><span class="dot" style="background:#7F77DD"></span> Pressing plant directory &mdash; Americas</div>
+<div style="font-size:12px;color:#8a8878;margin-bottom:16px">Plants marked * run WarmTone presses (same platform as NORP).</div><div style="font-size:13px;font-weight:700;color:#E8593C;margin:12px 0 8px">Southeast US</div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">U</div><div class="info"><div class="name">United Record Pressing</div><div class="detail">Nashville, TN | unitedrecordpressing.com | Largest US plant</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">F</div><div class="info"><div class="name">Furnace Record Pressing</div><div class="detail">Fairfax, VA | furnacemfg.com | Large, 10+ presses incl WarmTone*</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">K</div><div class="info"><div class="name">Kindercore Vinyl</div><div class="detail">Athens, GA | kindercore.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">E</div><div class="info"><div class="name">Echo Base</div><div class="detail">Athens, GA | echobase.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">C</div><div class="info"><div class="name">Citizen Vinyl</div><div class="detail">Asheville, NC | citizenvinyl.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">D</div><div class="info"><div class="name">Donaldson Record Pressing</div><div class="detail">Weaverville, NC | drpcvinyl.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">P</div><div class="info"><div class="name">Pour House Pressing</div><div class="detail">Raleigh, NC | pourhousepressing.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">A</div><div class="info"><div class="name">Audiodrome Record Pressing</div><div class="detail">Gainesville, FL | audiodromevinyl.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">N</div><div class="info"><div class="name">New Press Vinyl</div><div class="detail">Opa-Locka, FL | newpressvinyl.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">S</div><div class="info"><div class="name">Sunpress Vinyl</div><div class="detail">Miami, FL | sunpressvinyl.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">V</div><div class="info"><div class="name">Violet Vinyl</div><div class="detail">Daytona Beach, FL | violetvinyl.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a1a;color:#E8593C">B</div><div class="info"><div class="name">Blue Sprocket Pressing</div><div class="detail">Harrisonburg, VA | bluesprocketpressing.com</div></div></div><div style="font-size:13px;font-weight:700;color:#3B8BD4;margin:16px 0 8px">Northeast US</div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">H</div><div class="info"><div class="name">Hellbender Vinyl</div><div class="detail">Philadelphia, PA | hellbenderphilly.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">S</div><div class="info"><div class="name">Softwax Record Pressing</div><div class="detail">Philadelphia, PA | Artist-run plant</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">I</div><div class="info"><div class="name">Independent Record Pressing</div><div class="detail">Bordentown, NJ | independentrecordpressing.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">B</div><div class="info"><div class="name">Brooklynphono</div><div class="detail">Brooklyn, NY | brooklynphono.myshopify.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">S</div><div class="info"><div class="name">Studio 4 Vinyl</div><div class="detail">Nottingham, PA | studio4vinyl.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#3B8BD4">B</div><div class="info"><div class="name">Burlington Record Plant</div><div class="detail">Albany, NY | burlingtonrecordplant.com</div></div></div>
+
+<div style="font-size:13px;font-weight:700;color:#97C459;margin:16px 0 8px">Midwest US</div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">G</div><div class="info"><div class="name">Gotta Groove Records</div><div class="detail">Cleveland, OH | gottagrooverecords.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">S</div><div class="info"><div class="name">Smashed Plastic</div><div class="detail">Chicago, IL | smashedplastic.com | WarmTone Steamless*</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">2</div><div class="info"><div class="name">2424 Vinyl Pressing</div><div class="detail">Detroit, MI | 2424vinylpressing.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">A</div><div class="info"><div class="name">Archer Record Pressing</div><div class="detail">Detroit, MI | archerrecordpressing.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">M</div><div class="info"><div class="name">Musicol Recording</div><div class="detail">Columbus, OH | Pressing since 1971</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">O</div><div class="info"><div class="name">Outta Wax</div><div class="detail">Minneapolis, MN | Boutique, specialty</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">Q</div><div class="info"><div class="name">Quality Record Pressings</div><div class="detail">Salina, KS | qualityrecordpressings.com | 13+ presses, Toolex/SMT/Finebilt</div></div></div>
+
+<div style="font-size:13px;font-weight:700;color:#EF9F27;margin:16px 0 8px">South / Southwest US</div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">G</div><div class="info"><div class="name">Gold Rush Vinyl</div><div class="detail">Austin, TX | goldrushvinyl.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">H</div><div class="info"><div class="name">Hand Drawn Pressing</div><div class="detail">Addison, TX | handdrawpressing.com | WarmTone* (first install)</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">M</div><div class="info"><div class="name">Memphis Record Pressing</div><div class="detail">Memphis, TN | memphisrecordpressing.com</div></div></div><div style="font-size:13px;font-weight:700;color:#AFA9EC;margin:16px 0 8px">West US</div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">R</div><div class="info"><div class="name">Record Technology Inc (RTI)</div><div class="detail">Camarillo, CA | Major audiophile operation</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">C</div><div class="info"><div class="name">Cascade Record Pressing</div><div class="detail">Portland, OR | cascaderecordpressing.com | WarmTone*</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">L</div><div class="info"><div class="name">Licorice Pizza Pressing</div><div class="detail">Los Angeles + Miami | Vintage SMT + Hamilton presses</div></div></div>
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">V</div><div class="info"><div class="name">Vinyl Ceremony</div><div class="detail">Pasadena, CA | Newbilt press. Opened 2024.</div></div></div>
+
+<div style="font-size:13px;font-weight:700;color:#ED93B1;margin:16px 0 8px">Canada</div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">P</div><div class="info"><div class="name">Precision Record Pressing</div><div class="detail">Burlington, ON | precisionpressing.com | GZ Media subsidiary. 120+ staff. 35K sqft.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">M</div><div class="info"><div class="name">Microforum Vinyl</div><div class="detail">Toronto, ON | microforum.ca | WarmTone* presses. RSD Canada sponsor.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">C</div><div class="info"><div class="name">Canadian Vinyl Records</div><div class="detail">Calgary, AB | canadianvinylrecords.com | W. Canada only full-service plant.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">W</div><div class="info"><div class="name">Wrecking Crew Studios</div><div class="detail">Vancouver, BC | NewBilt presses. Opened 2025.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">D</div><div class="info"><div class="name">Drummond Vinyl</div><div class="detail">Drummondville, QC | drummondvinyl.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">K</div><div class="info"><div class="name">Kaneshii Vinyl Press</div><div class="detail">Charlottetown, PE | kaneshiivinyl.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">F</div><div class="info"><div class="name">Flashback Records</div><div class="detail">Edmonton, AB | flashbackrecords.ca</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">L</div><div class="info"><div class="name">Le Vinylist</div><div class="detail">Quebec City, QC | levinylist.com</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a2a;color:#ED93B1">M</div><div class="info"><div class="name">Moonshot Vinyl</div><div class="detail">Canada | WarmTone* press</div></div></div>
+
+<div style="font-size:13px;font-weight:700;color:#D85A30;margin:16px 0 8px">Mexico</div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#D85A30">V</div><div class="info"><div class="name">Vantiva / Conectiv</div><div class="detail">Guadalajara, Jalisco | vantiva.com/vinyl | 273K sqft. 30 presses. 23M+ albums/yr. 2-day ship to 80% of US.</div></div></div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#D85A30">R</div><div class="info"><div class="name">Rey Vinilo</div><div class="detail">Mexico City | reyvinilo.com | Neumann VMS80 lacquer cutting. Pressing network across LATAM, US, Europe.</div></div></div>
+<div class="note">Westlake Global Compounds also has a PVC compound plant in Matamoros, Mexico.</div><div style="font-size:13px;font-weight:700;color:#5DCAA5;margin:16px 0 8px">South America</div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">P</div><div class="info"><div class="name">Polysom</div><div class="detail">Rio de Janeiro, Brazil | polysom.com.br | 3 Hamilton + 1 Toolex Alpha. In-house lacquer cutting. Oldest active LATAM plant.</div></div></div>
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">V</div><div class="info"><div class="name">Vinil Brasil</div><div class="detail">S&atilde;o Paulo, Brazil | vinilbrasil.com.br | Largest LATAM plant. Capacity 140K units/month.</div></div></div>
+
+<div style="font-size:13px;font-weight:700;color:#EF9F27;margin:16px 0 8px">Caribbean</div>
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#EF9F27">T</div><div class="info"><div class="name">Tuff Gong International</div><div class="detail">Kingston, Jamaica | tuffgongmusic.com/vinyl | Bob Marley family operation. Pressing + mastering.</div></div></div>
+
+<div style="background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;padding:14px;margin-top:16px">
+<div style="font-size:12px;font-weight:700;color:#e4e2d8;margin-bottom:8px">Recommended call order for urgent black PVC sourcing</div>
+<div style="font-size:11px;color:#8a8878;line-height:1.8">
+1. Westlake &mdash; Push existing rep. Check all 4 MS plants + Matamoros for stock.<br>
+2. Precision / GZ Media &mdash; World's largest presser, massive PVC purchasing power.<br>
+3. United Record Pressing &mdash; Largest US plant, bulk buyer.<br>
+4. Microforum &mdash; Same WarmTone press, compatible compound.<br>
+5. Quality Record Pressings / Acoustic Sounds &mdash; Multiple presses, own compound tech.<br>
+6. Vantiva/Conectiv (Guadalajara) &mdash; 30 presses, likely large PVC reserves.<br>
+7. Record Compounds (NL) or Dugdale/Benvic (UK/FR) &mdash; Specialists, can air freight.<br>
+8. Thai Vinyl Compounds &mdash; Major global supplier, ~50% of US market.<br>
+9. VRMA network &mdash; NORP appeared in their 2025 video. Plant operators share supply chain intel.
+</div>
+</div>
+
+</div>
+
+<div style="text-align:center;padding:24px 0;font-size:11px;color:#3a3a33;font-family:'Space Mono',monospace">
+New Orleans Record Press LLC | Operations Guide | Prepared April 2026<br>
+Confidential &mdash; Internal use only
+</div>
+
+</body>
+</html>
