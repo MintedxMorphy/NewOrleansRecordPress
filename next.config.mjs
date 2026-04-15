@@ -24,6 +24,10 @@ const nextConfig = {
         source: '/staff/plants',
         destination: '/staff/plants.html',
       },
+      {
+        source: '/staff/mastering',
+        destination: '/staff/mastering.html',
+      },
     ]
   },
 }

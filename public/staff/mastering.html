@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NORP Mastering & Electroplating Directory</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-height:100vh;padding:0;font-size:17px}
+.nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:16px 32px;display:flex;gap:16px;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;flex-wrap:wrap}
+.nav a{color:#6a6858;text-decoration:none;font-size:18px;font-weight:600;padding:10px 20px;border-radius:8px;transition:all .2s}
+.nav a:hover{color:#e4e2d8;background:#1a1d24}
+.nav a.active{color:#5DCAA5;background:#0a1a15;border:1px solid #1a3a2a}
+.content{padding:32px}
+h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:#f5f3e8}
+.subtitle{font-size:18px;color:#8a8878;margin-bottom:32px;font-family:'Space Mono',monospace}
+.section{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden}
+.section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
+.section.full::before{background:linear-gradient(90deg,#7F77DD,#5DCAA5,#F2A623)}
+.section.plating::before{background:linear-gradient(90deg,#E8593C,#F2A623)}
+.section.cutting::before{background:linear-gradient(90deg,#3B8BD4,#AFA9EC)}
+.section.intl::before{background:linear-gradient(90deg,#5DCAA5,#97C459)}
+.section.info::before{background:linear-gradient(90deg,#ED93B1,#7F77DD)}
+.section-title{font-size:20px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.equip{display:flex;align-items:center;gap:12px;padding:10px 12px;background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;margin-bottom:8px;font-size:13px;transition:border-color .2s}
+.equip:hover{border-color:#4a4c53}
+.equip .icon{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.equip .info{flex:1;min-width:0}
+.equip .name{font-weight:500;font-size:17px;color:#e4e2d8}
+.equip .detail{font-size:14px;color:#6a6858;font-family:'Space Mono',monospace;line-height:1.4}
+.equip .detail a{color:#5DCAA5}
+.tags{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:0.5px}
+.tag-lacquer{background:#1a1a2a;color:#AFA9EC;border:1px solid #2a2a4a}
+.tag-plating{background:#2a1a0a;color:#F2A623;border:1px solid #4a2a0a}
+.tag-dmm{background:#0a2a2a;color:#5DCAA5;border:1px solid #0a4a4a}
+.tag-stamper{background:#2a1a1a;color:#E8593C;border:1px solid #4a2a2a}
+.tag-full{background:#1a2a1a;color:#97C459;border:1px solid #2a4a2a}
+.note{font-size:13px;color:#6a6858;font-style:italic;margin-top:8px}
+.alert{padding:14px 16px;border-radius:8px;margin-bottom:12px;font-size:14px;line-height:1.6;background:#1a1a0a;border:1px solid #3a3a1a;color:#e4d4a0}
+.alert strong{display:block;margin-bottom:4px}
+@media(max-width:768px){
+.content{padding:16px}
+.nav{padding:12px 16px;gap:6px;flex-direction:column}
+.nav a{font-size:16px;padding:10px 16px;width:100%;text-align:center}
+.nav img{height:60px !important;margin:0 auto 4px !important}
+h1{font-size:26px}
+.subtitle{font-size:14px;margin-bottom:20px}
+.section{padding:16px}
+.section-title{font-size:17px}
+.equip{flex-wrap:wrap;gap:8px}
+.equip .name{font-size:15px}
+.equip .detail{font-size:12px;word-break:break-word}
+.equip .icon{width:30px;height:30px;font-size:14px}
+}
+</style>
+</head>
+<body>
+
+<div class="nav">
+<img src="/staff/norp-logo.png" alt="NORP" style="height:90px;margin-right:12px">
+<a href="/staff">Operations Guide</a>
+<a href="/staff/pricing">Pricing & Market</a>
+<a href="/staff/suppliers">PVC Suppliers</a>
+<a href="/staff/plants">Plant Directory</a>
+<a href="/staff/mastering" class="active">Mastering & Plating</a>
+</div>
+
+<div class="content">
+
+<h1>Mastering & Electroplating Directory</h1>
+<div class="subtitle">Lacquer cutting, DMM mastering, electroforming &amp; stamper services</div>
+
+<div class="alert">
+<strong>⚡ Why This Matters for NORP</strong>
+The faster a lacquer goes from cutting to electroplating, the higher the fidelity. Lacquer grooves begin healing immediately after cutting. Plants with in-house plating (like Welcome to 1979) can plate within minutes. When using external services, ship lacquers overnight and communicate urgency. NORP should prioritize partners who understand this time sensitivity.
+</div>
+
+<!-- FULL SERVICE: CUTTING + PLATING -->
+<div class="section full">
+<div class="section-title"><span class="dot" style="background:#97C459"></span> Full Service — Lacquer Cutting + Electroplating</div>
+<div class="note" style="margin-top:-8px;margin-bottom:12px">These facilities handle the entire chain: mastering → lacquer cut → electroforming → stampers. Fastest turnaround, highest fidelity.</div>
+
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">W</div><div class="info"><div class="name">Welcome to 1979</div><div class="detail">Nashville, TN | Chris &amp; Yoli Mara | <a href="https://welcometo1979.com" target="_blank">welcometo1979.com</a><br>Neumann VMS70 lathe | Digital Matrix VLFP plating system | 10 plating stations<br>Grammy-nominated cuts (Megan Trainor, Mariah Carey, Chris Stapleton, Jason Isbell)<br>Only studio in the world that can track, cut &amp; plate same day. 8+ plating staff.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Stampers</span><span class="tag tag-full">Full Service</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">G</div><div class="info"><div class="name">The Electromastering Lab (Gotta Groove Records)</div><div class="detail">Columbus, OH | Matt Earley | <a href="https://recordplating.com" target="_blank">recordplating.com</a> | stampers@recordplating.com<br>28 plating positions | 5 process sinks | 2 silvering booths | 3 optical centering machines<br>Proprietary GrooveCoated™ stampers (2x lifespan). Capacity: ~50K records/day worth of stampers.<br>Serves pressing plants worldwide. &lt;1% reject rate. RO water purification. Inco S-Round nickel.</div><div class="tags"><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Stampers</span><span class="tag tag-full">Full Service</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">U</div><div class="info"><div class="name">United Record Pressing</div><div class="detail">Nashville, TN | <a href="https://unitedrecordpressing.com" target="_blank">unitedrecordpressing.com</a><br>In-house lacquer cutting + electroplating + pressing. $11M recent investment.<br>24 modern presses + 30+ restored classic presses. Cellular manufacturing. Sony Green Partner.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Stampers</span><span class="tag tag-full">Full Service</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">R</div><div class="info"><div class="name">Record Technology Inc (RTI)</div><div class="detail">Camarillo, CA<br>Major audiophile operation. In-house cutting, plating &amp; pressing.<br>Dorin heads plating — processed most major US albums in last 20 years. Industry gold standard.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Stampers</span><span class="tag tag-full">Full Service</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#1a2a1a;color:#97C459">Q</div><div class="info"><div class="name">Quality Record Pressings (Acoustic Sounds)</div><div class="detail">Salina, KS | Chad Kassem | <a href="https://qualityrecordpressings.com" target="_blank">qualityrecordpressings.com</a><br>In-house cutting + plating + pressing. 13+ presses (Toolex Alpha, SMT, Finebilt).<br>Quiex SV-P compound technology. Audiophile-focused.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Stampers</span><span class="tag tag-full">Full Service</span></div></div></div>
+</div>
+
+<!-- ELECTROPLATING / STAMPER SERVICES -->
+<div class="section plating">
+<div class="section-title"><span class="dot" style="background:#F2A623"></span> Electroplating &amp; Stamper Services (US)</div>
+
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#F2A623">S</div><div class="info"><div class="name">Symcon Inc.</div><div class="detail">United States<br>1-step, 2-step &amp; 3-step plating for the vinyl record industry.<br>Dedicated electroforming operation serving pressing plants.</div><div class="tags"><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Stampers</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#2a1a0a;color:#F2A623">M</div><div class="info"><div class="name">Mastercraft Metal Finishing</div><div class="detail">United States<br>Nearly 30 years providing electroplating for the music industry.<br>Established stamper supplier for US pressing plants.</div><div class="tags"><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Stampers</span></div></div></div>
+
+<div class="equip" style="opacity:0.6"><div class="icon" style="background:#2a1a0a;color:#F2A623">N</div><div class="info"><div class="name">NiPro Records</div><div class="detail">United States | ⚠️ CLOSED<br>Former stamper manufacturer. Equipment acquired by Gotta Groove / The Electromastering Lab.</div><div class="tags"><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Closed</span></div></div></div>
+</div>
+
+<!-- LACQUER CUTTING / MASTERING -->
+<div class="section cutting">
+<div class="section-title"><span class="dot" style="background:#3B8BD4"></span> Lacquer Cutting &amp; Vinyl Mastering (US)</div>
+
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">W</div><div class="info"><div class="name">Well Made Music</div><div class="detail">United States | <a href="https://wellmademusic.net" target="_blank">wellmademusic.net</a><br>12" lacquer: $260/side (digital) | $360/side (analog tape) | 7": $135/side<br>Rush: +$50/side (3 business day turnaround). Ships to any plant/plating facility in North America.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">A</div><div class="info"><div class="name">American Vinyl Co</div><div class="detail">United States | <a href="https://americanvinylco.com" target="_blank">americanvinylco.com</a><br>12" lacquer cutting + 2-step plating: $700. Newest stereo head technology.<br>Ships stampers to pressing plant of your choice. Add-on vinyl mastering available.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span><span class="tag tag-plating">Plating</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">E</div><div class="info"><div class="name">Elysian Masters</div><div class="detail">United States | Grammy-nominated<br>Audio mastering + vinyl mastering + lacquering services.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">T</div><div class="info"><div class="name">Telegraph Mastering</div><div class="detail">Portland, OR | <a href="https://telegraphmastering.com" target="_blank">telegraphmastering.com</a><br>Full-service mastering studio. Vinyl mastering + lacquer cutting.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">R</div><div class="info"><div class="name">Rare Form Mastering</div><div class="detail">United States<br>Neumann VMS70 lathe. Cuts from all-analog sources. Lacquer master cutting.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#1a1a2a;color:#AFA9EC">N</div><div class="info"><div class="name">NY Lathe Cuts</div><div class="detail">Woodside, NY | Rich Flores | +1 917-580-0052<br>Scully 601 lathe + Westrex 3D cutter head. Small-run specialist (1–25 copies).<br>7" polycarbonate from $10. Lacquer cutting available. US only.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span></div></div></div>
+</div>
+
+<!-- INTERNATIONAL -->
+<div class="section intl">
+<div class="section-title"><span class="dot" style="background:#5DCAA5"></span> International — DMM &amp; Lacquer Services</div>
+<div class="note" style="margin-top:-8px;margin-bottom:12px">⚠️ No DMM (Direct Metal Mastering) machines operate in the US. All DMM cutting requires European facilities.</div>
+
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">2</div><div class="info"><div class="name">24Mastering</div><div class="detail">Netherlands | <a href="https://24mastering.com" target="_blank">24mastering.com</a><br>3x modified Neumann VMS70 lathes. Lacquer AND DMM cutting.<br>12" lacquer: €115–€175/side | DMM 12": €130–€200/side<br>Half-speed cutting, inside-out grooves, laser etching, locked grooves. DSD256 direct-to-DMM.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span><span class="tag tag-dmm">DMM</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">F</div><div class="info"><div class="name">FONOTEC UG</div><div class="detail">Germany<br>DMM cutting studios + galvano stamper plating.<br>Compatible with Toolex Alpha, Viryl WarmTone, and Pheenix Alpha presses.</div><div class="tags"><span class="tag tag-dmm">DMM</span><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Stampers</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">T</div><div class="info"><div class="name">T.E.S.S. (The Entire Sound Spectrum)</div><div class="detail">Germany<br>Lacquer cuts (VMS70) + DMM cuts (VMS82). Analog premastering.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span><span class="tag tag-dmm">DMM</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">R</div><div class="info"><div class="name">Railroad Tracks Studios</div><div class="detail">Germany<br>DMM cutting + vinyl mastering.</div><div class="tags"><span class="tag tag-dmm">DMM</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">E</div><div class="info"><div class="name">Elsässer GmbH</div><div class="detail">Germany<br>Lacquer &amp; DMM master cutting + stamper service.<br>Also manufactures galvanic/electroforming equipment for vinyl plants.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span><span class="tag tag-dmm">DMM</span><span class="tag tag-plating">Plating</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">T</div><div class="info"><div class="name">TZO Leipzig GmbH</div><div class="detail">Germany<br>Wide range of electroplating services including vinyl record stampers.</div><div class="tags"><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Stampers</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">M</div><div class="info"><div class="name">Matrisfabrik AB</div><div class="detail">Finland<br>High quality stampers from lacquers and DMM. 20+ years experience.</div><div class="tags"><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Stampers</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">S</div><div class="info"><div class="name">Stamper Discs</div><div class="detail">Sheffield, UK<br>Electroplating service for the vinyl record industry.</div><div class="tags"><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Stampers</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">X</div><div class="info"><div class="name">XL Productions</div><div class="detail">Australia<br>Lacquer mastering + galvanic stamper service. Worldwide delivery.</div><div class="tags"><span class="tag tag-lacquer">Lacquer</span><span class="tag tag-plating">Plating</span></div></div></div>
+
+<div class="equip"><div class="icon" style="background:#0a2a2a;color:#5DCAA5">P</div><div class="info"><div class="name">Pheenix Alpha</div><div class="detail">Sweden<br>Pioneers in vinyl pressing &amp; electroforming since the 1970s. Equipment manufacturer.</div><div class="tags"><span class="tag tag-plating">Plating</span><span class="tag tag-stamper">Equipment</span></div></div></div>
+</div>
+
+<!-- PLATING PROCESS INFO -->
+<div class="section info">
+<div class="section-title"><span class="dot" style="background:#ED93B1"></span> Plating Process Reference</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:12px">
+<div style="background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;padding:14px">
+<div style="font-size:14px;font-weight:700;color:#e4e2d8;margin-bottom:6px">1-Step Plating</div>
+<div style="font-size:13px;color:#8a8878;line-height:1.5">Lacquer → Stamper (direct). No backup. If stamper is damaged during pressing, new lacquer cut required. Cheapest option.</div>
+</div>
+<div style="background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;padding:14px">
+<div style="font-size:14px;font-weight:700;color:#e4e2d8;margin-bottom:6px">2-Step Plating</div>
+<div style="font-size:13px;color:#8a8878;line-height:1.5">Lacquer → Father → Mother → Stamper. Mother preserved — additional stampers can be made. Standard for most runs.</div>
+</div>
+<div style="background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;padding:14px">
+<div style="font-size:14px;font-weight:700;color:#e4e2d8;margin-bottom:6px">3-Step Plating</div>
+<div style="font-size:13px;color:#8a8878;line-height:1.5">Lacquer → Father → Mother → Stamper. Father archived for generations. Dozens of mothers possible. Best for catalog titles that repress.</div>
+</div>
+</div>
+
+<div class="note">Key material: MDC lacquers (Japanese manufacturer) considered best. Inco S-Round nickel pellets = highest grade for electroforming. Delamo Chemicals silver formula = industry standard since 1980s. RO (reverse osmosis) water preferred over DI for purity.</div>
+</div>
+
+<div style="text-align:center;padding:24px 0;font-size:11px;color:#3a3a33;font-family:'Space Mono',monospace">
+New Orleans Record Press LLC | Mastering & Electroplating Directory | Updated April 2026<br>
+Confidential — Internal use only
+</div>
+
+</div>
+</body>
+</html>
