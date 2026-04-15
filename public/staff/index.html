@@ -44,7 +44,7 @@ h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:
 .status.backup{background:#3a2a1a;color:#ba8a5c;border:1px solid #5a3a2a}
 .flow-section{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden}
 .flow-section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#7F77DD,#97C459,#5DCAA5,#F2A623);border-radius:12px 12px 0 0}
-.flow-row{display:flex;align-items:center;gap:0;flex-wrap:wrap;justify-content:center;margin:16px 0}
+.flow-row{display:flex;align-items:center;gap:0;flex-wrap:nowrap;justify-content:center;margin:16px 0}
 .flow-box{background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;padding:10px 14px;text-align:center;min-width:100px;position:relative}
 .flow-box .fb-title{font-size:16px;font-weight:600;color:#e4e2d8}
 .flow-box .fb-sub{font-size:14px;color:#6a6858;font-family:'Space Mono',monospace;margin-top:2px}
@@ -99,7 +99,8 @@ h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:
 <div class="flow-box highlight"><div class="fb-title">Record press</div><div class="fb-sub">Steam + hydraulic</div></div>
 <div class="flow-arrow">&rarr;</div>
 <div class="flow-box"><div class="fb-title">Edge trim</div><div class="fb-sub">Auto / manual</div></div>
-<div class="flow-arrow">&rarr;</div>
+</div>
+<div class="flow-row">
 <div class="flow-box"><div class="fb-title">QC / listen</div><div class="fb-sub">Test play + visual</div></div>
 <div class="flow-arrow">&rarr;</div>
 <div class="flow-box"><div class="fb-title">Assembly</div><div class="fb-sub">Jacket + sleeve</div></div>
