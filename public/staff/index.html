@@ -44,13 +44,14 @@ h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:
 .status.backup{background:#3a2a1a;color:#ba8a5c;border:1px solid #5a3a2a}
 .flow-section{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden}
 .flow-section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#7F77DD,#97C459,#5DCAA5,#F2A623);border-radius:12px 12px 0 0}
-.flow-row{display:flex;align-items:center;gap:0;flex-wrap:nowrap;justify-content:center;margin:16px 0}
-.flow-box{background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;padding:10px 14px;text-align:center;min-width:100px;position:relative}
+.flow-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+.flow-box{background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;padding:14px 10px;text-align:center;position:relative}
 .flow-box .fb-title{font-size:16px;font-weight:600;color:#e4e2d8}
 .flow-box .fb-sub{font-size:14px;color:#6a6858;font-family:'Space Mono',monospace;margin-top:2px}
-.flow-arrow{color:#4a4c53;font-size:20px;padding:0 4px;flex-shrink:0;font-weight:300}
+.flow-arrow{display:none}
 .flow-box.highlight{border-color:#7F77DD;background:#1a1a2a}
 .flow-box.highlight .fb-title{color:#AFA9EC}
+.flow-box:not(:last-child)::after{content:'→';position:absolute;right:-12px;top:50%;transform:translate(50%,-50%);color:#4a4c53;font-size:18px;z-index:1}
 .legend{display:flex;gap:24px;margin-top:16px;flex-wrap:wrap}
 .legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:#6a6858}
 .legend-item .ldot{width:8px;height:8px;border-radius:50%}
