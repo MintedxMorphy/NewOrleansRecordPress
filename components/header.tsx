@@ -10,6 +10,7 @@ const navLinks = [
   { href: "/quote", label: "Quote" },
   { href: "#about", label: "About" },
   { href: "#contact", label: "Contact" },
+  { href: "/shop", label: "Shop" },
 ]
 
 export function Header() {
