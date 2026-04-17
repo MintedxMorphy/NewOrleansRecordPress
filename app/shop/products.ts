@@ -1,0 +1,166 @@
+export interface Product {
+  id: string
+  name: string
+  artist?: string
+  catno?: string
+  price: number // in cents
+  category: 'lp' | '7inch' | 'merch'
+  image: string
+  description: string
+  variants?: string[]
+  stock: number
+}
+
+export const products: Product[] = [
+  // LPs
+  {
+    id: 'scr-002',
+    name: 'Street Music',
+    artist: 'Stooges Brass Band',
+    catno: 'SCR-002',
+    price: 1200,
+    category: 'lp',
+    image: 'https://i.discogs.com/ndh_BhRTq-Nus5wh2GnTsXWzA40KXStRjLUW5JbDi50/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ3NTE3/MTMtMTM4ODI1NDg3/MS00MDczLmpwZWc.jpeg',
+    description: 'New Orleans brass funk on wax.',
+    stock: 0,
+  },
+  {
+    id: 'scr-006',
+    name: 'Beat Tape Sides A & B',
+    artist: 'Seprock',
+    catno: 'SCR-006',
+    price: 1300,
+    category: 'lp',
+    image: 'https://i.discogs.com/MbTcTe_sl8hvP113L7H6NnM_frmbes_u1PoS93yQ7s4/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTExNzIz/NzM1LTE1MjEyOTk0/NzctOTczNS5qcGVn.jpeg',
+    description: '2xLP beat tape pressed at NORP.',
+    stock: 0,
+  },
+  {
+    id: 'scr-023',
+    name: 'She Is The Future',
+    artist: 'Charm Taylor',
+    catno: 'SCR-023',
+    price: 1800,
+    category: 'lp',
+    image: '/images/placeholder-record.svg',
+    description: 'LP by Charm Taylor.',
+    stock: 0,
+  },
+  {
+    id: 'scr-021',
+    name: 'KindHumanKind',
+    artist: 'The Monocle',
+    catno: 'SCR-021',
+    price: 1800,
+    category: 'lp',
+    image: 'https://i.discogs.com/lWaDJVEaIjQ62oYDpVPWVyUV-UXDdmiqIYrh0O5Mm6o/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMyOTUy/MDA2LTE3Mzc4NDA1/NjEtOTUxNS5qcGVn.jpeg',
+    description: 'LP by The Monocle.',
+    stock: 0,
+  },
+  {
+    id: 'tasche-lp',
+    name: 'Tasche De La Rocha & The Psychedelic Roses',
+    artist: 'Tasche De La Rocha & The Psychedelic Roses',
+    price: 1800,
+    category: 'lp',
+    image: 'https://i.discogs.com/GkPXjmlnQvJ0BFwEBbztVOjdMGhei7d1qK27zNwNN_o/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI5NzAw/NTM1LTE3MDcwOTk1/ODAtMzYyMS5qcGVn.jpeg',
+    description: 'Self-titled LP.',
+    stock: 0,
+  },
+  {
+    id: 'scr-024',
+    name: 'Doubles',
+    artist: 'BASHER',
+    catno: 'SCR-024',
+    price: 2400,
+    category: 'lp',
+    image: 'https://i.discogs.com/nWFGR-FVaIzQ-3FvTapdNeFF-7_9M7sL3SM0ZUdjFpY/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI2MDc4/NDE5LTE2NzYyMTk1/MzUtNjk4MS5qcGVn.jpeg',
+    description: 'LP by BASHER.',
+    stock: 0,
+  },
+  {
+    id: 'scr-029',
+    name: 'Ready, Set',
+    artist: '_thesmoothcat & Wino Willy',
+    catno: 'SCR-029',
+    price: 3200,
+    category: 'lp',
+    image: 'https://i.discogs.com/MTdI3-Ql4Vq3KVmPYFoBZ_SmSAhESDpYYn0tC9i-lZc/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMwMTgw/OTc0LTE3MzA3MTQ4/ODEtNTcxMi5qcGVn.jpeg',
+    description: 'LP by _thesmoothcat & Wino Willy.',
+    stock: 0,
+  },
+  // 7"
+  {
+    id: 'scr-013',
+    name: 'Shake It Fo Ya Hood',
+    artist: 'Ricky B',
+    catno: 'SCR-013',
+    price: 1000,
+    category: '7inch',
+    image: 'https://i.discogs.com/Ykl4-kd89XZqxPJCKQYnFd6xtVbXWy9RLS-i8N142u0/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE1MTI0/MTEwLTE1ODY5ODE3/MzEtNzU5NC5qcGVn.jpeg',
+    description: '7" single by Ricky B.',
+    stock: 0,
+  },
+  {
+    id: 'scr-014',
+    name: 'Lifetime / Hustler',
+    artist: 'Blackbird & Seprock',
+    catno: 'SCR-014',
+    price: 700,
+    category: '7inch',
+    image: 'https://i.discogs.com/74luF6WO269SnVopt9dG1OkXDJZ8P1-pLSh4uEzNVdU/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE1MTI0/MTMxLTE1ODY5ODE5/MjItMjk2MC5qcGVn.jpeg',
+    description: '7" split by Blackbird & Seprock.',
+    stock: 0,
+  },
+  {
+    id: 'scr-018',
+    name: 'The Army With The Most Love Wins',
+    artist: 'The Night Janitor',
+    catno: 'SCR-018',
+    price: 700,
+    category: '7inch',
+    image: '/images/placeholder-record.svg',
+    description: '7" single by The Night Janitor.',
+    stock: 0,
+  },
+  // Merch
+  {
+    id: 'norp-sweatshirt',
+    name: 'NORP Sweatshirt',
+    price: 0,
+    category: 'merch',
+    image: '/images/placeholder-merch.svg',
+    description: 'Dark blue NORP crewneck sweatshirt.',
+    variants: ['S', 'M', 'L', 'XL'],
+    stock: 0,
+  },
+  {
+    id: 'womens-tee',
+    name: "Women's T-Shirt",
+    price: 0,
+    category: 'merch',
+    image: '/images/placeholder-merch.svg',
+    description: 'White NORP womens tee.',
+    variants: ['S', 'M', 'L', 'XL'],
+    stock: 0,
+  },
+  {
+    id: 'mens-tee',
+    name: "Men's T-Shirt",
+    price: 0,
+    category: 'merch',
+    image: '/images/placeholder-merch.svg',
+    description: 'Beige NORP mens tee.',
+    variants: ['S', 'M', 'L', 'XL'],
+    stock: 0,
+  },
+  {
+    id: 'vinyl-coaster',
+    name: 'Vinyl Coaster',
+    price: 500,
+    category: 'merch',
+    image: '/images/placeholder-merch.svg',
+    description: 'Cork-backed coaster made from recycled vinyl punchouts.',
+    stock: 0,
+  },
+]

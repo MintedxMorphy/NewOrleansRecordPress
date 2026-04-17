@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 150" width="150" height="150">
+  <rect width="150" height="150" fill="#1a1a1a"/>
+  <rect x="45" y="30" width="60" height="70" rx="4" fill="#222" stroke="#333" stroke-width="1"/>
+  <path d="M45 45 Q75 35 105 45" fill="none" stroke="#333" stroke-width="2"/>
+  <text x="75" y="138" text-anchor="middle" fill="#444" font-size="9" font-family="monospace">NO IMAGE</text>
+</svg>
