@@ -152,7 +152,7 @@
     "name": "DJ Lesson Clinic",
     "price": 35000,
     "category": "experience",
-    "image": "/images/placeholder-merch.svg",
+    "image": "/images/dj-lesson.jpg",
     "description": "Join Scott Borne for an intimate DJ lesson. Learn turntablism, mixing, and the art of DJing from a New Orleans legend. 4-6 guests per session, 2 hours.",
     "bookingInfo": "4-6 participants per session",
     "stock": 999
@@ -162,7 +162,7 @@
     "name": "Press Vinyl Experience",
     "price": 35000,
     "category": "experience",
-    "image": "/images/placeholder-merch.svg",
+    "image": "/images/press-experience.jpg",
     "description": "Walk the floor at NORP and press your own vinyl. Watch our machines in action, handle lacquer, and leave with a copy of what you pressed. 4-6 guests per session, 2 hours.",
     "bookingInfo": "4-6 participants per session",
     "stock": 999
