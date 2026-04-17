@@ -123,7 +123,7 @@ export default function ShopPage() {
         <section className="py-16 md:py-20 text-center">
           <div className="max-w-7xl mx-auto px-6">
             <p className="font-mono text-sm uppercase tracking-[0.3em] text-accent mb-4">From the Press</p>
-            <h1 className="text-4xl md:text-5xl font-bold uppercase tracking-tight text-foreground mb-4">NORP Shop</h1>
+
             <p className="text-muted-foreground text-lg max-w-xl mx-auto">
               Records &amp; merch from New Orleans Record Press
             </p>
