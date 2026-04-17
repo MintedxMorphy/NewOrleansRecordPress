@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NORP Inventory Dashboard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-height:100vh;padding:0;font-size:17px}
+.nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:16px 32px;display:flex;gap:16px;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;flex-wrap:wrap}
+.nav a{color:#6a6858;text-decoration:none;font-size:18px;font-weight:600;padding:10px 20px;border-radius:8px;transition:all .2s}
+.nav a:hover{color:#e4e2d8;background:#1a1d24}
+.nav a.active{color:#5DCAA5;background:#0a1a15;border:1px solid #1a3a2a}
+.content{padding:32px;max-width:1100px;margin:0 auto}
+h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:#f5f3e8}
+.subtitle{font-size:18px;color:#8a8878;margin-bottom:32px;font-family:'Space Mono',monospace}
+.section{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden}
+.section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
+.section.pvc::before{background:linear-gradient(90deg,#333,#FFD700,#DC143C)}
+.section.inner::before{background:linear-gradient(90deg,#5DCAA5,#3B8BD4)}
+.section.outer::before{background:linear-gradient(90deg,#7F77DD,#ED93B1)}
+.section-title{font-size:20px;font-weight:700;margin-bottom:20px;color:#f5f3e8}
+.read-only-badge{display:inline-block;font-size:11px;font-weight:600;color:#6a6858;background:#1a1d24;border:1px solid #2a2c33;border-radius:4px;padding:2px 8px;font-family:'Space Mono',monospace;vertical-align:middle;margin-left:10px}
+
+/* PVC */
+.total-bar-wrap{margin-bottom:24px}
+.total-bar-label{display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;color:#8a8878}
+.total-bar-label span:last-child{font-family:'Space Mono',monospace;color:#e4e2d8}
+.total-bar{background:#1a1d24;border-radius:8px;height:16px;overflow:hidden;display:flex}
+.total-bar-seg{height:100%;transition:width .4s ease}
+
+.pvc-rows{display:flex;flex-direction:column;gap:16px}
+.pvc-row{display:grid;grid-template-columns:110px 120px 1fr 140px;gap:12px;align-items:center}
+.pvc-label{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
+.pvc-swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0;border:1px solid #444}
+.pvc-lbs{font-size:13px;font-family:'Space Mono',monospace;color:#e4e2d8}
+.pvc-status{font-size:12px;color:#F2A623;font-family:'Space Mono',monospace}
+.pvc-bar-wrap{background:#1a1d24;border-radius:6px;height:12px;overflow:hidden}
+.pvc-bar-fill{height:100%;border-radius:6px;transition:width .4s ease}
+
+/* Sleeves */
+.sleeve-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+.sleeve-card{background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;padding:16px}
+.sleeve-label{font-size:11px;font-weight:600;color:#6a6858;text-transform:uppercase;letter-spacing:.5px;font-family:'Space Mono',monospace;margin-bottom:6px}
+.sleeve-count{font-size:28px;font-weight:700;font-family:'Space Mono',monospace;color:#e4e2d8}
+.sleeve-unit{font-size:12px;color:#6a6858;margin-top:2px}
+
+/* Footer note */
+.edit-note{margin-top:32px;padding:16px 20px;background:#0a1a15;border:1px solid #1a3a2a;border-radius:8px;color:#5DCAA5;font-size:14px}
+.edit-note a{color:#5DCAA5;font-weight:700}
+
+.loading{color:#6a6858;font-family:'Space Mono',monospace;padding:40px 0;text-align:center}
+.error{color:#ff6b6b;font-family:'Space Mono',monospace;padding:40px 0;text-align:center}
+
+@media(max-width:700px){
+  .pvc-row{grid-template-columns:90px 1fr;grid-template-rows:auto auto}
+  .pvc-bar-wrap,.pvc-status{grid-column:span 2}
+}
+</style>
+</head>
+<body>
+
+<div class="nav">
+<img src="/staff/norp-logo.png" alt="NORP" style="height:90px;margin-right:12px">
+<a href="/staff">Operations Guide</a>
+<a href="/staff/pricing">Pricing &amp; Market</a>
+<a href="/staff/suppliers">PVC Suppliers</a>
+<a href="/staff/plants">Plant Directory</a>
+<a href="/staff/mastering">Mastering &amp; Plating</a>
+<a href="/staff/inventory" class="active">Inventory</a>
+</div>
+
+<div class="content">
+  <h1>Inventory Dashboard <span class="read-only-badge">READ ONLY</span></h1>
+  <p class="subtitle">Current stock levels — updated by admin</p>
+
+  <div id="root">
+    <p class="loading">Loading inventory…</p>
+  </div>
+</div>
+
+<script>
+(function() {
+  const PVC_COLORS = [
+    { key: 'black',  label: 'Black',  bar: '#333',    swatch: '#333' },
+    { key: 'clear',  label: 'Clear',  bar: null,      swatch: null, striped: true },
+    { key: 'yellow', label: 'Yellow', bar: '#FFD700', swatch: '#FFD700' },
+    { key: 'red',    label: 'Red',    bar: '#DC143C', swatch: '#DC143C' },
+  ];
+
+  const STRIPED = 'repeating-linear-gradient(45deg,#b0c4cc,#b0c4cc 4px,#d0e4ec 4px,#d0e4ec 8px)';
+  const STRIPED_SWATCH = 'repeating-linear-gradient(45deg,#b0c4cc,#b0c4cc 3px,#d0e4ec 3px,#d0e4ec 6px)';
+
+  const INNER = [
+    { key: 'whitePaper', label: 'White Paper' },
+    { key: 'blackPaper', label: 'Black Paper' },
+    { key: 'whitePoly',  label: 'White Poly' },
+    { key: 'blackPoly',  label: 'Black Poly' },
+    { key: 'ricePaper',  label: 'Rice Paper' },
+  ];
+
+  const OUTER = [
+    { key: 'twoMil',           label: '2 mil' },
+    { key: 'twoMilResealable', label: '2 mil Resealable' },
+    { key: 'threeMil',         label: '3 mil' },
+  ];
+
+  function pct(val, max) {
+    if (!max) return 0;
+    return Math.min(100, (val / max) * 100);
+  }
+
+  function render(inv) {
+    const cap = inv.pvc.capacity;
+    const colors = inv.pvc.colors;
+    const totalLbs = PVC_COLORS.reduce((s, c) => s + (colors[c.key] ? colors[c.key].lbs : 0), 0);
+
+    // Build total multi-color bar segments
+    const segs = PVC_COLORS.map(c => {
+      const lbs = colors[c.key] ? colors[c.key].lbs : 0;
+      const p = pct(lbs, cap);
+      if (p <= 0) return '';
+      const bg = c.striped ? STRIPED : c.bar;
+      return `<div class="total-bar-seg" style="width:${p}%;background:${bg}"></div>`;
+    }).join('');
+
+    // PVC rows
+    const pvcRows = PVC_COLORS.map(c => {
+      const col = colors[c.key] || { lbs: 0, status: '' };
+      const p = pct(col.lbs, cap);
+      const bg = c.striped ? STRIPED : c.bar;
+      const swatchBg = c.striped ? STRIPED_SWATCH : c.swatch;
+      const onOrder = col.status === 'on order';
+      const lbsLabel = col.lbs === 0 && onOrder
+        ? `0 lbs — <span style="color:#F2A623">ON ORDER</span>`
+        : `${col.lbs.toLocaleString()} lbs`;
+      return `
+        <div class="pvc-row">
+          <div class="pvc-label">
+            <div class="pvc-swatch" style="background:${swatchBg}"></div>
+            ${c.label}
+          </div>
+          <div class="pvc-lbs">${lbsLabel}</div>
+          <div class="pvc-bar-wrap">
+            <div class="pvc-bar-fill" style="width:${p}%;background:${bg};min-width:${p>0?4:0}px"></div>
+          </div>
+          <div class="pvc-status">${onOrder && col.lbs > 0 ? 'ON ORDER' : ''}</div>
+        </div>`;
+    }).join('');
+
+    // Sleeve cards helper
+    function sleeveCards(items, data) {
+      return items.map(item => {
+        const count = data[item.key] !== undefined ? data[item.key] : 0;
+        return `
+          <div class="sleeve-card">
+            <div class="sleeve-label">${item.label}</div>
+            <div class="sleeve-count">${count.toLocaleString()}</div>
+            <div class="sleeve-unit">units</div>
+          </div>`;
+      }).join('');
+    }
+
+    document.getElementById('root').innerHTML = `
+      <!-- PVC -->
+      <div class="section pvc">
+        <div class="section-title">PVC Compound</div>
+        <div class="total-bar-wrap">
+          <div class="total-bar-label">
+            <span>Total on hand</span>
+            <span>${totalLbs.toLocaleString()} / ${cap.toLocaleString()} lbs (${Math.round((totalLbs/cap)*100)}%)</span>
+          </div>
+          <div class="total-bar">${segs || '<div style="width:100%;height:100%;background:#1a1d24"></div>'}</div>
+        </div>
+        <div class="pvc-rows">${pvcRows}</div>
+      </div>
+
+      <!-- Inner Sleeves -->
+      <div class="section inner">
+        <div class="section-title">Inner Sleeves</div>
+        <div class="sleeve-grid">${sleeveCards(INNER, inv.innerSleeves)}</div>
+      </div>
+
+      <!-- Outer Sleeves -->
+      <div class="section outer">
+        <div class="section-title">Outer Sleeves</div>
+        <div class="sleeve-grid">${sleeveCards(OUTER, inv.outerSleeves)}</div>
+      </div>
+
+      <div class="edit-note">
+        To update inventory levels, go to <a href="/admin">Admin Panel → Inventory tab</a>.
+        This dashboard is read-only.
+      </div>
+    `;
+  }
+
+  fetch('/api/admin/inventory')
+    .then(r => r.json())
+    .then(data => render(data))
+    .catch(() => {
+      document.getElementById('root').innerHTML = '<p class="error">Failed to load inventory data.</p>';
+    });
+})();
+</script>
+
+</body>
+</html>

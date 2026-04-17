@@ -1,0 +1,23 @@
+{
+  "pvc": {
+    "capacity": 10000,
+    "colors": {
+      "black": { "lbs": 0, "status": "on order" },
+      "clear": { "lbs": 0, "status": "" },
+      "yellow": { "lbs": 0, "status": "" },
+      "red": { "lbs": 0, "status": "" }
+    }
+  },
+  "innerSleeves": {
+    "whitePaper": 0,
+    "blackPaper": 0,
+    "whitePoly": 0,
+    "blackPoly": 0,
+    "ricePaper": 0
+  },
+  "outerSleeves": {
+    "twoMil": 0,
+    "twoMilResealable": 0,
+    "threeMil": 0
+  }
+}

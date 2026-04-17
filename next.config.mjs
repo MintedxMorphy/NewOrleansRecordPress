@@ -28,6 +28,10 @@ const nextConfig = {
         source: '/staff/mastering',
         destination: '/staff/mastering.html',
       },
+      {
+        source: '/staff/inventory',
+        destination: '/staff/inventory.html',
+      },
     ]
   },
 }
