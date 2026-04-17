@@ -111,7 +111,7 @@
   {
     "id": "norp-sweatshirt",
     "name": "NORP Sweatshirt",
-    "price": 0,
+    "price": 4500,
     "category": "merch",
     "image": "/images/placeholder-merch.svg",
     "description": "Dark blue NORP crewneck sweatshirt.",
@@ -121,7 +121,7 @@
   {
     "id": "womens-tee",
     "name": "Women's T-Shirt",
-    "price": 0,
+    "price": 2500,
     "category": "merch",
     "image": "/images/placeholder-merch.svg",
     "description": "White NORP womens tee.",
@@ -131,7 +131,7 @@
   {
     "id": "mens-tee",
     "name": "Men's T-Shirt",
-    "price": 0,
+    "price": 2500,
     "category": "merch",
     "image": "/images/placeholder-merch.svg",
     "description": "Beige NORP mens tee.",
