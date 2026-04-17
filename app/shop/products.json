@@ -1,5 +1,64 @@
 [
   {
+    "id": "dj-clinic",
+    "name": "DJ Lesson Clinic",
+    "price": 35000,
+    "category": "experience",
+    "image": "/images/dj-lesson.jpg",
+    "description": "Join Scott Borne for an intimate DJ lesson. Learn turntablism, mixing, and the art of DJing from a New Orleans legend. 4-6 guests per session, 2 hours.",
+    "bookingInfo": "4-6 participants per session",
+    "stock": 999
+  },
+  {
+    "id": "press-vinyl-experience",
+    "name": "Press Vinyl Experience",
+    "price": 35000,
+    "category": "experience",
+    "image": "/images/press-experience.jpg",
+    "description": "Walk the floor at NORP and press your own vinyl. Watch our machines in action, handle lacquer, and leave with a copy of what you pressed. 4-6 guests per session, 2 hours.",
+    "bookingInfo": "4-6 participants per session",
+    "stock": 999
+  },
+  {
+    "id": "norp-sweatshirt",
+    "name": "NORP Sweatshirt",
+    "price": 4500,
+    "category": "merch",
+    "image": "/images/placeholder-merch.svg",
+    "description": "Dark blue NORP crewneck sweatshirt.",
+    "variants": ["S", "M", "L", "XL"],
+    "stock": 0
+  },
+  {
+    "id": "womens-tee",
+    "name": "Women's T-Shirt",
+    "price": 2500,
+    "category": "merch",
+    "image": "/images/placeholder-merch.svg",
+    "description": "White NORP womens tee.",
+    "variants": ["S", "M", "L", "XL"],
+    "stock": 0
+  },
+  {
+    "id": "mens-tee",
+    "name": "Men's T-Shirt",
+    "price": 2500,
+    "category": "merch",
+    "image": "/images/placeholder-merch.svg",
+    "description": "Beige NORP mens tee.",
+    "variants": ["S", "M", "L", "XL"],
+    "stock": 0
+  },
+  {
+    "id": "vinyl-coaster",
+    "name": "Vinyl Coaster",
+    "price": 500,
+    "category": "merch",
+    "image": "/images/placeholder-merch.svg",
+    "description": "Cork-backed coaster made from recycled vinyl punchouts.",
+    "stock": 0
+  },
+  {
     "id": "scr-002",
     "name": "Street Music",
     "artist": "Stooges Brass Band",
@@ -107,64 +166,5 @@
     "image": "/images/placeholder-record.svg",
     "description": "7\" single by The Night Janitor.",
     "stock": 0
-  },
-  {
-    "id": "norp-sweatshirt",
-    "name": "NORP Sweatshirt",
-    "price": 4500,
-    "category": "merch",
-    "image": "/images/placeholder-merch.svg",
-    "description": "Dark blue NORP crewneck sweatshirt.",
-    "variants": ["S", "M", "L", "XL"],
-    "stock": 0
-  },
-  {
-    "id": "womens-tee",
-    "name": "Women's T-Shirt",
-    "price": 2500,
-    "category": "merch",
-    "image": "/images/placeholder-merch.svg",
-    "description": "White NORP womens tee.",
-    "variants": ["S", "M", "L", "XL"],
-    "stock": 0
-  },
-  {
-    "id": "mens-tee",
-    "name": "Men's T-Shirt",
-    "price": 2500,
-    "category": "merch",
-    "image": "/images/placeholder-merch.svg",
-    "description": "Beige NORP mens tee.",
-    "variants": ["S", "M", "L", "XL"],
-    "stock": 0
-  },
-  {
-    "id": "vinyl-coaster",
-    "name": "Vinyl Coaster",
-    "price": 500,
-    "category": "merch",
-    "image": "/images/placeholder-merch.svg",
-    "description": "Cork-backed coaster made from recycled vinyl punchouts.",
-    "stock": 0
-  },
-  {
-    "id": "dj-clinic",
-    "name": "DJ Lesson Clinic",
-    "price": 35000,
-    "category": "experience",
-    "image": "/images/dj-lesson.jpg",
-    "description": "Join Scott Borne for an intimate DJ lesson. Learn turntablism, mixing, and the art of DJing from a New Orleans legend. 4-6 guests per session, 2 hours.",
-    "bookingInfo": "4-6 participants per session",
-    "stock": 999
-  },
-  {
-    "id": "press-vinyl-experience",
-    "name": "Press Vinyl Experience",
-    "price": 35000,
-    "category": "experience",
-    "image": "/images/press-experience.jpg",
-    "description": "Walk the floor at NORP and press your own vinyl. Watch our machines in action, handle lacquer, and leave with a copy of what you pressed. 4-6 guests per session, 2 hours.",
-    "bookingInfo": "4-6 participants per session",
-    "stock": 999
   }
 ]
