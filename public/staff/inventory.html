@@ -106,6 +106,12 @@ h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:
     { key: 'threeMil',         label: '3 mil' },
   ];
 
+  const BOXES = [
+    { key: 'innerBox',    label: 'Inner Box' },
+    { key: 'outerBox',    label: 'Outer Box' },
+    { key: 'shippingBox', label: 'Shipping Box' },
+  ];
+
   function pct(val, max) {
     if (!max) return 0;
     return Math.min(100, (val / max) * 100);
@@ -186,6 +192,12 @@ h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:
       <div class="section outer">
         <div class="section-title">Outer Sleeves</div>
         <div class="sleeve-grid">${sleeveCards(OUTER, inv.outerSleeves)}</div>
+      </div>
+
+      <!-- Boxes -->
+      <div class="section boxes">
+        <div class="section-title">Boxes</div>
+        <div class="sleeve-grid">${sleeveCards(BOXES, inv.boxes || {})}</div>
       </div>
 
       <div class="edit-note">

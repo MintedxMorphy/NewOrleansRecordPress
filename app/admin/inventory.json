@@ -19,5 +19,10 @@
     "twoMil": 0,
     "twoMilResealable": 0,
     "threeMil": 0
+  },
+  "boxes": {
+    "innerBox": 0,
+    "outerBox": 0,
+    "shippingBox": 0
   }
 }

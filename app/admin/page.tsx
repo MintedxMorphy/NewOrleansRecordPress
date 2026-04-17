@@ -44,6 +44,11 @@ interface Inventory {
     twoMilResealable: number
     threeMil: number
   }
+  boxes: {
+    innerBox: number
+    outerBox: number
+    shippingBox: number
+  }
 }
 
 const CATEGORIES = ['lp', '7inch', 'merch'] as const
@@ -156,6 +161,12 @@ const OUTER_SLEEVES: { key: keyof Inventory['outerSleeves']; label: string }[] =
   { key: 'threeMil',        label: '3 mil' },
 ]
 
+const BOXES: { key: keyof Inventory['boxes']; label: string }[] = [
+  { key: 'innerBox',    label: 'Inner Box' },
+  { key: 'outerBox',    label: 'Outer Box' },
+  { key: 'shippingBox', label: 'Shipping Box' },
+]
+
 // ─── Inventory Tab ────────────────────────────────────────────────────────────
 
 function InventoryTab({ password, inventory, setInventory }: {
@@ -209,6 +220,11 @@ function InventoryTab({ password, inventory, setInventory }: {
   function setOuter(key: keyof Inventory['outerSleeves'], val: number) {
     if (!local) return
     setLocal({ ...local, outerSleeves: { ...local.outerSleeves, [key]: val } })
+  }
+
+  function setBox(key: keyof Inventory['boxes'], val: number) {
+    if (!local) return
+    setLocal({ ...local, boxes: { ...local.boxes, [key]: val } })
   }
 
   if (!local) return <p style={{ color: '#555' }}>Loading inventory...</p>
@@ -336,6 +352,28 @@ function InventoryTab({ password, inventory, setInventory }: {
                   value={local.outerSleeves[key]}
                   min={0}
                   onChange={e => setOuter(key, parseInt(e.target.value) || 0)}
+                  style={{ ...S.numInput, flex: 1, width: '100%' }}
+                />
+                <span style={{ color: '#888', fontSize: 12, whiteSpace: 'nowrap' }}>units</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Boxes */}
+      <div style={S.cardPad}>
+        <h2 style={S.sectionTitle}>Boxes</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
+          {BOXES.map(({ key, label }) => (
+            <div key={key} style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 8, padding: 16 }}>
+              <label style={S.label}>{label}</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="number"
+                  value={local.boxes[key]}
+                  min={0}
+                  onChange={e => setBox(key, parseInt(e.target.value) || 0)}
                   style={{ ...S.numInput, flex: 1, width: '100%' }}
                 />
                 <span style={{ color: '#888', fontSize: 12, whiteSpace: 'nowrap' }}>units</span>
