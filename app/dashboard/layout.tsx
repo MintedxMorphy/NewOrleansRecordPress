@@ -1,19 +1,9 @@
 'use client';
 
 import { SessionProvider, useSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import Image from 'next/image';
 
 function DashboardInner({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/api/auth/signin');
-    }
-  }, [status, router]);
 
   if (status === 'loading') {
     return (
@@ -22,8 +12,6 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-
-  if (status === 'unauthenticated') return null;
 
   return (
     <div style={{ background: '#0A0A0A', minHeight: '100vh', color: '#E8E8E8', fontFamily: 'var(--font-sans, sans-serif)' }}>
