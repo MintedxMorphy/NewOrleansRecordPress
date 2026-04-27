@@ -1,19 +1,15 @@
 import { google } from 'googleapis';
-import { JWT } from 'google-auth-library';
 
 const SHEETS_DB_ID = process.env.SHEETS_DB_ID!;
 
-function getAuth(): JWT {
-  const raw = Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY!, 'base64').toString('utf-8');
-  const key = JSON.parse(raw);
-  return new JWT({
-    email: key.client_email,
-    key: key.private_key,
-    scopes: [
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive',
-    ],
-  });
+function getAuth() {
+  const oauth2 = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID!,
+    process.env.GOOGLE_CLIENT_SECRET!,
+    process.env.GOOGLE_REDIRECT_URI!,
+  );
+  oauth2.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN! });
+  return oauth2;
 }
 
 function getSheetsClient() {

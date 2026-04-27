@@ -247,6 +247,15 @@ export default function AdminPage() {
         <TokenRefresh label="Refresh Gusto Token" path="/api/gusto/refresh" />
       </Card>
 
+      <Card title="Google OAuth">
+        <p style={{ color: COLORS.muted, fontSize: '13px', marginBottom: '12px' }}>
+          Connect Google to authorize Sheets, Drive, and Gmail access. After connecting, copy the refresh token from Vercel logs and set it as <code style={{ background: COLORS.elevated, padding: '1px 4px', borderRadius: '3px' }}>GOOGLE_REFRESH_TOKEN</code>.
+        </p>
+        <a href="/api/auth/google/connect" style={{ display: 'inline-block', background: COLORS.green + '22', border: `1px solid ${COLORS.green}66`, borderRadius: '6px', padding: '8px 16px', color: COLORS.green, fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>
+          Connect Google Drive &amp; Sheets
+        </a>
+      </Card>
+
       <Card title="Claude API Usage">
         <div style={{ color: COLORS.muted, fontSize: '13px' }}>
           Claude API usage is not available via API at this time.
