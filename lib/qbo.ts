@@ -1,6 +1,7 @@
 import { findRow, updateRow, getSheet, appendRow } from './sheets';
 
 const QBO_BASE = 'https://quickbooks.api.intuit.com/v3/company';
+const QBO_REALM_ID = () => (process.env.QBO_REALM_ID ?? '').trim();
 const TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
 
 async function getCachedToken(): Promise<string> {
@@ -40,7 +41,7 @@ export async function refreshQBOToken(): Promise<string> {
 
 async function qboFetch(path: string): Promise<any> {
   const token = await getCachedToken();
-  const realmId = process.env.QBO_REALM_ID!;
+  const realmId = QBO_REALM_ID();
   const res = await fetch(`${QBO_BASE}/${realmId}/${path}`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -159,7 +160,7 @@ export interface CreateBillResult {
 
 async function qboPost(path: string, body: any): Promise<any> {
   const token = await getCachedToken();
-  const realmId = process.env.QBO_REALM_ID!;
+  const realmId = QBO_REALM_ID();
   const res = await fetch(`${QBO_BASE}/${realmId}/${path}`, {
     method: 'POST',
     headers: {
@@ -174,7 +175,7 @@ async function qboPost(path: string, body: any): Promise<any> {
 
 export async function createDraftBill(params: CreateBillParams): Promise<CreateBillResult> {
   try {
-    const realmId = process.env.QBO_REALM_ID!;
+    const realmId = QBO_REALM_ID();
 
     // Find vendor
     const encodedName = encodeURIComponent(`SELECT * FROM Vendor WHERE DisplayName = '${params.vendorName.replace(/'/g, "\\'")}'`);
