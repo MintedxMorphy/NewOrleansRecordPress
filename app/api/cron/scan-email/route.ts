@@ -419,7 +419,17 @@ export async function GET(req: NextRequest) {
 
   // Get last run timestamp
   const lastRunRow = await findRow('qbo_cache', 'key', 'email_last_run');
-  const lastRunTs = lastRunRow ? parseInt(lastRunRow.row.value) : Date.now() - 30 * 60 * 1000;
+  // Allow manual lookback override via query param (e.g. ?lookback=7 for 7 days back)
+  const lookbackDays = req.nextUrl?.searchParams?.get('lookback');
+  let lastRunTs: number;
+  if (lookbackDays) {
+    lastRunTs = Date.now() - parseInt(lookbackDays) * 24 * 60 * 60 * 1000;
+  } else if (lastRunRow) {
+    lastRunTs = parseInt(lastRunRow.row.value);
+  } else {
+    // First run: default to 7 days back
+    lastRunTs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  }
   const afterDate = Math.floor(lastRunTs / 1000);
 
   // Load processed IDs from email_log to prevent duplicates
