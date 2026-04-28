@@ -4,8 +4,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { findRow, updateRow, appendRow, getSheet } from '@/lib/sheets';
 import { getWorkspaceAuth, getOAuth2Auth, hasServiceAccount } from '@/lib/google-auth';
 
-// Operational inboxes only — forwarded emails land here too
+// Operational inboxes — forwarded emails land here too
 const ALL_MAILBOXES = [
+  'gregory@neworleansrecordpress.com',
   'scott@neworleansrecordpress.com',
   'brice@neworleansrecordpress.com',
   'patrick@neworleansrecordpress.com',
