@@ -73,38 +73,54 @@ function CronTrigger({ label, path }: { label: string; path: string }) {
   );
 }
 
+const STAGES = ['quote','deposit','plates','test_pressing','approved','pressing','qc','pack','ship','paid'];
+const STAGE_LABELS: Record<string, string> = {
+  quote: 'Quote', deposit: 'Deposit', plates: 'Plates', test_pressing: 'Test Press',
+  approved: 'Approved', pressing: 'Pressing', qc: 'QC', pack: 'Pack', ship: 'Ship', paid: 'Paid',
+};
+
 // ── Add Job Form ──────────────────────────────────────────────────────────────
 
 function AddJobForm() {
-  const [form, setForm] = useState({ customer: '', contact_email: '', format: '', quantity: '', color: '', notes: '' });
+  const [form, setForm] = useState({ customer: '', contact_email: '', format: '', quantity: '', color: '', stage: 'quote', notes: '' });
   const [status, setStatus] = useState('');
   const set = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const submit = async () => {
     if (!form.customer) { setStatus('Customer name required'); return; }
-    const now = new Date();
-    const jobId = `NORP-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(Math.floor(Math.random()*9000)+1000)}`;
     try {
-      const res = await fetch('/api/admin/add-row', {
+      const res = await fetch('/api/jobs/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tab: 'jobs', row: { ...form, job_id: jobId, stage: 'quote', quote_date: now.toISOString().split('T')[0] } }),
+        body: JSON.stringify(form),
       });
       const data = await res.json();
-      setStatus(data.ok ? `Created job ${jobId}` : `Error: ${data.error}`);
-      if (data.ok) setForm({ customer: '', contact_email: '', format: '', quantity: '', color: '', notes: '' });
+      setStatus(data.ok ? `Created job ${data.job_id}` : `Error: ${data.error}`);
+      if (data.ok) setForm({ customer: '', contact_email: '', format: '', quantity: '', color: '', stage: 'quote', notes: '' });
     } catch (e: any) { setStatus(`Error: ${e?.message}`); }
   };
 
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-        <Input label="Customer" value={form.customer} onChange={set('customer')} />
+        <Input label="Customer / Artist / Label" value={form.customer} onChange={set('customer')} />
         <Input label="Contact Email" value={form.contact_email} onChange={set('contact_email')} type="email" />
-        <Input label="Format (LP / 7inch)" value={form.format} onChange={set('format')} />
+        <Input label="Format (LP 12inch / 7inch / etc)" value={form.format} onChange={set('format')} />
         <Input label="Quantity" value={form.quantity} onChange={set('quantity')} type="number" />
-        <Input label="Color" value={form.color} onChange={set('color')} />
-        <Input label="Notes" value={form.notes} onChange={set('notes')} />
+        <Input label="Color / Vinyl Type" value={form.color} onChange={set('color')} />
+        <div style={{ marginBottom: '10px' }}>
+          <label style={{ display: 'block', fontSize: '11px', color: COLORS.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>Stage</label>
+          <select
+            value={form.stage}
+            onChange={e => set('stage')(e.target.value)}
+            style={{ width: '100%', background: COLORS.elevated, border: `1px solid ${COLORS.border}`, borderRadius: '6px', padding: '8px 10px', color: COLORS.text, fontSize: '13px', outline: 'none' }}
+          >
+            {STAGES.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+          </select>
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <Input label="Notes" value={form.notes} onChange={set('notes')} />
+        </div>
       </div>
       <Btn onClick={submit}>Add Job</Btn>
       {status && <div style={{ marginTop: '8px', fontSize: '12px', color: status.startsWith('Error') ? COLORS.red : COLORS.green }}>{status}</div>}
@@ -235,6 +251,7 @@ export default function AdminPage() {
 
       <Card title="Trigger Cron Jobs">
         <CronTrigger label="Scan Email" path="/api/cron/scan-email" />
+        <CronTrigger label="Seed Jobs from Email History" path="/api/cron/seed-jobs" />
         <CronTrigger label="QBO Sync" path="/api/cron/qbo-sync" />
         <CronTrigger label="Compound Check" path="/api/cron/compound-check" />
         <CronTrigger label="UPS Tracking" path="/api/cron/ups-tracking" />

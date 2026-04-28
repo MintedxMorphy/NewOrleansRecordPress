@@ -270,6 +270,22 @@ function KanbanBoard({ jobs, inventory, onJobUpdate, onJobClick }: {
     } catch (e) { console.error(e); }
   };
 
+  if (jobs.length === 0) {
+    return (
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: '10px', padding: '32px', textAlign: 'center' }}>
+        <div style={{ color: COLORS.muted, fontSize: '14px', marginBottom: '8px' }}>No jobs yet.</div>
+        <div style={{ color: COLORS.muted, fontSize: '13px' }}>
+          Jobs are auto-created from email — or{' '}
+          <a href="/dashboard/admin" style={{ color: COLORS.green, textDecoration: 'none' }}>add manually in Admin</a>.
+        </div>
+        <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '12px' }}>
+          Run <span style={{ fontFamily: 'monospace', color: COLORS.text }}>/api/cron/scan-email</span> to scan inboxes, or{' '}
+          <span style={{ fontFamily: 'monospace', color: COLORS.text }}>/api/cron/seed-jobs</span> to seed from email history.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <DragDropContext onDragEnd={onDragEnd}>
       <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>

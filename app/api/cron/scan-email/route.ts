@@ -15,31 +15,41 @@ const ALL_MAILBOXES = [
 // Personal Gmail account (uses OAuth2 refresh token, not DWD)
 const PERSONAL_GMAIL = 'neworleansrecordpress@gmail.com';
 
-const CLASSIFICATION_PROMPT = `You are an email classifier for a vinyl record pressing plant. Classify this email into exactly one category and extract relevant fields. Return ONLY valid JSON.
+const CLASSIFICATION_PROMPT = `You are an email classifier for New Orleans Record Press (NORP), a vinyl record pressing plant. Classify this email into exactly one category and extract relevant fields. Return ONLY valid JSON.
 
-Categories:
-- vendor_invoice: contains an invoice, bill, or payment request from a supplier
-- quote_request: a label or artist asking for pressing quotes or pricing
-- order_update: update on an existing order (mastering, plating, pressing status)
-- shipping_update: tracking info, delivery notification, shipping confirmation
-- payment_received: ACH, wire, check, or card payment notification
-- other: everything else
+IMPORTANT CONTEXT: This plant presses vinyl records (LPs 12", 7" singles, colored vinyl, picture discs, test pressings) for independent labels and artists. Common emails include:
+- Artists/labels placing or discussing pressing orders
+- Status updates on jobs (mastering complete, lacquers cut, plates ready, pressing scheduled, test pressings sent, QC pass/fail, ready to ship)
+- Vendor invoices from: PVC/compound suppliers (Shintech, Axiall, MRC), mastering labs, plating shops, sleeve/jacket printers, label printers, packaging suppliers
+- Shipping confirmations and tracking from Priority1, UPS, FedEx, freight carriers
+- Payment notifications (Stripe, ACH, wire, check)
+- Internal team updates between gregory@, scott@, brice@, patrick@ about order status
+
+CLASSIFICATION RULES (bias toward these categories — use 'other' sparingly):
+- vendor_invoice: invoice, bill, PO, payment request from ANY supplier or vendor; includes mastering labs, plating, printing, PVC/compound
+- quote_request: any label, band, artist, or manager asking about pressing costs, pricing, turnaround, or wanting to place a NEW order they haven't confirmed yet
+- order_update: ANY of these — order confirmed, deposit paid, mastering started/done, lacquers cut, plates made, test pressings sent/approved/rejected, pressing started/done, QC pass/fail, order status questions, job number references, artist/title/format/quantity mentioned in context of an existing order, internal team updates about a job, emails FROM or TO labels/artists about their order progress
+- shipping_update: tracking numbers, UPS/FedEx/freight notifications, delivery confirmations, shipping invoices
+- payment_received: Stripe notification, ACH/wire received, check received, deposit confirmation, payment confirmation
+- other: ONLY use for spam, newsletters, unrelated personal emails, system notifications unrelated to plant operations
+
+When in doubt between 'order_update' and 'other', choose 'order_update' if the email mentions: an artist name, album/record title, vinyl format, pressing quantity, any NORP job number, mastering/plating/pressing/QC/test pressing, or any customer/label communication.
 
 Required JSON response:
 {
   "classification": "<category>",
   "confidence": <0.0-1.0>,
-  "summary": "<one sentence>",
+  "summary": "<one sentence describing what this email is about, including artist/label name and format if present>",
   "extracted": {
-    "vendor_name": "<if vendor_invoice>",
+    "vendor_name": "<supplier name if vendor_invoice, else null>",
     "amount_usd": <number or null>,
-    "invoice_number": "<or null>",
+    "invoice_number": "<invoice/PO number or null>",
     "due_date": "<YYYY-MM-DD or null>",
-    "customer_name": "<if quote_request>",
-    "format": "<LP/7inch/etc or null>",
+    "customer_name": "<artist, band, or label name if identifiable, else null>",
+    "format": "<LP 12inch / 7inch / test pressing / picture disc / etc or null>",
     "quantity": <number or null>,
-    "job_id": "<if references existing job or null>",
-    "tracking_number": "<if shipping_update or null>"
+    "job_id": "<NORP job ID if mentioned e.g. NORP-20240115-1234, else null>",
+    "tracking_number": "<tracking number if shipping_update, else null>"
   }
 }
 
