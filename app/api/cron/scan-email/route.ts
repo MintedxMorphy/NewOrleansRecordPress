@@ -12,6 +12,9 @@ const ALL_MAILBOXES = [
   'patrick@neworleansrecordpress.com',
 ];
 
+// Personal Gmail account (uses OAuth2 refresh token, not DWD)
+const PERSONAL_GMAIL = 'neworleansrecordpress@gmail.com';
+
 const CLASSIFICATION_PROMPT = `You are an email classifier for a vinyl record pressing plant. Classify this email into exactly one category and extract relevant fields. Return ONLY valid JSON.
 
 Categories:
@@ -181,8 +184,9 @@ function pLimit(concurrency: number) {
   };
 }
 
-async function scanMailbox(
+async function scanMailboxWithAuth(
   email: string,
+  auth: any,
   afterDate: number,
   processedIds: Set<string>,
   anthropic: Anthropic
@@ -190,10 +194,38 @@ async function scanMailbox(
   const results: ScanResult[] = [];
 
   try {
-    const auth = getWorkspaceAuth(email);
     const gmail = google.gmail({ version: 'v1', auth });
-    // Use OAuth2 for Drive operations (more reliable for shared folders)
-    const driveAuth = hasServiceAccount() ? getWorkspaceAuth('gregory@neworleansrecordpress.com') : getOAuth2Auth();
+    const driveAuth = auth; // use same auth for drive
+    return await scanMailboxCore(email, gmail, driveAuth, afterDate, processedIds, anthropic);
+  } catch (e: any) {
+    console.error(`[scanMailbox] Failed to scan ${email}:`, e?.message);
+    return [];
+  }
+}
+
+async function scanMailbox(
+  email: string,
+  afterDate: number,
+  processedIds: Set<string>,
+  anthropic: Anthropic
+): Promise<ScanResult[]> {
+  const auth = getWorkspaceAuth(email);
+  const gmail = google.gmail({ version: 'v1', auth });
+  const driveAuth = hasServiceAccount() ? getWorkspaceAuth('gregory@neworleansrecordpress.com') : getOAuth2Auth();
+  return scanMailboxCore(email, gmail, driveAuth, afterDate, processedIds, anthropic);
+}
+
+async function scanMailboxCore(
+  email: string,
+  gmail: any,
+  driveAuth: any,
+  afterDate: number,
+  processedIds: Set<string>,
+  anthropic: Anthropic
+): Promise<ScanResult[]> {
+  const results: ScanResult[] = [];
+
+  try {
     const drive = google.drive({ version: 'v3', auth: driveAuth });
 
     const listRes = await gmail.users.messages.list({
@@ -413,6 +445,9 @@ export async function GET(req: NextRequest) {
     console.warn('[scan-email] GOOGLE_SERVICE_ACCOUNT_KEY not set — scanning gregory@ only (fallback mode)');
   }
 
+  // Always include personal Gmail if GOOGLE_PERSONAL_REFRESH_TOKEN is set
+  const scanPersonalGmail = !!process.env.GOOGLE_PERSONAL_REFRESH_TOKEN;
+
   // Get last run timestamp
   const lastRunRow = await findRow('qbo_cache', 'key', 'email_last_run');
   // Allow manual lookback override via query param (e.g. ?lookback=7 for 7 days back)
@@ -437,6 +472,14 @@ export async function GET(req: NextRequest) {
   const allResults = await limit(
     mailboxes.map(mb => () => scanMailbox(mb, afterDate, processedIds, anthropic))
   );
+
+  // Also scan personal Gmail if token available
+  if (scanPersonalGmail) {
+    const personalAuth = getOAuth2Auth(process.env.GOOGLE_PERSONAL_REFRESH_TOKEN);
+    const personalResults = await scanMailboxWithAuth(PERSONAL_GMAIL, personalAuth, afterDate, processedIds, anthropic);
+    allResults.push(personalResults);
+  }
+
   const flatResults = allResults.flat();
 
   // Update last run timestamp
