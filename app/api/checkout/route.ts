@@ -18,7 +18,11 @@ interface Product {
   stock: number
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-03-31.basil' })
+let _stripe: Stripe | null = null;
+function getStripe() {
+  if (!_stripe) _stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-03-31.basil' });
+  return _stripe;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -60,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     const origin = req.headers.get('origin') || 'http://localhost:3000'
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       mode: 'payment',
       line_items: lineItems,
       success_url: `${origin}/shop?success=1`,

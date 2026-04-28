@@ -3,15 +3,10 @@ import { getOAuth2Auth, getPersonalGmailAuth, getWorkspaceAuth, hasServiceAccoun
 
 const SHEETS_DB_ID = process.env.SHEETS_DB_ID!;
 
-// Use service account directly (no impersonation needed — SA is shared on the sheet)
+// Use service account (impersonate gregory@) if available, else OAuth2 fallback
 function getSheetsAuth() {
   if (hasServiceAccount()) {
-    const keyJson = JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY!, 'base64').toString());
-    return new google.auth.JWT({
-      email: keyJson.client_email,
-      key: keyJson.private_key,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
+    return getWorkspaceAuth('gregory@neworleansrecordpress.com');
   }
   return getOAuth2Auth();
 }
