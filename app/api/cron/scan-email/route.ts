@@ -4,10 +4,6 @@ import Anthropic from '@anthropic-ai/sdk';
 import { findRow, updateRow, appendRow, getSheet } from '@/lib/sheets';
 import { getWorkspaceAuth, getOAuth2Auth, hasServiceAccount } from '@/lib/google-auth';
 
-// pdf-parse v1.1.0 - CommonJS module without types
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
-
 const ALL_MAILBOXES = [
   'gregory@neworleansrecordpress.com',
   'scott@neworleansrecordpress.com',
@@ -75,8 +71,11 @@ function extractBodyText(payload: any): string {
 
 async function extractPdfText(buf: Buffer): Promise<string> {
   try {
+    // Dynamic require avoids Next.js build-time module evaluation
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pdfParse = require("pdf-parse/lib/pdf-parse");
     const data = await pdfParse(buf);
-    return data.text.slice(0, 2000); // limit to prevent token explosion
+    return (data.text ?? "").slice(0, 2000);
   } catch {
     return '';
   }
