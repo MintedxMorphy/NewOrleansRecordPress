@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { findRow, updateRow, appendRow } from '@/lib/sheets';
 
 const TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
 
@@ -48,7 +49,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to exchange code', details: data }, { status: 500 });
     }
 
-    // Return the tokens — user needs to set QBO_REFRESH_TOKEN in Vercel
+    // Auto-save realm ID and refresh token to qbo_cache sheet
+    try {
+      const saveValue = async (key: string, value: string) => {
+        const existing = await findRow('qbo_cache', 'key', key);
+        const row = { key, value, updated_at: new Date().toISOString() };
+        if (existing) await updateRow('qbo_cache', existing.rowIndex, row);
+        else await appendRow('qbo_cache', row);
+      };
+      if (realmId) await saveValue('qbo_realm_id_from_oauth', realmId);
+      await saveValue('qbo_refresh_token_from_oauth', data.refresh_token);
+    } catch (_) { /* non-fatal */ }
+
     return new NextResponse(
       `<!DOCTYPE html>
 <html>
@@ -56,18 +68,24 @@ export async function GET(req: NextRequest) {
 <style>
   body { font-family: monospace; background: #0A0A0A; color: #E8E8E8; padding: 40px; }
   .success { color: #00E86A; font-size: 24px; font-weight: bold; margin-bottom: 24px; }
-  .label { color: #9A9A9A; font-size: 12px; margin-top: 16px; }
-  .value { background: #1A1A1A; border: 1px solid #2A2A2A; padding: 12px; border-radius: 6px; word-break: break-all; margin-top: 4px; font-size: 13px; }
-  .note { color: #FFB800; margin-top: 24px; font-size: 14px; }
+  .label { color: #9A9A9A; font-size: 12px; margin-top: 20px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .value { background: #1A1A1A; border: 1px solid #2A2A2A; padding: 12px; border-radius: 6px; word-break: break-all; margin-top: 6px; font-size: 13px; cursor: pointer; }
+  .critical { border-color: #FF4444 !important; }
+  .note { color: #FFB800; margin-top: 24px; font-size: 14px; line-height: 1.6; }
 </style>
 </head>
 <body>
-  <div class="success">✅ QBO Connected!</div>
-  <div class="label">Realm ID (already set in Vercel):</div>
-  <div class="value">${realmId ?? 'N/A'}</div>
-  <div class="label">Refresh Token — copy this and send to Zero Cool:</div>
-  <div class="value" id="rt">${data.refresh_token}</div>
-  <div class="note">⚠️ Copy the refresh token above and send it to Zero Cool to set in Vercel.</div>
+  <div class="success">✅ QBO OAuth Complete!</div>
+
+  <div class="note">⚠️ Send BOTH values below to Zero Cool so he can update Vercel.</div>
+
+  <div class="label">🔴 REALM ID — send this to Zero Cool:</div>
+  <div class="value critical" onclick="navigator.clipboard.writeText('${realmId ?? ''}')">${realmId ?? 'NOT RETURNED — something went wrong'}</div>
+
+  <div class="label">Refresh Token — send this to Zero Cool:</div>
+  <div class="value" onclick="navigator.clipboard.writeText('${data.refresh_token}')">${data.refresh_token}</div>
+
+  <div class="note">Both values have been saved to your NORP_OPS_DB sheet (qbo_cache tab) as backup.</div>
 </body>
 </html>`,
       { headers: { 'Content-Type': 'text/html' } }
