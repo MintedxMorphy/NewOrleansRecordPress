@@ -54,6 +54,7 @@ async function qboFetch(path: string): Promise<any> {
 }
 
 export async function getARaging(): Promise<{ total: number; buckets: { current: number; days30: number; days60: number; days90plus: number } }> {
+  if (!process.env.QBO_CLIENT_ID || !process.env.QBO_REFRESH_TOKEN) return { total: 0, buckets: { current: 0, days30: 0, days60: 0, days90plus: 0 } };
   try {
     const data = await qboFetch('reports/AgedReceivables?report_date=today&aging_period=30&num_periods=4');
     const rows = data?.Rows?.Row ?? [];
@@ -77,6 +78,7 @@ export async function getARaging(): Promise<{ total: number; buckets: { current:
 }
 
 export async function getAPAging(): Promise<{ total: number; pendingBills: number }> {
+  if (!process.env.QBO_CLIENT_ID || !process.env.QBO_REFRESH_TOKEN) return { total: 0, pendingBills: 0 };
   try {
     const data = await qboFetch('reports/AgedPayables?report_date=today&aging_period=30&num_periods=4');
     const rows = data?.Rows?.Row ?? [];
@@ -97,6 +99,7 @@ export async function getAPAging(): Promise<{ total: number; pendingBills: numbe
 }
 
 export async function getBankBalances(): Promise<Array<{ accountName: string; balance: number }>> {
+  if (!process.env.QBO_CLIENT_ID || !process.env.QBO_REFRESH_TOKEN) return [];
   try {
     const data = await qboFetch('query?query=SELECT%20*%20FROM%20Account%20WHERE%20AccountType%20IN%20(%27Bank%27%2C%27Credit%20Card%27)%20MAXRESULTS%2050');
     const accounts = data?.QueryResponse?.Account ?? [];
@@ -110,6 +113,7 @@ export async function getBankBalances(): Promise<Array<{ accountName: string; ba
 }
 
 export async function getMTDRevenue(): Promise<number> {
+  if (!process.env.QBO_CLIENT_ID || !process.env.QBO_REFRESH_TOKEN) return 0;
   try {
     const now = new Date();
     const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;

@@ -16,6 +16,7 @@ async function getCachedToken(): Promise<string> {
 
 export async function refreshGustoToken(): Promise<string> {
   const res = await fetch('https://api.gusto.com/oauth/token', {
+    signal: AbortSignal.timeout(5000),
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -40,6 +41,7 @@ export async function refreshGustoToken(): Promise<string> {
 async function gustoFetch(path: string): Promise<any> {
   const token = await getCachedToken();
   const res = await fetch(`${GUSTO_API}${path}`, {
+    signal: AbortSignal.timeout(5000),
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   });
   return res.json();
@@ -55,6 +57,7 @@ export interface NextPayroll {
 }
 
 export async function getNextPayroll(): Promise<NextPayroll | null> {
+  if (!process.env.GUSTO_CLIENT_ID || !process.env.GUSTO_REFRESH_TOKEN) return null; // not configured
   try {
     const companyId = process.env.GUSTO_COMPANY_UUID!;
     const payrolls = await gustoFetch(`/companies/${companyId}/payrolls?processing_statuses[]=unprocessed&include=payroll_status_meta`);

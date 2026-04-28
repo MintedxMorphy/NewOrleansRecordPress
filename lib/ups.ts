@@ -9,6 +9,7 @@ async function getUPSToken(): Promise<string> {
   if (_upsToken && Date.now() < _upsTokenExpiry - 60_000) return _upsToken;
   const creds = Buffer.from(`${process.env.UPS_CLIENT_ID}:${process.env.UPS_CLIENT_SECRET}`).toString('base64');
   const res = await fetch(UPS_AUTH_URL, {
+    signal: AbortSignal.timeout(5000),
     method: 'POST',
     headers: {
       Authorization: `Basic ${creds}`,
