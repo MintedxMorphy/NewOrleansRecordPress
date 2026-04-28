@@ -209,10 +209,15 @@ async function scanMailbox(
   processedIds: Set<string>,
   anthropic: Anthropic
 ): Promise<ScanResult[]> {
-  const auth = getWorkspaceAuth(email);
-  const gmail = google.gmail({ version: 'v1', auth });
-  const driveAuth = hasServiceAccount() ? getWorkspaceAuth('gregory@neworleansrecordpress.com') : getOAuth2Auth();
-  return scanMailboxCore(email, gmail, driveAuth, afterDate, processedIds, anthropic);
+  try {
+    const auth = getWorkspaceAuth(email);
+    const gmail = google.gmail({ version: 'v1', auth });
+    const driveAuth = hasServiceAccount() ? getWorkspaceAuth('gregory@neworleansrecordpress.com') : getOAuth2Auth();
+    return await scanMailboxCore(email, gmail, driveAuth, afterDate, processedIds, anthropic);
+  } catch (e: any) {
+    console.error(`[scanMailbox] Failed to scan ${email}:`, e?.message);
+    return [{ emailId: 'N/A', inbox: email, classification: 'error', action: 'mailbox_scan_failed', error: e?.message }];
+  }
 }
 
 async function scanMailboxCore(
