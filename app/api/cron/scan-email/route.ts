@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
-import { JWT } from 'google-auth-library';
 import Anthropic from '@anthropic-ai/sdk';
 import { findRow, updateRow, appendRow, getSheet } from '@/lib/sheets';
 
@@ -35,25 +34,14 @@ Required JSON response:
 Email subject: {{SUBJECT}}
 Email body: {{BODY}}`;
 
-function getGmailAuth(): JWT {
-  const raw = Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY!, 'base64').toString('utf-8');
-  const key = JSON.parse(raw);
-  return new JWT({
-    email: key.client_email,
-    key: key.private_key,
-    scopes: ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/drive'],
-    subject: 'info@neworleansrecordpress.com', // domain-wide delegation
-  });
-}
-
-function getDriveAuth(): JWT {
-  const raw = Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY!, 'base64').toString('utf-8');
-  const key = JSON.parse(raw);
-  return new JWT({
-    email: key.client_email,
-    key: key.private_key,
-    scopes: ['https://www.googleapis.com/auth/drive'],
-  });
+function getOAuth2Client() {
+  const oauth2 = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID!,
+    process.env.GOOGLE_CLIENT_SECRET!,
+    process.env.GOOGLE_REDIRECT_URI!
+  );
+  oauth2.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN! });
+  return oauth2;
 }
 
 function decodeBase64Url(str: string): Buffer {
@@ -111,14 +99,14 @@ async function uploadToDrive(drive: any, content: Buffer, filename: string, mime
 }
 
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get('authorization');
-  if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  const authHeader = req.headers.get('authorization');
+  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const gmailAuth = getGmailAuth();
-  const gmail = google.gmail({ version: 'v1', auth: gmailAuth });
-  const drive = google.drive({ version: 'v3', auth: getDriveAuth() });
+  const auth = getOAuth2Client();
+  const gmail = google.gmail({ version: 'v1', auth });
+  const drive = google.drive({ version: 'v3', auth });
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   // Get last run timestamp
