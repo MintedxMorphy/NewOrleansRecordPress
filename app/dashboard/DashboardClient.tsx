@@ -630,7 +630,7 @@ function LowStockTable({ inventory }: { inventory: InventoryRow[] }) {
 
 const EMPTY_KPI: KpiData = { bankAccounts: [], arAging: { total: 0, buckets: { current: 0, days30: 0, days60: 0, days90plus: 0 } }, apAging: { total: 0, pendingBills: 0 }, mtdRevenue: 0, nextPayroll: null };
 
-export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJobs, inventory, billsInbox, latestBriefing, latestCompoundAlert, shipments, emailLog }: Props) {
+export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJobs, inventory = [], billsInbox = [], latestBriefing = null, latestCompoundAlert = null, shipments = [], emailLog = [] }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs ?? []);
   const [loading, setLoading] = useState(true);
   const [kpiData] = useState<KpiData>(kpiDataProp ?? EMPTY_KPI);
