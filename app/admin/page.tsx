@@ -589,6 +589,7 @@ export default function AdminPage() {
           <button onClick={() => setActiveTab('shop')} style={tabStyle('shop')}>Shop Products</button>
         </div>
         <div style={S.navRight}>
+          <a href="/dashboard" style={{ ...S.btnGreen, textDecoration: 'none', display: 'inline-block' }}>Operations Dashboard</a>
           <a href="/shop" style={S.btnGhost}>View Shop</a>
           <a href="/staff/inventory" style={S.btnGhost}>Staff View</a>
         </div>
