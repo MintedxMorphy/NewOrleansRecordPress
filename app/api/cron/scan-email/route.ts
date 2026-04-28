@@ -434,6 +434,7 @@ async function scanMailboxCore(
 }
 
 export async function GET(req: NextRequest) {
+  try {
   const authHeader = req.headers.get('authorization');
   if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -506,4 +507,8 @@ export async function GET(req: NextRequest) {
   };
 
   return NextResponse.json(summary);
+  } catch (e: any) {
+    console.error('[scan-email] Fatal error:', e?.message, e?.stack);
+    return NextResponse.json({ ok: false, error: e?.message ?? 'Unknown error', stack: e?.stack?.slice(0,500) }, { status: 500 });
+  }
 }
