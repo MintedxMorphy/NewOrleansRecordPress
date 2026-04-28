@@ -1,10 +1,18 @@
 import { google } from 'googleapis';
-import { getOAuth2Auth, getPersonalGmailAuth } from './google-auth';
+import { getOAuth2Auth, getPersonalGmailAuth, getWorkspaceAuth, hasServiceAccount } from './google-auth';
 
 const SHEETS_DB_ID = process.env.SHEETS_DB_ID!;
 
+// Use service account (impersonate gregory@) if available, else OAuth2 fallback
+function getSheetsAuth() {
+  if (hasServiceAccount()) {
+    return getWorkspaceAuth('gregory@neworleansrecordpress.com');
+  }
+  return getOAuth2Auth();
+}
+
 function getSheetsClient() {
-  return google.sheets({ version: 'v4', auth: getOAuth2Auth() });
+  return google.sheets({ version: 'v4', auth: getSheetsAuth() });
 }
 
 export const TAB_HEADERS: Record<string, string[]> = {
