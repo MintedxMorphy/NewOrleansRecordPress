@@ -24,11 +24,11 @@ export default async function DashboardPage() {
   ] = await Promise.allSettled([
     getNORPJobs(),
     getSheet('inventory'),
-    getSheet('bills_inbox'),
-    getSheet('briefings'),
-    getSheet('compound_alerts'),
-    getSheet('shipments'),
-    getSheet('email_log'),
+    getSheet('bills_inbox', 50),
+    getSheet('briefings', 10),
+    getSheet('compound_alerts', 20),
+    getSheet('shipments', 50),
+    getSheet('email_log', 100), // limit to recent 100 entries
     getBankBalances(),
     getARaging(),
     getAPAging(),

@@ -66,8 +66,8 @@ async function ensureTabs() {
   }
 }
 
-export async function getSheet(tabName: string): Promise<Record<string, string>[]> {
-  await ensureTabs();
+export async function getSheet(tabName: string, maxRows?: number): Promise<Record<string, string>[]> {
+  // Note: ensureTabs() intentionally NOT called here — tabs are stable after setup, no need to check on every read
   const sheets = getSheetsClient();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEETS_DB_ID,
@@ -76,7 +76,8 @@ export async function getSheet(tabName: string): Promise<Record<string, string>[
   const rows = res.data.values ?? [];
   if (rows.length < 2) return [];
   const headers = rows[0] as string[];
-  return rows.slice(1).map(row => {
+  const dataRows = maxRows ? rows.slice(-maxRows) : rows.slice(1); // slice from end for recent rows
+  return dataRows.map(row => {
     const obj: Record<string, string> = {};
     headers.forEach((h, i) => { obj[h] = (row[i] as string) ?? ''; });
     return obj;
