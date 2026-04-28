@@ -1,19 +1,10 @@
 import { google } from 'googleapis';
+import { getOAuth2Auth, getPersonalGmailAuth } from './google-auth';
 
 const SHEETS_DB_ID = process.env.SHEETS_DB_ID!;
 
-function getAuth() {
-  const oauth2 = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID!,
-    process.env.GOOGLE_CLIENT_SECRET!,
-    process.env.GOOGLE_REDIRECT_URI!,
-  );
-  oauth2.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN! });
-  return oauth2;
-}
-
 function getSheetsClient() {
-  return google.sheets({ version: 'v4', auth: getAuth() });
+  return google.sheets({ version: 'v4', auth: getOAuth2Auth() });
 }
 
 export const TAB_HEADERS: Record<string, string[]> = {
@@ -21,7 +12,7 @@ export const TAB_HEADERS: Record<string, string[]> = {
   inventory: ['material','sku','on_hand_qty','unit','reorder_point','supplier','last_ordered','unit_cost','notes'],
   customers: ['name','email','phone','total_orders','total_revenue','first_order_date','last_order_date','notes'],
   bills_inbox: ['email_id','date_received','sender','vendor_guess','amount_usd','due_date','invoice_number','status','pdf_drive_url','qbo_bill_id','notes'],
-  email_log: ['timestamp','from','subject','classification','confidence','summary','action_taken','job_id','bill_id'],
+  email_log: ['email_id','timestamp','inbox','from','subject','classification','confidence','summary','action_taken','job_id','bill_id'],
   compound_alerts: ['timestamp','mbr1_value','wlk_value','oln_value','cl1_value','alert_level','message'],
   briefings: ['date','briefing_text','cash_total','ar_total','ap_total','active_jobs_count','low_inventory_count','days_to_next_payroll','next_payroll_amount','payroll_covered'],
   shipments: ['tracking_number','job_id','carrier','service','weight_lbs','dimensions','shipped_date','est_delivery','actual_delivery','status','last_status_update','total_cost','base_cost','fuel_surcharge','accessorials','notes'],
@@ -122,4 +113,26 @@ export async function upsertRow(tabName: string, matchField: string, matchValue:
   } else {
     await appendRow(tabName, rowObj);
   }
+}
+
+// Read master Google Sheets from personal Gmail (neworleansrecordpress@gmail.com)
+// Uses NORP_MASTER_SHEET_IDS env var (comma-separated list of sheet IDs)
+export async function getMasterSheets(): Promise<Record<string, string[][]>> {
+  const ids = (process.env.NORP_MASTER_SHEET_IDS ?? '').split(',').filter(Boolean);
+  if (!ids.length) return {};
+  const auth = getPersonalGmailAuth();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const result: Record<string, string[][]> = {};
+  for (const id of ids) {
+    try {
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId: id.trim(),
+        range: 'A1:Z1000',
+      });
+      result[id] = (res.data.values as string[][]) ?? [];
+    } catch (e) {
+      console.error(`[getMasterSheets] Failed to read sheet ${id}:`, e);
+    }
+  }
+  return result;
 }
