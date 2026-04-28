@@ -1,4 +1,5 @@
 import { getSheet } from '@/lib/sheets';
+import { getNORPJobs, NORPJob } from '@/lib/norp-sheet';
 import { getBankBalances, getARaging, getAPAging, getMTDRevenue } from '@/lib/qbo';
 import { getNextPayroll } from '@/lib/gusto';
 import DashboardClient from './DashboardClient';
@@ -8,7 +9,7 @@ export const revalidate = 0;
 
 export default async function DashboardPage() {
   const [
-    jobs,
+    norpJobs,
     inventory,
     billsInbox,
     briefings,
@@ -21,7 +22,7 @@ export default async function DashboardPage() {
     mtdRevenue,
     nextPayroll,
   ] = await Promise.allSettled([
-    getSheet('jobs'),
+    getNORPJobs(),
     getSheet('inventory'),
     getSheet('bills_inbox'),
     getSheet('briefings'),
@@ -34,6 +35,32 @@ export default async function DashboardPage() {
     getMTDRevenue(),
     getNextPayroll(),
   ]);
+
+  // Map NORPJob to Record<string, string> for DashboardClient
+  const mapNORPJob = (job: NORPJob): Record<string, string> => ({
+    job_id: job.job_id,
+    customer: job.customer,
+    matrix: job.matrix,
+    quantity: job.quantity,
+    colors: job.colors,
+    weight: job.weight,
+    speed: job.speed,
+    stage: job.stage,
+    ship_date: job.ship_date,
+    order_number: job.order_number,
+    deposit: job.deposit,
+    notes: job.notes,
+    due_note: job.due_note,
+    lacquer: job.lacquer,
+    stampers: job.stampers,
+    test_pressings_sent: job.test_pressings_sent,
+    test_pressings_approved: job.test_pressings_approved,
+    labels_arrived: job.labels_arrived,
+    sleeves_arrived: job.sleeves_arrived,
+    jackets_arrived: job.jackets_arrived,
+  });
+
+  const jobs = norpJobs.status === 'fulfilled' ? norpJobs.value.map(mapNORPJob) : [];
 
   const resolve = <T,>(r: PromiseSettledResult<T>, fallback: T): T =>
     r.status === 'fulfilled' ? r.value : fallback;
@@ -49,7 +76,7 @@ export default async function DashboardPage() {
   return (
     <DashboardClient
       kpiData={kpiData}
-      jobs={resolve(jobs, [])}
+      jobs={jobs}
       inventory={resolve(inventory, [])}
       billsInbox={resolve(billsInbox, [])}
       latestBriefing={resolve(briefings, []).slice(-1)[0] ?? null}

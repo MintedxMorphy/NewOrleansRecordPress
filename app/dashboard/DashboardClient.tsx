@@ -205,17 +205,9 @@ function PayrollCard({ nextPayroll, bankAccounts }: { nextPayroll: NextPayroll |
 
 // ── Kanban ─────────────────────────────────────────────────────────────────────
 
-function JobCard({ job, pvcOnHand, onClick }: { job: Job; pvcOnHand: number; onClick: () => void }) {
-  const hasPvc = parseFloat(job.pvc_kg_needed || '0') <= pvcOnHand;
+function JobCard({ job, onClick }: { job: Job; onClick: () => void }) {
   const isShipping = job.stage === 'ship';
-
-  let fmtDate = '';
-  try {
-    if (job.ship_date_target) {
-      const d = parseISO(job.ship_date_target);
-      if (isValid(d)) fmtDate = format(d, 'MMM d');
-    }
-  } catch {}
+  const customerDisplay = job.customer?.length > 50 ? job.customer.slice(0, 50) + '…' : job.customer;
 
   return (
     <div
@@ -229,30 +221,33 @@ function JobCard({ job, pvcOnHand, onClick }: { job: Job; pvcOnHand: number; onC
       onMouseLeave={e => (e.currentTarget.style.borderColor = COLORS.border)}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <span style={{ color: COLORS.green, fontWeight: 700, fontSize: '13px' }}>{job.customer}</span>
-        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: hasPvc ? COLORS.green : COLORS.red, marginTop: '3px', flexShrink: 0 }} title={hasPvc ? 'PVC OK' : 'Low PVC'} />
+        <span style={{ color: COLORS.green, fontWeight: 700, fontSize: '13px' }}>{customerDisplay}</span>
       </div>
-      <div style={{ fontSize: '12px', color: COLORS.muted, marginTop: '3px' }}>
-        {job.format} × {job.quantity}
+      {job.matrix && (
+        <div style={{ fontSize: '11px', color: COLORS.muted, marginTop: '2px', fontFamily: 'monospace' }}>{job.matrix}</div>
+      )}
+      <div style={{ fontSize: '12px', color: COLORS.text, marginTop: '4px' }}>
+        {job.quantity && <span>{job.quantity}</span>}
+        {job.quantity && job.colors && <span style={{ color: COLORS.muted }}> × </span>}
+        {job.colors && <span style={{ color: COLORS.gold }}>{job.colors}</span>}
       </div>
-      {job.color && <div style={{ fontSize: '11px', color: COLORS.gold, marginTop: '2px' }}>{job.color}</div>}
-      {fmtDate && <div style={{ fontSize: '11px', color: COLORS.muted, marginTop: '2px' }}>Ship: {fmtDate}</div>}
-      {isShipping && job.ups_service && (
-        <div style={{ marginTop: '4px', background: COLORS.purple + '33', border: `1px solid ${COLORS.purple}66`, borderRadius: '4px', padding: '2px 6px', fontSize: '10px', color: COLORS.purple }}>
-          {job.ups_service} · {job.ship_status}
+      {job.due_note && (
+        <div style={{ marginTop: '4px', background: COLORS.red + '22', border: `1px solid ${COLORS.red}66`, borderRadius: '4px', padding: '2px 6px', fontSize: '10px', color: COLORS.red, fontWeight: 600 }}>
+          {job.due_note}
         </div>
+      )}
+      {isShipping && job.ship_date && (
+        <div style={{ marginTop: '4px', fontSize: '11px', color: COLORS.muted }}>Shipped: {job.ship_date}</div>
       )}
     </div>
   );
 }
 
-function KanbanBoard({ jobs, inventory, onJobUpdate, onJobClick }: {
-  jobs: Job[]; inventory: InventoryRow[];
+function KanbanBoard({ jobs, onJobUpdate, onJobClick }: {
+  jobs: Job[];
   onJobUpdate: (jobs: Job[]) => void;
   onJobClick: (job: Job) => void;
 }) {
-  const pvcRow = inventory.find(i => i.material?.toLowerCase().includes('pvc'));
-  const pvcOnHand = parseFloat(pvcRow?.on_hand_qty ?? '999999');
 
   const byStage = (stage: Stage) => jobs.filter(j => j.stage === stage);
 
@@ -319,7 +314,7 @@ function KanbanBoard({ jobs, inventory, onJobUpdate, onJobClick }: {
                             opacity: snapshot2.isDragging ? 0.85 : 1,
                           }}
                         >
-                          <JobCard job={job} pvcOnHand={pvcOnHand} onClick={() => onJobClick(job)} />
+                          <JobCard job={job} onClick={() => onJobClick(job)} />
                         </div>
                       )}
                     </Draggable>
@@ -659,7 +654,7 @@ export default function DashboardClient({ kpiData, jobs: initialJobs, inventory,
         {/* Kanban */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ color: COLORS.text, fontWeight: 700, fontSize: '16px', marginBottom: '12px', letterSpacing: '-0.3px' }}>Production Board</h2>
-          <KanbanBoard jobs={jobs} inventory={inventory} onJobUpdate={setJobs} onJobClick={setSelectedJob} />
+          <KanbanBoard jobs={jobs} onJobUpdate={setJobs} onJobClick={setSelectedJob} />
         </div>
 
         {/* Right sidebar */}
