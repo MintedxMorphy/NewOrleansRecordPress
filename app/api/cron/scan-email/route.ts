@@ -4,16 +4,11 @@ import Anthropic from '@anthropic-ai/sdk';
 import { findRow, updateRow, appendRow, getSheet } from '@/lib/sheets';
 import { getWorkspaceAuth, getOAuth2Auth, hasServiceAccount } from '@/lib/google-auth';
 
+// Operational inboxes only — forwarded emails land here too
 const ALL_MAILBOXES = [
-  'gregory@neworleansrecordpress.com',
   'scott@neworleansrecordpress.com',
   'brice@neworleansrecordpress.com',
   'patrick@neworleansrecordpress.com',
-  'accounting@neworleansrecordpress.com',
-  'info@neworleansrecordpress.com',
-  'orders@neworleansrecordpress.com',
-  'designs@neworleansrecordpress.com',
-  'audio@neworleansrecordpress.com',
 ];
 
 const CLASSIFICATION_PROMPT = `You are an email classifier for a vinyl record pressing plant. Classify this email into exactly one category and extract relevant fields. Return ONLY valid JSON.

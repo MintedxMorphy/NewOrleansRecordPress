@@ -1,6 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/scan-email", "schedule": "0 13 * * *" },
+    { "path": "/api/cron/scan-email", "schedule": "0 10-23 * * *" },
     { "path": "/api/cron/qbo-sync", "schedule": "0 14 * * *" },
     { "path": "/api/cron/compound-check", "schedule": "30 11 * * *" },
     { "path": "/api/cron/ups-tracking", "schedule": "0 15 * * *" },
