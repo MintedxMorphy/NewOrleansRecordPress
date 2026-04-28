@@ -1,16 +1,35 @@
 import { NextResponse } from 'next/server';
-import { getBankBalances, getARaging, getAPAging, getMTDRevenue } from '@/lib/qbo';
+import { refreshQBOToken } from '@/lib/qbo';
+
+const QBO_BASE = 'https://quickbooks.api.intuit.com/v3/company';
 
 export async function GET() {
+  const realmId = (process.env.QBO_REALM_ID ?? '').trim();
   try {
-    const [banks, ar, ap, mtd] = await Promise.all([
-      getBankBalances(),
-      getARaging(),
-      getAPAging(),
-      getMTDRevenue(),
-    ]);
-    return NextResponse.json({ banks, ar, ap, mtd, realmId: (process.env.QBO_REALM_ID ?? '').trim(), clientIdSet: !!process.env.QBO_CLIENT_ID, secretSet: !!process.env.QBO_CLIENT_SECRET, refreshSet: !!process.env.QBO_REFRESH_TOKEN });
+    const token = await refreshQBOToken();
+
+    // Try to get company info
+    const companyRes = await fetch(`${QBO_BASE}/${realmId}/companyinfo/${realmId}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    const companyData = await companyRes.json();
+
+    // Try raw bank query
+    const bankRes = await fetch(`${QBO_BASE}/${realmId}/query?query=${encodeURIComponent("SELECT * FROM Account WHERE AccountType IN ('Bank','Credit Card') MAXRESULTS 10")}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    const bankData = await bankRes.json();
+
+    return NextResponse.json({
+      realmId,
+      clientIdSet: !!process.env.QBO_CLIENT_ID,
+      secretSet: !!process.env.QBO_CLIENT_SECRET,
+      refreshSet: !!process.env.QBO_REFRESH_TOKEN,
+      tokenOk: !!token,
+      companyInfo: companyData?.CompanyInfo ?? companyData,
+      bankRaw: bankData?.QueryResponse ?? bankData,
+    });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message }, { status: 500 });
+    return NextResponse.json({ error: e?.message, realmId }, { status: 500 });
   }
 }
