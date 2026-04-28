@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { format, parseISO, isValid } from 'date-fns';
 
@@ -27,14 +27,15 @@ interface ShipmentRow { [key: string]: string }
 interface EmailLogRow { [key: string]: string }
 
 interface Props {
-  kpiData: KpiData;
-  jobs: Job[];
-  inventory: InventoryRow[];
-  billsInbox: BillRow[];
-  latestBriefing: Record<string, string> | null;
-  latestCompoundAlert: Record<string, string> | null;
-  shipments: ShipmentRow[];
-  emailLog: EmailLogRow[];
+  // All props are now optional — data loads client-side via API
+  kpiData?: KpiData;
+  jobs?: Job[];
+  inventory?: InventoryRow[];
+  billsInbox?: BillRow[];
+  latestBriefing?: Record<string, string> | null;
+  latestCompoundAlert?: Record<string, string> | null;
+  shipments?: ShipmentRow[];
+  emailLog?: EmailLogRow[];
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -624,8 +625,21 @@ function LowStockTable({ inventory }: { inventory: InventoryRow[] }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function DashboardClient({ kpiData, jobs: initialJobs, inventory, billsInbox, latestBriefing, latestCompoundAlert, shipments, emailLog }: Props) {
-  const [jobs, setJobs] = useState<Job[]>(initialJobs);
+const EMPTY_KPI: KpiData = { bankAccounts: [], arAging: { total: 0, buckets: { current: 0, days30: 0, days60: 0, days90plus: 0 } }, apAging: { total: 0, pendingBills: 0 }, mtdRevenue: 0, nextPayroll: null };
+
+export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJobs, inventory, billsInbox, latestBriefing, latestCompoundAlert, shipments, emailLog }: Props) {
+  const [jobs, setJobs] = useState<Job[]>(initialJobs ?? []);
+  const [loading, setLoading] = useState(true);
+  const [kpiData] = useState<KpiData>(kpiDataProp ?? EMPTY_KPI);
+
+  useEffect(() => {
+    // Load jobs from API on mount — keeps initial page response small
+    fetch('/api/norp-jobs')
+      .then(r => r.json())
+      .then(data => { if (data.jobs) setJobs(data.jobs); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
   const { bankAccounts, arAging, mtdRevenue, nextPayroll } = kpiData;
@@ -637,14 +651,14 @@ export default function DashboardClient({ kpiData, jobs: initialJobs, inventory,
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '16px', marginBottom: '16px' }}>
         <CashCard bankAccounts={bankAccounts} />
         <ARCard arAging={arAging} />
-        <BillsCard billsInbox={billsInbox} />
-        <ActiveJobsCard jobs={jobs} inventory={inventory} />
+        <BillsCard billsInbox={billsInbox ?? []} />
+        <ActiveJobsCard jobs={jobs} inventory={inventory ?? []} />
       </div>
 
       {/* Row 2: 3 secondary KPI cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '16px', marginBottom: '24px' }}>
-        <ShipmentsCard shipments={shipments} />
-        <ShippingCostCard shipments={shipments} mtdRevenue={mtdRevenue} />
+        <ShipmentsCard shipments={shipments ?? []} />
+        <ShippingCostCard shipments={shipments ?? []} mtdRevenue={mtdRevenue} />
         <PayrollCard nextPayroll={nextPayroll} bankAccounts={bankAccounts} />
       </div>
 
@@ -653,26 +667,26 @@ export default function DashboardClient({ kpiData, jobs: initialJobs, inventory,
 
         {/* Kanban */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ color: COLORS.text, fontWeight: 700, fontSize: '16px', marginBottom: '12px', letterSpacing: '-0.3px' }}>Production Board</h2>
+          <h2 style={{ color: COLORS.text, fontWeight: 700, fontSize: '16px', marginBottom: '12px', letterSpacing: '-0.3px' }}>Production Board {loading && <span style={{ color: COLORS.muted, fontSize: '12px', fontWeight: 400 }}>Loading jobs...</span>}</h2>
           <KanbanBoard jobs={jobs} onJobUpdate={setJobs} onJobClick={setSelectedJob} />
         </div>
 
         {/* Right sidebar */}
         <div style={{ width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <Card><BillsInbox bills={billsInbox} /></Card>
-          <Card><BriefingSection briefing={latestBriefing} /></Card>
-          <CompoundWatch alert={latestCompoundAlert} />
+          <Card><BriefingSection briefing={latestBriefing ?? null} /></Card>
+          <CompoundWatch alert={latestCompoundAlert ?? null} />
         </div>
       </div>
 
       {/* Low stock */}
-      <LowStockTable inventory={inventory} />
+      <LowStockTable inventory={inventory ?? []} />
 
       {/* Job Drawer */}
       {selectedJob && (
         <JobDrawer
-          job={selectedJob} inventory={inventory} emailLog={emailLog}
-          shipments={shipments} onClose={() => setSelectedJob(null)}
+          job={selectedJob} inventory={inventory ?? []} emailLog={emailLog ?? []}
+          shipments={shipments ?? []} onClose={() => setSelectedJob(null)}
         />
       )}
     </div>
