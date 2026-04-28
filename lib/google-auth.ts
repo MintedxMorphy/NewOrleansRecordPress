@@ -46,6 +46,23 @@ export function getPersonalGmailAuth(): OAuth2Client {
   return getOAuth2Auth(process.env.GOOGLE_PERSONAL_REFRESH_TOKEN ?? process.env.GOOGLE_REFRESH_TOKEN);
 }
 
+// Returns a JWT client authenticated AS the service account itself (no DWD/impersonation)
+// Use this for accessing resources directly shared with the service account email
+// (e.g. NORP_OPS_DB Google Sheet shared with norp-ops@norp-494619.iam.gserviceaccount.com)
+export function getServiceAccountSelfAuth(): JWT {
+  const keyJson = Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY!, 'base64').toString('utf-8');
+  const key = JSON.parse(keyJson);
+  return new google.auth.JWT({
+    email: key.client_email,
+    key: key.private_key,
+    scopes: [
+      'https://www.googleapis.com/auth/drive',
+      'https://www.googleapis.com/auth/spreadsheets',
+    ],
+    // No subject = no DWD, acts as service account itself
+  });
+}
+
 // Check if service account is configured
 export function hasServiceAccount(): boolean {
   return !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY;

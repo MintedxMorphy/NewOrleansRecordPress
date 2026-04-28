@@ -1,12 +1,14 @@
 import { google } from 'googleapis';
-import { getOAuth2Auth, getPersonalGmailAuth, getWorkspaceAuth, hasServiceAccount } from './google-auth';
+import { getOAuth2Auth, getPersonalGmailAuth, getWorkspaceAuth, hasServiceAccount, getServiceAccountSelfAuth } from './google-auth';
 
 const SHEETS_DB_ID = process.env.SHEETS_DB_ID!;
 
-// Use service account (impersonate gregory@) if available, else OAuth2 fallback
+// Use service account self-auth (no DWD) if available — the NORP_OPS_DB sheet is
+// shared directly with the SA email, so impersonation is NOT needed.
+// Falls back to OAuth2 refresh token.
 function getSheetsAuth() {
   if (hasServiceAccount()) {
-    return getWorkspaceAuth('gregory@neworleansrecordpress.com');
+    return getServiceAccountSelfAuth();
   }
   return getOAuth2Auth();
 }
