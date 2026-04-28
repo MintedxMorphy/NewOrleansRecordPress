@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { format, parseISO, isValid } from 'date-fns';
 
@@ -249,6 +249,9 @@ function KanbanBoard({ jobs, onJobUpdate, onJobClick }: {
   onJobUpdate: (jobs: Job[]) => void;
   onJobClick: (job: Job) => void;
 }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <div style={{ color: '#9A9A9A', padding: '20px', fontSize: '13px' }}>Loading board...</div>;
 
   const byStage = (stage: Stage) => jobs.filter(j => j.stage === stage);
 
