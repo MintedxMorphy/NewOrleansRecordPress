@@ -25,6 +25,7 @@ export async function refreshQBOToken(): Promise<string> {
       Accept: 'application/json',
     },
     body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(process.env.QBO_REFRESH_TOKEN!)}`,
+    signal: AbortSignal.timeout(8000), // 8s timeout
   });
   const data = await res.json() as { access_token: string; expires_in: number };
   const expiry = Date.now() + (data.expires_in * 1000);
@@ -47,6 +48,7 @@ async function qboFetch(path: string): Promise<any> {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json',
     },
+    signal: AbortSignal.timeout(8000), // 8s timeout — fail fast when QBO is broken
   });
   return res.json();
 }
