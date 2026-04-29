@@ -206,9 +206,16 @@ function PayrollCard({ nextPayroll, bankAccounts }: { nextPayroll: NextPayroll |
 
 // ── Kanban ─────────────────────────────────────────────────────────────────────
 
+const POST_PLATES_STAGES = new Set(['plates','test_pressing','approved','pressing','qc','pack','ship','paid']);
+
 function JobCard({ job, onClick }: { job: Job; onClick: () => void }) {
   const isShipping = job.stage === 'ship';
   const customerDisplay = job.customer?.length > 50 ? job.customer.slice(0, 50) + '…' : job.customer;
+  const artExt = job as unknown as { art_received?: boolean; art_received_date?: string; art_sides?: string };
+  const artReceived = !!artExt.art_received;
+  const artDate = artExt.art_received_date ?? '';
+  const artSides = artExt.art_sides ?? '';
+  const showNoArtWarning = !artReceived && POST_PLATES_STAGES.has(job.stage);
 
   return (
     <div
@@ -232,6 +239,16 @@ function JobCard({ job, onClick }: { job: Job; onClick: () => void }) {
         {job.quantity && job.colors && <span style={{ color: COLORS.muted }}> × </span>}
         {job.colors && <span style={{ color: COLORS.gold }}>{job.colors}</span>}
       </div>
+      {artReceived && (
+        <div style={{ marginTop: '4px', background: COLORS.green + '22', border: `1px solid ${COLORS.green}66`, borderRadius: '4px', padding: '2px 6px', fontSize: '10px', color: COLORS.green, fontWeight: 600 }}>
+          🎨 Art {artSides && <span style={{ color: COLORS.text }}>{artSides}</span>}{artDate && <span style={{ color: COLORS.muted, marginLeft: '4px' }}>{artDate}</span>}
+        </div>
+      )}
+      {showNoArtWarning && (
+        <div style={{ marginTop: '4px', background: COLORS.yellow + '22', border: `1px solid ${COLORS.yellow}66`, borderRadius: '4px', padding: '2px 6px', fontSize: '10px', color: COLORS.yellow, fontWeight: 600 }}>
+          ⚠️ No art
+        </div>
+      )}
       {job.due_note && (
         <div style={{ marginTop: '4px', background: COLORS.red + '22', border: `1px solid ${COLORS.red}66`, borderRadius: '4px', padding: '2px 6px', fontSize: '10px', color: COLORS.red, fontWeight: 600 }}>
           {job.due_note}
@@ -626,6 +643,98 @@ function LowStockTable({ inventory }: { inventory: InventoryRow[] }) {
   );
 }
 
+// ── Drive Intel Panel ──────────────────────────────────────────────────────────
+
+interface ArtFileEntry { sides: string[]; receivedDate: string; folder: string }
+interface DriveIntelData {
+  artIndex: Record<string, ArtFileEntry>;
+  artMatrixIds: string[];
+  artCount: number;
+  priorityListText: string;
+  priorityListPreview: string;
+}
+
+// Pull lines that look like queue entries from the priority doc text.
+// Heuristic: keep non-empty lines, drop pure heading/separator lines.
+function parsePriorityQueue(text: string): string[] {
+  if (!text) return [];
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  return lines.filter(l => {
+    if (l.length < 3) return false;
+    if (/^[-=_*•·]+$/.test(l)) return false;
+    return true;
+  }).slice(0, 25);
+}
+
+function DriveIntelPanel({ jobs }: { jobs: Job[] }) {
+  const [data, setData] = useState<DriveIntelData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/norp-drive-intel')
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) setErr(d.error);
+        else setData(d);
+      })
+      .catch(e => setErr(String(e)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Compute art status summary from current jobs (which are already enriched)
+  const haveArt = jobs.filter(j => (j as unknown as { art_received?: boolean }).art_received).length;
+  const awaitingArt = jobs.length - haveArt;
+  const queueLines = data ? parsePriorityQueue(data.priorityListText) : [];
+
+  return (
+    <div style={{ marginTop: '24px' }}>
+      <h3 style={{ color: COLORS.text, fontWeight: 700, fontSize: '14px', marginBottom: '12px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+        Drive Intel
+      </h3>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+        <Card>
+          <KpiLabel>Art Status</KpiLabel>
+          <BigNumber value={`${haveArt} / ${jobs.length}`} color={COLORS.green} />
+          <div style={{ marginTop: '6px', fontSize: '12px', color: COLORS.muted }}>
+            <span style={{ color: COLORS.green }}>{haveArt}</span> jobs have art on file,{' '}
+            <span style={{ color: awaitingArt > 0 ? COLORS.yellow : COLORS.muted }}>{awaitingArt}</span> awaiting art
+          </div>
+          {data && (
+            <div style={{ marginTop: '8px', fontSize: '11px', color: COLORS.muted }}>
+              Drive index: {data.artCount} matrix IDs found across art folders
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <KpiLabel>180g Priority List (preview)</KpiLabel>
+          {loading && <div style={{ color: COLORS.muted, fontSize: '12px' }}>Loading…</div>}
+          {err && <div style={{ color: COLORS.red, fontSize: '12px' }}>{err}</div>}
+          {data && (
+            <div style={{ fontSize: '11px', color: COLORS.text, whiteSpace: 'pre-wrap', maxHeight: '180px', overflowY: 'auto', lineHeight: 1.4 }}>
+              {data.priorityListPreview || <span style={{ color: COLORS.muted }}>(empty)</span>}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <KpiLabel>Pressing Queue</KpiLabel>
+          {loading && <div style={{ color: COLORS.muted, fontSize: '12px' }}>Loading…</div>}
+          {data && queueLines.length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px' }}>No queue entries parsed</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '180px', overflowY: 'auto' }}>
+            {queueLines.map((l, i) => (
+              <div key={i} style={{ fontSize: '11px', color: COLORS.text, padding: '2px 0', borderBottom: `1px solid ${COLORS.border}22` }}>
+                <span style={{ color: COLORS.muted, marginRight: '6px' }}>{i + 1}.</span>{l}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 const EMPTY_KPI: KpiData = { bankAccounts: [], arAging: { total: 0, buckets: { current: 0, days30: 0, days60: 0, days90plus: 0 } }, apAging: { total: 0, pendingBills: 0 }, mtdRevenue: 0, nextPayroll: null };
@@ -681,6 +790,9 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
           <CompoundWatch alert={latestCompoundAlert ?? null} />
         </div>
       </div>
+
+      {/* Drive intel */}
+      <DriveIntelPanel jobs={jobs} />
 
       {/* Low stock */}
       <LowStockTable inventory={inventory ?? []} />
