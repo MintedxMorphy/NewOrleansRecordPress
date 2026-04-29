@@ -1200,7 +1200,7 @@ const EMPTY_KPI: KpiData = { bankAccounts: [], arAging: { total: 0, buckets: { c
 export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJobs, inventory = [], billsInbox = [], latestBriefing = null, latestCompoundAlert = null, shipments = [], emailLog = [] }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs ?? []);
   const [loading, setLoading] = useState(true);
-  const [kpiData] = useState<KpiData>(kpiDataProp ?? EMPTY_KPI);
+  const [kpiData, setKpiData] = useState<KpiData>(kpiDataProp ?? EMPTY_KPI);
 
   useEffect(() => {
     // Load jobs from API on mount — keeps initial page response small
@@ -1210,6 +1210,24 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetch('/api/norp-kpi')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.error) {
+          setKpiData({
+            bankAccounts: data.bankAccounts ?? [],
+            arAging: data.arAging ?? EMPTY_KPI.arAging,
+            apAging: data.apAging ?? EMPTY_KPI.apAging,
+            mtdRevenue: data.mtdRevenue ?? 0,
+            nextPayroll: data.nextPayroll ?? null,
+          });
+        }
+      })
+      .catch(console.error);
+  }, []);
+
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
   const { bankAccounts, arAging, mtdRevenue, nextPayroll } = kpiData;
