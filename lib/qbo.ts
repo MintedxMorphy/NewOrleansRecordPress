@@ -127,8 +127,8 @@ export async function getBankBalancesFromReport(): Promise<Array<{ accountName: 
           const val = parseFloat(cols[1]?.value ?? '0') || 0;
           if (name && val !== 0) accounts.push({ accountName: name, balance: val });
         }
+        // Only recurse once — avoid double-walking Section rows
         if (row?.Rows?.Row) walkRows(row.Rows.Row);
-        if (row?.type === 'Section' && row?.Rows?.Row) walkRows(row.Rows.Row);
       }
     };
     walkRows(rows);

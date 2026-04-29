@@ -1265,11 +1265,22 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
       </div>
 
       <CollapsibleSection
+        id="production"
+        title="🎵 Production Board"
+        badge={`${jobs.filter(j => j.stage !== 'paid').length} active`}
+        badgeColor={COLORS.green}
+        defaultOpen={true}
+      >
+        {loading && <div style={{ color: COLORS.muted, fontSize: '12px', marginBottom: '8px' }}>Loading jobs...</div>}
+        <KanbanBoard jobs={jobs} onJobUpdate={setJobs} onJobClick={setSelectedJob} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
         id="financials"
-        title="Financials - AR & AP"
+        title="💰 Financials — AR & AP"
         badge={`AR $${arData.total.toFixed(0)} | AP $${apData.total.toFixed(0)}`}
         badgeColor={COLORS.gold}
-        defaultOpen={true}
+        defaultOpen={false}
       >
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
           <div>
@@ -1281,19 +1292,6 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
             <APTable bills={apData.bills} total={apData.total} />
           </div>
         </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        id="production"
-        title="Production Board"
-        badge={`${jobs.filter(j => j.stage !== 'paid').length} active`}
-        badgeColor={COLORS.green}
-        defaultOpen={false}
-      >
-        <h2 style={{ color: COLORS.text, fontWeight: 700, fontSize: '16px', marginBottom: '12px' }}>
-          Production Board {loading && <span style={{ color: COLORS.muted, fontSize: '12px', fontWeight: 400 }}>Loading...</span>}
-        </h2>
-        <KanbanBoard jobs={jobs} onJobUpdate={setJobs} onJobClick={setSelectedJob} />
       </CollapsibleSection>
 
       <CollapsibleSection
