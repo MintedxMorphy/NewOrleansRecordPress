@@ -20,7 +20,7 @@ interface Product {
 
 let _stripe: Stripe | null = null;
 function getStripe() {
-  if (!_stripe) _stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-03-31.basil' });
+  if (!_stripe) _stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2026-03-25.dahlia' });
   return _stripe;
 }
 
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     const products: Product[] = JSON.parse(readFileSync(filePath, 'utf-8'))
     const productMap = new Map(products.map(p => [p.id, p]))
 
-    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = []
+    const lineItems: NonNullable<Stripe.Checkout.SessionCreateParams['line_items']> = []
 
     for (const item of items) {
       const product = productMap.get(item.id)

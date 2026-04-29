@@ -112,6 +112,35 @@ export async function getBankBalances(): Promise<Array<{ accountName: string; ba
   }
 }
 
+export async function getBankBalancesFromReport(): Promise<Array<{ accountName: string; balance: number }>> {
+  if (!process.env.QBO_CLIENT_ID || !process.env.QBO_REFRESH_TOKEN) return [];
+  try {
+    const data = await qboFetch('reports/BalanceSheet?date_macro=Today&minorversion=65');
+    const rows = data?.Rows?.Row ?? [];
+    const accounts: Array<{ accountName: string; balance: number }> = [];
+
+    const walkRows = (rowList: any[]) => {
+      for (const row of rowList) {
+        if (row?.type === 'Data') {
+          const cols = row?.ColData ?? [];
+          const name = cols[0]?.value ?? '';
+          const val = parseFloat(cols[1]?.value ?? '0') || 0;
+          if (name && val !== 0) accounts.push({ accountName: name, balance: val });
+        }
+        if (row?.Rows?.Row) walkRows(row.Rows.Row);
+        if (row?.type === 'Section' && row?.Rows?.Row) walkRows(row.Rows.Row);
+      }
+    };
+    walkRows(rows);
+
+    return accounts.filter(a =>
+      /check|saving|cash|bank|3025|3870|resource/i.test(a.accountName)
+    );
+  } catch {
+    return getBankBalances();
+  }
+}
+
 export async function getMTDRevenue(): Promise<number> {
   if (!process.env.QBO_CLIENT_ID || !process.env.QBO_REFRESH_TOKEN) return 0;
   try {

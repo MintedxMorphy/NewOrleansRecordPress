@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       if (!foundShipment) continue;
 
       const now = new Date().toISOString();
-      const updated = {
+      const updated: Record<string, string> = {
         ...foundShipment.row,
         status: newStatus,
         last_status_update: now,
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
         if (job_id) {
           const foundJob = await findRow('jobs', 'job_id', job_id);
           if (foundJob) {
-            const updatedJob = { ...foundJob.row, delivery_date: updated.actual_delivery };
+            const updatedJob: Record<string, string> = { ...foundJob.row, delivery_date: updated.actual_delivery };
             if (parseFloat(foundJob.row.balance_due || '0') === 0) {
               updatedJob.stage = 'paid';
             }

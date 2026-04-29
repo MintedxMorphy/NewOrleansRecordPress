@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { format, parseISO, isValid } from 'date-fns';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,7 +24,8 @@ interface InventoryRow { [key: string]: string }
 interface BillRow { [key: string]: string }
 interface ShipmentRow { [key: string]: string }
 interface EmailLogRow { [key: string]: string }
-interface InboxEmail { email_id: string; timestamp: string; inbox: string; from: string; subject: string; classification: string; confidence: string; summary: string; action_taken: string; job_id: string; bill_id: string }
+interface ARInvoice { id: string; docNumber: string; customerName: string; matrixId: string; totalAmt: number; balance: number; amountPaid: number; dueDate: string; txnDate: string; status: string }
+interface APBill { id: string; vendorName: string; totalAmt: number; balance: number; dueDate: string; txnDate: string; docNumber: string; privateNote: string; status: string }
 
 interface Props {
   // All props are now optional — data loads client-side via API
@@ -77,6 +77,49 @@ function KpiLabel({ children }: { children: React.ReactNode }) {
 
 function BigNumber({ value, color }: { value: string; color?: string }) {
   return <div style={{ fontSize: '32px', fontWeight: 700, color: color ?? COLORS.text, lineHeight: 1.1 }}>{value}</div>;
+}
+
+function CollapsibleSection({
+  id, title, badge, badgeColor, defaultOpen = false, children,
+}: {
+  id: string; title: string; badge?: string | number; badgeColor?: string;
+  defaultOpen?: boolean; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div id={id} style={{ marginBottom: '8px', border: `1px solid ${COLORS.border}`, borderRadius: '10px', overflow: 'hidden' }}>
+      <div
+        onClick={() => setOpen(!open)}
+        style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '12px 16px', cursor: 'pointer', background: COLORS.card,
+          userSelect: 'none',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = COLORS.elevated)}
+        onMouseLeave={e => (e.currentTarget.style.background = COLORS.card)}
+      >
+        <span style={{ fontWeight: 700, fontSize: '13px', color: COLORS.text, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          {title}
+        </span>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {badge !== undefined && (
+            <span style={{
+              background: (badgeColor ?? COLORS.green) + '22',
+              border: `1px solid ${(badgeColor ?? COLORS.green)}66`,
+              borderRadius: '10px', padding: '1px 8px',
+              fontSize: '11px', color: badgeColor ?? COLORS.green, fontWeight: 700,
+            }}>{badge}</span>
+          )}
+          <span style={{ color: COLORS.muted, fontSize: '16px', transition: 'transform 0.2s', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▼</span>
+        </div>
+      </div>
+      {open && (
+        <div style={{ padding: '16px', borderTop: `1px solid ${COLORS.border}`, background: COLORS.bg }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── KPI Cards ─────────────────────────────────────────────────────────────────
@@ -592,6 +635,113 @@ function CompoundWatch({ alert }: { alert: Record<string, string> | null }) {
   );
 }
 
+function ARTable({
+  invoices, total, jobs, onJobClick,
+}: {
+  invoices: ARInvoice[]; total: number; jobs: Job[]; onJobClick: (job: Job) => void;
+}) {
+  if (invoices.length === 0) return <div style={{ color: COLORS.muted, fontSize: '13px' }}>No open invoices</div>;
+
+  const findJob = (matrixId: string) => {
+    const needle = matrixId.trim().toLowerCase();
+    if (!needle) return undefined;
+    return jobs.find(j => (j.matrix ?? '').trim().toLowerCase() === needle);
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: '12px', fontSize: '13px', color: COLORS.muted }}>
+        Total AR outstanding: <span style={{ color: COLORS.gold, fontWeight: 700 }}>${total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+        <thead>
+          <tr style={{ color: COLORS.muted, textAlign: 'left' }}>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}` }}>Customer</th>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}` }}>Matrix</th>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}` }}>Invoice</th>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}`, textAlign: 'right' }}>Total</th>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}`, textAlign: 'right' }}>Paid</th>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}`, textAlign: 'right' }}>Balance</th>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}` }}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoices.map(inv => {
+            const statusColor = inv.status === 'paid' ? COLORS.green : inv.status === 'partial' ? COLORS.gold : COLORS.red;
+            const job = findJob(inv.matrixId);
+            return (
+              <tr key={inv.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                <td style={{ padding: '8px', color: COLORS.text }}>{inv.customerName}</td>
+                <td style={{ padding: '8px' }}>
+                  {job ? (
+                    <button
+                      type="button"
+                      onClick={() => onJobClick(job)}
+                      style={{
+                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                        color: COLORS.green, fontFamily: 'monospace', fontSize: '11px', textDecoration: 'underline',
+                      }}
+                    >
+                      {inv.matrixId}
+                    </button>
+                  ) : (
+                    <span style={{ color: inv.matrixId ? COLORS.green : COLORS.muted, fontFamily: 'monospace', fontSize: '11px' }}>{inv.matrixId || '—'}</span>
+                  )}
+                </td>
+                <td style={{ padding: '8px', color: COLORS.muted }}>{inv.docNumber}</td>
+                <td style={{ padding: '8px', color: COLORS.text, textAlign: 'right' }}>${inv.totalAmt.toFixed(2)}</td>
+                <td style={{ padding: '8px', color: COLORS.green, textAlign: 'right' }}>${inv.amountPaid.toFixed(2)}</td>
+                <td style={{ padding: '8px', color: COLORS.gold, fontWeight: 700, textAlign: 'right' }}>${inv.balance.toFixed(2)}</td>
+                <td style={{ padding: '8px' }}>
+                  <span style={{ background: statusColor + '22', border: `1px solid ${statusColor}66`, borderRadius: '4px', padding: '2px 6px', fontSize: '10px', color: statusColor, fontWeight: 600, textTransform: 'uppercase' }}>{inv.status}</span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function APTable({ bills, total }: { bills: APBill[]; total: number }) {
+  if (bills.length === 0) return <div style={{ color: COLORS.muted, fontSize: '13px' }}>No open bills</div>;
+  return (
+    <div>
+      <div style={{ marginBottom: '12px', fontSize: '13px', color: COLORS.muted }}>
+        Total AP outstanding: <span style={{ color: COLORS.red, fontWeight: 700 }}>${total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+        <thead>
+          <tr style={{ color: COLORS.muted, textAlign: 'left' }}>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}` }}>Vendor</th>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}` }}>Doc #</th>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}` }}>Due Date</th>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}`, textAlign: 'right' }}>Amount</th>
+            <th style={{ padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}` }}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bills.map(bill => {
+            const statusColor = bill.status === 'overdue' ? COLORS.red : bill.status === 'paid' ? COLORS.green : COLORS.yellow;
+            return (
+              <tr key={bill.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                <td style={{ padding: '8px', color: COLORS.text }}>{bill.vendorName}</td>
+                <td style={{ padding: '8px', color: COLORS.muted, fontSize: '11px' }}>{bill.docNumber || '—'}</td>
+                <td style={{ padding: '8px', color: bill.status === 'overdue' ? COLORS.red : COLORS.text }}>{bill.dueDate || '—'}</td>
+                <td style={{ padding: '8px', color: COLORS.red, fontWeight: 700, textAlign: 'right' }}>${bill.balance.toFixed(2)}</td>
+                <td style={{ padding: '8px' }}>
+                  <span style={{ background: statusColor + '22', border: `1px solid ${statusColor}66`, borderRadius: '4px', padding: '2px 6px', fontSize: '10px', color: statusColor, fontWeight: 600, textTransform: 'uppercase' }}>{bill.status}</span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ── Low Stock Table ────────────────────────────────────────────────────────────
 
 function LowStockTable({ inventory }: { inventory: InventoryRow[] }) {
@@ -778,146 +928,6 @@ function PressQueueCard({ title, jobs, artIndex, accent }: {
   );
 }
 
-// ── Inbox Panel ────────────────────────────────────────────────────────────────
-
-function InboxRow({ email }: { email: InboxEmail }) {
-  const badgeColors: Record<string, string> = {
-    quote_request: COLORS.gold,
-    order_update: COLORS.green,
-    vendor_invoice: '#FF8C00',
-    payment_received: '#00B4D8',
-    shipping_update: COLORS.purple,
-  };
-  const color = badgeColors[email.classification] || COLORS.muted;
-  const isQuoteRequest = email.classification === 'quote_request';
-
-  let timestamp = '';
-  try {
-    if (email.timestamp && isValid(parseISO(email.timestamp))) {
-      timestamp = format(parseISO(email.timestamp), 'MMM d, h:mm a');
-    }
-  } catch {}
-
-  const fromDisplay = email.from ? (email.from.length > 35 ? email.from.slice(0, 35) + '…' : email.from) : '(no sender)';
-  const subjectDisplay = email.subject ? (email.subject.length > 50 ? email.subject.slice(0, 50) + '…' : email.subject) : '(no subject)';
-
-  return (
-    <div
-      style={{
-        background: isQuoteRequest ? COLORS.elevated : 'transparent',
-        border: `1px solid ${COLORS.border}`,
-        borderLeft: isQuoteRequest ? `4px solid ${COLORS.gold}` : `1px solid ${COLORS.border}`,
-        borderRadius: '8px',
-        padding: '12px',
-        marginBottom: '8px',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '6px' }}>
-        <span
-          style={{
-            background: color + '22',
-            border: `1px solid ${color}66`,
-            borderRadius: '4px',
-            padding: '2px 8px',
-            fontSize: '10px',
-            color,
-            fontWeight: 600,
-            whiteSpace: 'nowrap',
-            textTransform: 'uppercase',
-          }}
-        >
-          {email.classification.replace(/_/g, ' ')}
-        </span>
-        <span style={{ fontSize: '11px', color: COLORS.muted, whiteSpace: 'nowrap' }}>{timestamp}</span>
-      </div>
-      <div style={{ fontSize: '12px', color: COLORS.text, marginBottom: '4px' }}>
-        <strong>{fromDisplay}</strong>
-      </div>
-      <div style={{ fontSize: '12px', color: COLORS.muted, marginBottom: '6px' }}>{subjectDisplay}</div>
-      {email.summary && <div style={{ fontSize: '11px', color: COLORS.muted, lineHeight: 1.4, marginBottom: '6px' }}>{email.summary}</div>}
-      {email.job_id && (
-        <div style={{ fontSize: '10px', color: COLORS.green, fontWeight: 600 }}>🔗 Job: {email.job_id}</div>
-      )}
-    </div>
-  );
-}
-
-function InboxPanel() {
-  const [emails, setEmails] = useState<InboxEmail[]>([]);
-  const [counts, setCounts] = useState<Record<string, number>>({ total: 0, quote_request: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/norp-inbox')
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) {
-          setError(d.error);
-        } else {
-          setEmails(d.emails || []);
-          setCounts(d.counts || { total: 0 });
-          // Auto-expand if there are quote requests, else collapse
-          setCollapsed((d.counts?.quote_request || 0) === 0);
-        }
-      })
-      .catch(e => setError(String(e)))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const quoteCount = counts.quote_request || 0;
-
-  return (
-    <div style={{ marginBottom: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
-        <h2 style={{ color: COLORS.text, fontWeight: 700, fontSize: '16px', margin: 0, letterSpacing: '-0.3px' }}>
-          📬 Email Inbox{' '}
-          <span style={{ color: COLORS.muted, fontSize: '13px', fontWeight: 400 }}>(last 48h)</span>
-        </h2>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {quoteCount > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', background: COLORS.gold + '22', border: `1px solid ${COLORS.gold}66`, borderRadius: '6px' }}>
-              <span style={{ color: COLORS.gold, fontWeight: 700, fontSize: '12px' }}>🎯</span>
-              <span style={{ color: COLORS.gold, fontWeight: 700, fontSize: '12px' }}>{quoteCount} new inquiry{quoteCount > 1 ? 'ies' : ''}</span>
-            </div>
-          )}
-          <span style={{ background: COLORS.border, borderRadius: '10px', padding: '2px 8px', fontSize: '11px', color: COLORS.text, fontWeight: 600 }}>
-            {counts.total} total
-          </span>
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: COLORS.muted,
-              cursor: 'pointer',
-              fontSize: '18px',
-              padding: '0',
-              transition: 'transform 0.2s',
-              transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-            }}
-          >
-            ▼
-          </button>
-        </div>
-      </div>
-
-      {loading && <div style={{ color: COLORS.muted, fontSize: '12px', padding: '8px 0' }}>Loading inbox…</div>}
-      {error && <div style={{ color: COLORS.red, fontSize: '12px', padding: '8px 0' }}>Error: {error}</div>}
-      {!loading && !error && emails.length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px', padding: '8px 0' }}>No emails in last 48 hours</div>}
-
-      {!collapsed && emails.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-          {emails.map(email => (
-            <InboxRow key={email.email_id} email={email} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function DriveIntelPanel({ jobs }: { jobs: Job[] }) {
   const [data, setData] = useState<DriveIntelData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -941,11 +951,7 @@ function DriveIntelPanel({ jobs }: { jobs: Job[] }) {
   const artIndex = data?.artIndex ?? {};
 
   return (
-    <div style={{ marginTop: '24px', marginBottom: '24px' }}>
-      <h3 style={{ color: COLORS.text, fontWeight: 700, fontSize: '14px', marginBottom: '12px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-        Drive Intel
-      </h3>
-
+    <div>
       {/* Art status summary */}
       <div style={{ marginBottom: '16px' }}>
         <Card>
@@ -1201,6 +1207,8 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
   const [jobs, setJobs] = useState<Job[]>(initialJobs ?? []);
   const [loading, setLoading] = useState(true);
   const [kpiData, setKpiData] = useState<KpiData>(kpiDataProp ?? EMPTY_KPI);
+  const [arData, setArData] = useState<{ invoices: ARInvoice[]; total: number }>({ invoices: [], total: 0 });
+  const [apData, setApData] = useState<{ bills: APBill[]; total: number }>({ bills: [], total: 0 });
 
   useEffect(() => {
     // Load jobs from API on mount — keeps initial page response small
@@ -1228,50 +1236,96 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
       .catch(console.error);
   }, []);
 
+  useEffect(() => {
+    fetch('/api/norp-ar')
+      .then(r => r.json())
+      .then(d => { if (!d.error) setArData(d); })
+      .catch(console.error);
+    fetch('/api/norp-ap')
+      .then(r => r.json())
+      .then(d => { if (!d.error) setApData(d); })
+      .catch(console.error);
+  }, []);
+
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
-  const { bankAccounts, arAging, mtdRevenue, nextPayroll } = kpiData;
+  const { bankAccounts, arAging, nextPayroll } = kpiData;
 
   return (
     <div style={{ maxWidth: '1800px', margin: '0 auto' }}>
 
-      {/* Inbox — first thing users see */}
-      <InboxPanel />
-
-      {/* Drive Intel */}
-      <DriveIntelPanel jobs={jobs} />
-
-      {/* Row 1: 4 KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '16px', marginBottom: '16px' }}>
+      {/* Permanent KPI strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', marginBottom: '16px' }}>
         <CashCard bankAccounts={bankAccounts} />
         <ARCard arAging={arAging} />
         <BillsCard billsInbox={billsInbox ?? []} />
         <ActiveJobsCard jobs={jobs} inventory={inventory ?? []} />
-      </div>
-
-      {/* Row 2: 3 secondary KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '16px', marginBottom: '24px' }}>
         <ShipmentsCard shipments={shipments ?? []} />
-        <ShippingCostCard shipments={shipments ?? []} mtdRevenue={mtdRevenue} />
         <PayrollCard nextPayroll={nextPayroll} bankAccounts={bankAccounts} />
       </div>
 
-      {/* Center + Sidebar layout */}
-      <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-
-        {/* Kanban */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ color: COLORS.text, fontWeight: 700, fontSize: '16px', marginBottom: '12px', letterSpacing: '-0.3px' }}>Production Board {loading && <span style={{ color: COLORS.muted, fontSize: '12px', fontWeight: 400 }}>Loading jobs...</span>}</h2>
-          <KanbanBoard jobs={jobs} onJobUpdate={setJobs} onJobClick={setSelectedJob} />
+      <CollapsibleSection
+        id="financials"
+        title="Financials - AR & AP"
+        badge={`AR $${arData.total.toFixed(0)} | AP $${apData.total.toFixed(0)}`}
+        badgeColor={COLORS.gold}
+        defaultOpen={true}
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          <div>
+            <h3 style={{ color: COLORS.gold, fontWeight: 700, fontSize: '13px', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Who Owes Us</h3>
+            <ARTable invoices={arData.invoices} total={arData.total} jobs={jobs} onJobClick={setSelectedJob} />
+          </div>
+          <div>
+            <h3 style={{ color: COLORS.red, fontWeight: 700, fontSize: '13px', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Bills We Owe</h3>
+            <APTable bills={apData.bills} total={apData.total} />
+          </div>
         </div>
+      </CollapsibleSection>
 
-        {/* Right sidebar */}
-        <div style={{ width: '300px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <Card><BillsInbox bills={billsInbox} /></Card>
-          <Card><BriefingSection briefing={latestBriefing ?? null} /></Card>
+      <CollapsibleSection
+        id="production"
+        title="Production Board"
+        badge={`${jobs.filter(j => j.stage !== 'paid').length} active`}
+        badgeColor={COLORS.green}
+        defaultOpen={false}
+      >
+        <h2 style={{ color: COLORS.text, fontWeight: 700, fontSize: '16px', marginBottom: '12px' }}>
+          Production Board {loading && <span style={{ color: COLORS.muted, fontSize: '12px', fontWeight: 400 }}>Loading...</span>}
+        </h2>
+        <KanbanBoard jobs={jobs} onJobUpdate={setJobs} onJobClick={setSelectedJob} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="drive"
+        title="Drive Intel - Press Queues & Inventory"
+        badge="Queues"
+        badgeColor={COLORS.purple}
+        defaultOpen={false}
+      >
+        <DriveIntelPanel jobs={jobs} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="bills"
+        title="Bills Inbox"
+        badge={billsInbox?.filter(b => b.status === 'new').length || 0}
+        badgeColor={COLORS.orange}
+        defaultOpen={false}
+      >
+        <BillsInbox bills={billsInbox ?? []} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="briefing"
+        title="Daily Briefing"
+        defaultOpen={false}
+      >
+        <BriefingSection briefing={latestBriefing ?? null} />
+        <div style={{ marginTop: '16px' }}>
           <CompoundWatch alert={latestCompoundAlert ?? null} />
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* Low stock */}
       <LowStockTable inventory={inventory ?? []} />

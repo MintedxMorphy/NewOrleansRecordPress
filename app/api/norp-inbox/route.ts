@@ -58,7 +58,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      emails: filtered as InboxEmail[],
+      emails: filtered as unknown as InboxEmail[],
       counts: {
         quote_request: counts['quote_request'] || 0,
         order_update: counts['order_update'] || 0,

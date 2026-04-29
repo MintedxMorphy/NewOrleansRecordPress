@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getBankBalances, getARaging, getAPAging, getMTDRevenue } from '@/lib/qbo';
+import { getBankBalancesFromReport, getARaging, getAPAging, getMTDRevenue } from '@/lib/qbo';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
     const [bankAccounts, arAging, apAging, mtdRevenue] = await Promise.all([
-      getBankBalances().catch(() => []),
+      getBankBalancesFromReport().catch(() => []),
       getARaging().catch(() => ({ total: 0, buckets: { current: 0, days30: 0, days60: 0, days90plus: 0 } })),
       getAPAging().catch(() => ({ total: 0, pendingBills: 0 })),
       getMTDRevenue().catch(() => 0),
