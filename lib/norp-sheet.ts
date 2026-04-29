@@ -97,6 +97,17 @@ export async function getNORPJobs(): Promise<NORPJob[]> {
     if (!projectName) continue;
 
     const matrix = row[1]?.trim() ?? '';
+
+    // Skip inventory/supply rows that pollute the job list
+    const nameLower = projectName.toLowerCase();
+    const isInventory = (
+      nameLower.includes('sleeve') ||
+      nameLower.includes('polysleeve') ||
+      nameLower.includes('consumable') ||
+      // Vinyl color swatches have matrix=0 and short single/two-word names
+      (matrix === '0' && projectName.split(' ').length <= 4 && !projectName.includes('-'))
+    );
+    if (isInventory) continue;
     const orderNumber = row[24]?.trim() ?? '';
 
     // Generate a unique job_id from matrix or order number

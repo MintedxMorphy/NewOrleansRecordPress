@@ -759,6 +759,9 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
   return (
     <div style={{ maxWidth: '1800px', margin: '0 auto' }}>
 
+      {/* Drive Intel — top of page */}
+      <DriveIntelPanel jobs={jobs} />
+
       {/* Row 1: 4 KPI cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '16px', marginBottom: '16px' }}>
         <CashCard bankAccounts={bankAccounts} />
@@ -790,9 +793,6 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
           <CompoundWatch alert={latestCompoundAlert ?? null} />
         </div>
       </div>
-
-      {/* Drive intel */}
-      <DriveIntelPanel jobs={jobs} />
 
       {/* Low stock */}
       <LowStockTable inventory={inventory ?? []} />
