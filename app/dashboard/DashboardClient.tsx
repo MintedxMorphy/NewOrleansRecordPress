@@ -25,6 +25,7 @@ interface InventoryRow { [key: string]: string }
 interface BillRow { [key: string]: string }
 interface ShipmentRow { [key: string]: string }
 interface EmailLogRow { [key: string]: string }
+interface InboxEmail { email_id: string; timestamp: string; inbox: string; from: string; subject: string; classification: string; confidence: string; summary: string; action_taken: string; job_id: string; bill_id: string }
 
 interface Props {
   // All props are now optional — data loads client-side via API
@@ -777,6 +778,146 @@ function PressQueueCard({ title, jobs, artIndex, accent }: {
   );
 }
 
+// ── Inbox Panel ────────────────────────────────────────────────────────────────
+
+function InboxRow({ email }: { email: InboxEmail }) {
+  const badgeColors: Record<string, string> = {
+    quote_request: COLORS.gold,
+    order_update: COLORS.green,
+    vendor_invoice: '#FF8C00',
+    payment_received: '#00B4D8',
+    shipping_update: COLORS.purple,
+  };
+  const color = badgeColors[email.classification] || COLORS.muted;
+  const isQuoteRequest = email.classification === 'quote_request';
+
+  let timestamp = '';
+  try {
+    if (email.timestamp && isValid(parseISO(email.timestamp))) {
+      timestamp = format(parseISO(email.timestamp), 'MMM d, h:mm a');
+    }
+  } catch {}
+
+  const fromDisplay = email.from ? (email.from.length > 35 ? email.from.slice(0, 35) + '…' : email.from) : '(no sender)';
+  const subjectDisplay = email.subject ? (email.subject.length > 50 ? email.subject.slice(0, 50) + '…' : email.subject) : '(no subject)';
+
+  return (
+    <div
+      style={{
+        background: isQuoteRequest ? COLORS.elevated : 'transparent',
+        border: `1px solid ${COLORS.border}`,
+        borderLeft: isQuoteRequest ? `4px solid ${COLORS.gold}` : `1px solid ${COLORS.border}`,
+        borderRadius: '8px',
+        padding: '12px',
+        marginBottom: '8px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '6px' }}>
+        <span
+          style={{
+            background: color + '22',
+            border: `1px solid ${color}66`,
+            borderRadius: '4px',
+            padding: '2px 8px',
+            fontSize: '10px',
+            color,
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+            textTransform: 'uppercase',
+          }}
+        >
+          {email.classification.replace(/_/g, ' ')}
+        </span>
+        <span style={{ fontSize: '11px', color: COLORS.muted, whiteSpace: 'nowrap' }}>{timestamp}</span>
+      </div>
+      <div style={{ fontSize: '12px', color: COLORS.text, marginBottom: '4px' }}>
+        <strong>{fromDisplay}</strong>
+      </div>
+      <div style={{ fontSize: '12px', color: COLORS.muted, marginBottom: '6px' }}>{subjectDisplay}</div>
+      {email.summary && <div style={{ fontSize: '11px', color: COLORS.muted, lineHeight: 1.4, marginBottom: '6px' }}>{email.summary}</div>}
+      {email.job_id && (
+        <div style={{ fontSize: '10px', color: COLORS.green, fontWeight: 600 }}>🔗 Job: {email.job_id}</div>
+      )}
+    </div>
+  );
+}
+
+function InboxPanel() {
+  const [emails, setEmails] = useState<InboxEmail[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({ total: 0, quote_request: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/norp-inbox')
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) {
+          setError(d.error);
+        } else {
+          setEmails(d.emails || []);
+          setCounts(d.counts || { total: 0 });
+          // Auto-expand if there are quote requests, else collapse
+          setCollapsed((d.counts?.quote_request || 0) === 0);
+        }
+      })
+      .catch(e => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const quoteCount = counts.quote_request || 0;
+
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
+        <h2 style={{ color: COLORS.text, fontWeight: 700, fontSize: '16px', margin: 0, letterSpacing: '-0.3px' }}>
+          📬 Email Inbox{' '}
+          <span style={{ color: COLORS.muted, fontSize: '13px', fontWeight: 400 }}>(last 48h)</span>
+        </h2>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {quoteCount > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', background: COLORS.gold + '22', border: `1px solid ${COLORS.gold}66`, borderRadius: '6px' }}>
+              <span style={{ color: COLORS.gold, fontWeight: 700, fontSize: '12px' }}>🎯</span>
+              <span style={{ color: COLORS.gold, fontWeight: 700, fontSize: '12px' }}>{quoteCount} new inquiry{quoteCount > 1 ? 'ies' : ''}</span>
+            </div>
+          )}
+          <span style={{ background: COLORS.border, borderRadius: '10px', padding: '2px 8px', fontSize: '11px', color: COLORS.text, fontWeight: 600 }}>
+            {counts.total} total
+          </span>
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: COLORS.muted,
+              cursor: 'pointer',
+              fontSize: '18px',
+              padding: '0',
+              transition: 'transform 0.2s',
+              transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+            }}
+          >
+            ▼
+          </button>
+        </div>
+      </div>
+
+      {loading && <div style={{ color: COLORS.muted, fontSize: '12px', padding: '8px 0' }}>Loading inbox…</div>}
+      {error && <div style={{ color: COLORS.red, fontSize: '12px', padding: '8px 0' }}>Error: {error}</div>}
+      {!loading && !error && emails.length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px', padding: '8px 0' }}>No emails in last 48 hours</div>}
+
+      {!collapsed && emails.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+          {emails.map(email => (
+            <InboxRow key={email.email_id} email={email} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DriveIntelPanel({ jobs }: { jobs: Job[] }) {
   const [data, setData] = useState<DriveIntelData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1076,7 +1217,10 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
   return (
     <div style={{ maxWidth: '1800px', margin: '0 auto' }}>
 
-      {/* Drive Intel — top of page */}
+      {/* Inbox — first thing users see */}
+      <InboxPanel />
+
+      {/* Drive Intel */}
       <DriveIntelPanel jobs={jobs} />
 
       {/* Row 1: 4 KPI cards */}
