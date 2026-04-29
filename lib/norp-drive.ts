@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { getPersonalGmailAuth } from './google-auth';
+import { getNORPJobs, type NORPJob } from './norp-sheet';
 
 // READ-ONLY: pulls art file index, priority list doc, and inventory sheets
 // from the neworleansrecordpress@gmail.com Drive.
@@ -127,6 +128,198 @@ async function readSheetValues(sheetId: string, range: string): Promise<string[]
   const sheets = google.sheets({ version: 'v4', auth });
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range });
   return (res.data.values as string[][]) ?? [];
+}
+
+// ── Press queue parser ────────────────────────────────────────────────────────
+
+export interface PressQueueJob {
+  matrix: string;
+  customer: string;
+  qty_from_doc: string;
+  color_from_doc: string;
+  quantity: string;
+  colors: string;
+  weight: string;
+  stage: string;
+  due_note: string;
+  notes_from_doc: string;
+}
+
+export interface PressQueues {
+  viryl: PressQueueJob[];
+  finebilt: PressQueueJob[];
+  test_pressings: string[];
+  blocked: PressQueueJob[];
+  raw_text: string;
+}
+
+// Heuristic: line starts with a 1-5 digit qty followed by a space and non-digit.
+function isQtyLine(line: string): boolean {
+  return /^\d{1,5}\s+\S/.test(line) && !/^\d{1,5}\s*$/.test(line);
+}
+
+// Heuristic: line looks like a matrix ID (possibly followed by " - notes").
+function looksLikeMatrix(line: string): boolean {
+  const head = line.split(/\s+-\s+/)[0].trim();
+  if (!head || head.length > 50) return false;
+  const words = head.split(/\s+/);
+  if (words.length > 4) return false;
+  const hasDigit = /\d/.test(head);
+  const hasUpper = /[A-Z]/.test(head);
+  if (!hasDigit && !hasUpper) return false;
+  const lower = (head.match(/[a-z]/g) || []).length;
+  const upperOrDigit = (head.match(/[A-Z0-9]/g) || []).length;
+  if (lower > upperOrDigit) return false;
+  return true;
+}
+
+function parseQtyColor(line: string): { qty: string; color: string } {
+  const m = line.match(/^(\d{1,5})\s+(.+)$/);
+  if (!m) return { qty: '', color: line };
+  return { qty: m[1], color: m[2].trim() };
+}
+
+function splitMatrixAndNotes(line: string): { matrix: string; notes: string } {
+  const parts = line.split(/\s+-\s+/);
+  return {
+    matrix: parts[0].trim(),
+    notes: parts.slice(1).join(' - ').trim(),
+  };
+}
+
+function buildEntry(
+  matrix: string,
+  notes: string,
+  pending: { qty: string; color: string } | null,
+  jobByMatrix: Map<string, NORPJob>,
+): PressQueueJob {
+  const job = matrix ? jobByMatrix.get(matrix.toUpperCase()) : undefined;
+  return {
+    matrix,
+    customer: job?.customer ?? '',
+    qty_from_doc: pending?.qty ?? '',
+    color_from_doc: pending?.color ?? '',
+    quantity: job?.quantity ?? '',
+    colors: job?.colors ?? '',
+    weight: job?.weight ?? '',
+    stage: job?.stage ?? '',
+    due_note: job?.due_note ?? '',
+    notes_from_doc: notes,
+  };
+}
+
+function parsePressQueues(text: string, jobs: NORPJob[]): PressQueues {
+  const lines = text.split(/\r?\n/);
+  const result: PressQueues = {
+    viryl: [],
+    finebilt: [],
+    test_pressings: [],
+    blocked: [],
+    raw_text: text,
+  };
+
+  const jobByMatrix = new Map<string, NORPJob>();
+  for (const j of jobs) {
+    if (j.matrix) jobByMatrix.set(j.matrix.toUpperCase(), j);
+  }
+
+  type Section = 'none' | 'tests' | 'finebilt' | 'viryl' | 'blocked';
+  let section: Section = 'none';
+  let inProduction = false;
+  let pending: { qty: string; color: string } | null = null;
+
+  const flushOrphan = () => {
+    if (!pending) return;
+    if (section === 'finebilt' || section === 'viryl' || section === 'blocked') {
+      const entry = buildEntry('', '', pending, jobByMatrix);
+      if (section === 'finebilt') result.finebilt.push(entry);
+      else if (section === 'viryl') result.viryl.push(entry);
+      else result.blocked.push(entry);
+    }
+    pending = null;
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    const upper = line.toUpperCase();
+
+    // Section headers (exact matches only — title line "VIRYL PRESS PRIORITY..." won't match)
+    if (upper === 'TEST PRESSES' || upper === 'COLOR TESTS') {
+      flushOrphan();
+      section = 'tests';
+      continue;
+    }
+    if (upper === 'PRODUCTION') {
+      flushOrphan();
+      inProduction = true;
+      section = 'none';
+      continue;
+    }
+    if (upper === 'FINEBILT' && inProduction) {
+      flushOrphan();
+      section = 'finebilt';
+      continue;
+    }
+    if (upper === 'VIRYL' && inProduction) {
+      flushOrphan();
+      section = 'viryl';
+      continue;
+    }
+    if (upper.startsWith('THESE NEED THINGS')) {
+      flushOrphan();
+      section = 'blocked';
+      continue;
+    }
+    if (upper.startsWith('ISSUES:') || upper === 'ISSUES') {
+      flushOrphan();
+      section = 'none';
+      continue;
+    }
+
+    if (section === 'tests') {
+      if (looksLikeMatrix(line)) {
+        const { matrix } = splitMatrixAndNotes(line);
+        if (matrix) result.test_pressings.push(matrix);
+      }
+      continue;
+    }
+
+    if (section === 'finebilt' || section === 'viryl' || section === 'blocked') {
+      if (isQtyLine(line)) {
+        // New qty/color block — flush any prior pending as orphan
+        flushOrphan();
+        pending = parseQtyColor(line);
+        continue;
+      }
+
+      if (looksLikeMatrix(line)) {
+        const { matrix, notes } = splitMatrixAndNotes(line);
+        const entry = buildEntry(matrix, notes, pending, jobByMatrix);
+        if (section === 'finebilt') result.finebilt.push(entry);
+        else if (section === 'viryl') result.viryl.push(entry);
+        else result.blocked.push(entry);
+        pending = null;
+        continue;
+      }
+
+      // Other lines (commentary like "Finebilt - Ok to press") — skip
+    }
+  }
+
+  // Final flush
+  flushOrphan();
+
+  return result;
+}
+
+export async function getPressQueues(): Promise<PressQueues> {
+  const [text, jobs] = await Promise.all([
+    getNORPPriorityList(),
+    getNORPJobs().catch(() => [] as NORPJob[]),
+  ]);
+  return parsePressQueues(text, jobs);
 }
 
 export async function getNORPInventorySummary(): Promise<InventorySummary> {

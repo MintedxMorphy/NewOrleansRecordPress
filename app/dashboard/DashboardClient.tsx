@@ -646,24 +646,123 @@ function LowStockTable({ inventory }: { inventory: InventoryRow[] }) {
 // ── Drive Intel Panel ──────────────────────────────────────────────────────────
 
 interface ArtFileEntry { sides: string[]; receivedDate: string; folder: string }
+interface PressQueueJob {
+  matrix: string;
+  customer: string;
+  qty_from_doc: string;
+  color_from_doc: string;
+  quantity: string;
+  colors: string;
+  weight: string;
+  stage: string;
+  due_note: string;
+  notes_from_doc: string;
+}
+interface PressQueues {
+  viryl: PressQueueJob[];
+  finebilt: PressQueueJob[];
+  test_pressings: string[];
+  blocked: PressQueueJob[];
+  raw_text: string;
+}
 interface DriveIntelData {
   artIndex: Record<string, ArtFileEntry>;
   artMatrixIds: string[];
   artCount: number;
   priorityListText: string;
   priorityListPreview: string;
+  pressQueues: PressQueues | null;
 }
 
-// Pull lines that look like queue entries from the priority doc text.
-// Heuristic: keep non-empty lines, drop pure heading/separator lines.
-function parsePriorityQueue(text: string): string[] {
-  if (!text) return [];
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  return lines.filter(l => {
-    if (l.length < 3) return false;
-    if (/^[-=_*•·]+$/.test(l)) return false;
-    return true;
-  }).slice(0, 25);
+const STAGE_BADGE_COLOR: Record<string, string> = {
+  quote: '#9A9A9A', deposit: '#C9A84C', plates: '#8B3FCF',
+  test_pressing: '#FFB800', approved: '#00E86A', pressing: '#00E86A',
+  qc: '#FF8C00', pack: '#FF8C00', ship: '#00E86A', paid: '#9A9A9A',
+};
+
+function PressQueueRow({ job, artIndex }: { job: PressQueueJob; artIndex: Record<string, ArtFileEntry> }) {
+  const customer = job.customer || '—';
+  const customerDisplay = customer.length > 35 ? customer.slice(0, 35) + '…' : customer;
+  const qtyColor = [job.qty_from_doc, job.color_from_doc].filter(Boolean).join(' ');
+  const is180g = (job.weight || '').toLowerCase().includes('180');
+  const hasArt = !!(job.matrix && artIndex[job.matrix]);
+  const stageColor = STAGE_BADGE_COLOR[job.stage] ?? COLORS.muted;
+
+  return (
+    <div style={{
+      padding: '6px 8px', borderBottom: `1px solid ${COLORS.border}22`,
+      display: 'flex', flexDirection: 'column', gap: '2px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
+        <span style={{ fontFamily: 'monospace', color: COLORS.muted, minWidth: '90px' }}>
+          {job.matrix || '—'}
+        </span>
+        <span style={{ color: COLORS.text, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {customerDisplay}
+        </span>
+        {is180g && (
+          <span title="180g" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3FA9FF', flexShrink: 0 }} />
+        )}
+        {hasArt && (
+          <span title="Art on file" style={{ color: COLORS.green, fontSize: '11px' }}>🎨</span>
+        )}
+        {job.stage && (
+          <span style={{
+            background: stageColor + '22', border: `1px solid ${stageColor}66`, borderRadius: '3px',
+            padding: '0 4px', fontSize: '9px', color: stageColor, fontWeight: 600,
+            textTransform: 'uppercase', letterSpacing: '0.04em',
+          }}>{job.stage}</span>
+        )}
+      </div>
+      {qtyColor && (
+        <div style={{ fontSize: '11px', color: COLORS.gold, paddingLeft: '90px' }}>
+          {qtyColor}
+        </div>
+      )}
+      {job.due_note && (
+        <div style={{ fontSize: '10px', color: COLORS.red, paddingLeft: '90px', fontWeight: 600 }}>
+          {job.due_note}
+        </div>
+      )}
+      {job.notes_from_doc && (
+        <div style={{ fontSize: '10px', color: COLORS.muted, paddingLeft: '90px', fontStyle: 'italic' }}>
+          {job.notes_from_doc}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PressQueueCard({ title, jobs, artIndex, accent }: {
+  title: string; jobs: PressQueueJob[]; artIndex: Record<string, ArtFileEntry>; accent: string;
+}) {
+  return (
+    <Card style={{ padding: 0 }}>
+      <div style={{
+        padding: '10px 14px', borderBottom: `1px solid ${COLORS.border}`,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <div style={{
+          fontSize: '12px', fontWeight: 700, color: accent,
+          letterSpacing: '0.08em', textTransform: 'uppercase',
+        }}>{title}</div>
+        <span style={{
+          background: accent + '22', border: `1px solid ${accent}66`, borderRadius: '10px',
+          padding: '1px 8px', fontSize: '11px', color: accent, fontWeight: 700,
+        }}>{jobs.length}</span>
+      </div>
+      <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+        {jobs.length === 0 && (
+          <div style={{ padding: '14px', color: COLORS.muted, fontSize: '12px', textAlign: 'center' }}>
+            No jobs queued
+          </div>
+        )}
+        {jobs.map((j, i) => (
+          <PressQueueRow key={`${j.matrix}-${i}`} job={j} artIndex={artIndex} />
+        ))}
+      </div>
+    </Card>
+  );
 }
 
 function DriveIntelPanel({ jobs }: { jobs: Job[] }) {
@@ -685,52 +784,104 @@ function DriveIntelPanel({ jobs }: { jobs: Job[] }) {
   // Compute art status summary from current jobs (which are already enriched)
   const haveArt = jobs.filter(j => (j as unknown as { art_received?: boolean }).art_received).length;
   const awaitingArt = jobs.length - haveArt;
-  const queueLines = data ? parsePriorityQueue(data.priorityListText) : [];
+  const pressQueues = data?.pressQueues ?? null;
+  const artIndex = data?.artIndex ?? {};
 
   return (
-    <div style={{ marginTop: '24px' }}>
+    <div style={{ marginTop: '24px', marginBottom: '24px' }}>
       <h3 style={{ color: COLORS.text, fontWeight: 700, fontSize: '14px', marginBottom: '12px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
         Drive Intel
       </h3>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+
+      {/* Art status summary */}
+      <div style={{ marginBottom: '16px' }}>
         <Card>
           <KpiLabel>Art Status</KpiLabel>
           <BigNumber value={`${haveArt} / ${jobs.length}`} color={COLORS.green} />
           <div style={{ marginTop: '6px', fontSize: '12px', color: COLORS.muted }}>
             <span style={{ color: COLORS.green }}>{haveArt}</span> jobs have art on file,{' '}
             <span style={{ color: awaitingArt > 0 ? COLORS.yellow : COLORS.muted }}>{awaitingArt}</span> awaiting art
-          </div>
-          {data && (
-            <div style={{ marginTop: '8px', fontSize: '11px', color: COLORS.muted }}>
-              Drive index: {data.artCount} matrix IDs found across art folders
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <KpiLabel>180g Priority List (preview)</KpiLabel>
-          {loading && <div style={{ color: COLORS.muted, fontSize: '12px' }}>Loading…</div>}
-          {err && <div style={{ color: COLORS.red, fontSize: '12px' }}>{err}</div>}
-          {data && (
-            <div style={{ fontSize: '11px', color: COLORS.text, whiteSpace: 'pre-wrap', maxHeight: '180px', overflowY: 'auto', lineHeight: 1.4 }}>
-              {data.priorityListPreview || <span style={{ color: COLORS.muted }}>(empty)</span>}
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <KpiLabel>Pressing Queue</KpiLabel>
-          {loading && <div style={{ color: COLORS.muted, fontSize: '12px' }}>Loading…</div>}
-          {data && queueLines.length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px' }}>No queue entries parsed</div>}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '180px', overflowY: 'auto' }}>
-            {queueLines.map((l, i) => (
-              <div key={i} style={{ fontSize: '11px', color: COLORS.text, padding: '2px 0', borderBottom: `1px solid ${COLORS.border}22` }}>
-                <span style={{ color: COLORS.muted, marginRight: '6px' }}>{i + 1}.</span>{l}
-              </div>
-            ))}
+            {data && <span style={{ marginLeft: '12px' }}>· Drive index: {data.artCount} matrix IDs</span>}
           </div>
         </Card>
       </div>
+
+      {/* Loading / error */}
+      {loading && <div style={{ color: COLORS.muted, fontSize: '12px', padding: '8px 0' }}>Loading press queues…</div>}
+      {err && <div style={{ color: COLORS.red, fontSize: '12px', padding: '8px 0' }}>{err}</div>}
+
+      {/* Press queues split */}
+      {pressQueues && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <PressQueueCard
+              title="Viryl Press Queue"
+              jobs={pressQueues.viryl}
+              artIndex={artIndex}
+              accent={COLORS.green}
+            />
+            <PressQueueCard
+              title="Finebilt Press Queue"
+              jobs={pressQueues.finebilt}
+              artIndex={artIndex}
+              accent={COLORS.purple}
+            />
+          </div>
+
+          {/* Test pressings + Blocked side-by-side */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <Card style={{ padding: 0 }}>
+              <div style={{
+                padding: '10px 14px', borderBottom: `1px solid ${COLORS.border}`,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: COLORS.yellow, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  Test Pressing Queue
+                </div>
+                <span style={{
+                  background: COLORS.yellow + '22', border: `1px solid ${COLORS.yellow}66`, borderRadius: '10px',
+                  padding: '1px 8px', fontSize: '11px', color: COLORS.yellow, fontWeight: 700,
+                }}>{pressQueues.test_pressings.length}</span>
+              </div>
+              <div style={{ padding: '10px 14px', maxHeight: '200px', overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {pressQueues.test_pressings.length === 0 && (
+                  <div style={{ color: COLORS.muted, fontSize: '12px' }}>None</div>
+                )}
+                {pressQueues.test_pressings.map((m, i) => (
+                  <span key={i} style={{
+                    fontFamily: 'monospace', fontSize: '11px', color: COLORS.text,
+                    background: COLORS.elevated, border: `1px solid ${COLORS.border}`,
+                    borderRadius: '4px', padding: '2px 6px',
+                  }}>{m}</span>
+                ))}
+              </div>
+            </Card>
+
+            <Card style={{ padding: 0 }}>
+              <div style={{
+                padding: '10px 14px', borderBottom: `1px solid ${COLORS.border}`,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: COLORS.red, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  Blocked — Waiting on Items
+                </div>
+                <span style={{
+                  background: COLORS.red + '22', border: `1px solid ${COLORS.red}66`, borderRadius: '10px',
+                  padding: '1px 8px', fontSize: '11px', color: COLORS.red, fontWeight: 700,
+                }}>{pressQueues.blocked.length}</span>
+              </div>
+              <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+                {pressQueues.blocked.length === 0 && (
+                  <div style={{ padding: '14px', color: COLORS.muted, fontSize: '12px', textAlign: 'center' }}>None</div>
+                )}
+                {pressQueues.blocked.map((j, i) => (
+                  <PressQueueRow key={`${j.matrix}-${i}`} job={j} artIndex={artIndex} />
+                ))}
+              </div>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   );
 }
