@@ -98,14 +98,15 @@ export async function getNORPJobs(): Promise<NORPJob[]> {
 
     const matrix = row[1]?.trim() ?? '';
 
-    // Skip inventory/supply rows that pollute the job list
+    // Skip inventory/supply rows — real jobs always have alphanumeric matrix IDs.
+    // Color swatches and sleeve inventory have empty or purely-numeric matrix columns.
     const nameLower = projectName.toLowerCase();
+    const matrixHasLetters = /[a-zA-Z]/.test(matrix);
     const isInventory = (
+      !matrixHasLetters || // empty or purely numeric matrix = color swatch / sleeve inventory
       nameLower.includes('sleeve') ||
       nameLower.includes('polysleeve') ||
-      nameLower.includes('consumable') ||
-      // Vinyl color swatches have matrix=0 and short single/two-word names
-      (matrix === '0' && projectName.split(' ').length <= 4 && !projectName.includes('-'))
+      nameLower.includes('consumable')
     );
     if (isInventory) continue;
     const orderNumber = row[24]?.trim() ?? '';
