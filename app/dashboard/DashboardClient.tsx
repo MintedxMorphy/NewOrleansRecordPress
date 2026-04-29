@@ -665,6 +665,12 @@ interface PressQueues {
   blocked: PressQueueJob[];
   raw_text: string;
 }
+interface StamperEntry { matrixId: string; boxes: string[]; sides: string; }
+interface MotherEntry { matrixId: string; box: string; sides: string; }
+interface SSTEntry { artist: string; title: string; catNumber: string; stampersQty: string; labelsQty: string; jacketsQty: string; insertQty: string; }
+interface IARCShipEntry { stockInDate: string; upc: string; catNumber: string; title: string; variant: string; format: string; qty: number; }
+interface NOVCEntry { album: string; quantity: number; matrixId: string; overflow: string; }
+
 interface DriveIntelData {
   artIndex: Record<string, ArtFileEntry>;
   artMatrixIds: string[];
@@ -672,6 +678,12 @@ interface DriveIntelData {
   priorityListText: string;
   priorityListPreview: string;
   pressQueues: PressQueues | null;
+  stampers: StamperEntry[];
+  mothers: MotherEntry[];
+  sstCatalog: SSTEntry[];
+  iarcSplits: IARCShipEntry[];
+  novcStock: NOVCEntry[];
+  sleeversText: string;
 }
 
 const STAGE_BADGE_COLOR: Record<string, string> = {
@@ -881,6 +893,160 @@ function DriveIntelPanel({ jobs }: { jobs: Job[] }) {
             </Card>
           </div>
         </>
+      )}
+
+      {/* QC & Packing View */}
+      {data && (
+        <div style={{ marginTop: '24px' }}>
+          <h3 style={{ color: COLORS.text, fontWeight: 700, fontSize: '14px', marginBottom: '12px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>QC &amp; Packing</h3>
+          {data.sleeversText && (
+            <Card style={{ marginBottom: '14px' }}>
+              <KpiLabel>Sleever Notes</KpiLabel>
+              <pre style={{ color: COLORS.text, fontSize: '12px', whiteSpace: 'pre-wrap', margin: 0, maxHeight: '100px', overflowY: 'auto' }}>{data.sleeversText}</pre>
+            </Card>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+            <Card>
+              <KpiLabel>Needs Listening</KpiLabel>
+              <BigNumber value={String(jobs.filter(j => j.stage === 'test_pressing').length)} color={COLORS.yellow} />
+              <div style={{ marginTop: '10px', maxHeight: '200px', overflowY: 'auto' }}>
+                {jobs.filter(j => j.stage === 'test_pressing').map((j, i) => (
+                  <div key={i} style={{ fontSize: '11px', color: COLORS.text, padding: '4px 0', borderBottom: '1px solid #2A2A2A' }}>
+                    <span style={{ color: COLORS.yellow, fontWeight: 700 }}>{j.matrix}</span>
+                    {j.artist && <span style={{ color: COLORS.muted, marginLeft: '6px' }}>{j.artist.slice(0, 30)}</span>}
+                    {j.qty && <span style={{ color: COLORS.muted, marginLeft: '6px' }}>× {j.qty}</span>}
+                  </div>
+                ))}
+                {jobs.filter(j => j.stage === 'test_pressing').length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px' }}>All clear</div>}
+              </div>
+            </Card>
+            <Card>
+              <KpiLabel>Ready to Press</KpiLabel>
+              <BigNumber value={String(jobs.filter(j => j.stage === 'approved').length)} color={COLORS.green} />
+              <div style={{ marginTop: '10px', maxHeight: '200px', overflowY: 'auto' }}>
+                {jobs.filter(j => j.stage === 'approved').map((j, i) => (
+                  <div key={i} style={{ fontSize: '11px', color: COLORS.text, padding: '4px 0', borderBottom: '1px solid #2A2A2A' }}>
+                    <span style={{ color: COLORS.green, fontWeight: 700 }}>{j.matrix}</span>
+                    {j.artist && <span style={{ color: COLORS.muted, marginLeft: '6px' }}>{j.artist.slice(0, 30)}</span>}
+                    {j.qty && <span style={{ color: COLORS.muted, marginLeft: '6px' }}>× {j.qty}</span>}
+                  </div>
+                ))}
+                {jobs.filter(j => j.stage === 'approved').length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px' }}>None queued</div>}
+              </div>
+            </Card>
+            <Card>
+              <KpiLabel>Sleeve &amp; Pack</KpiLabel>
+              <BigNumber value={String(jobs.filter(j => j.stage === 'qc' || j.stage === 'pack').length)} color={'#FF8C00'} />
+              <div style={{ marginTop: '10px', maxHeight: '200px', overflowY: 'auto' }}>
+                {jobs.filter(j => j.stage === 'qc' || j.stage === 'pack').map((j, i) => (
+                  <div key={i} style={{ fontSize: '11px', color: COLORS.text, padding: '4px 0', borderBottom: '1px solid #2A2A2A' }}>
+                    <span style={{ color: '#FF8C00', fontWeight: 700 }}>{j.matrix}</span>
+                    {j.artist && <span style={{ color: COLORS.muted, marginLeft: '6px' }}>{j.artist.slice(0, 30)}</span>}
+                    {j.qty && <span style={{ fontWeight: 700, color: '#FF8C00', marginLeft: '6px' }}>× {j.qty}</span>}
+                    <span style={{ color: COLORS.muted, marginLeft: '6px', fontSize: '10px' }}>{j.stage}</span>
+                  </div>
+                ))}
+                {jobs.filter(j => j.stage === 'qc' || j.stage === 'pack').length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px' }}>Nothing pending</div>}
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Inventory Library */}
+      {data && (
+        <div style={{ marginTop: '24px' }}>
+          <h3 style={{ color: COLORS.text, fontWeight: 700, fontSize: '14px', marginBottom: '12px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Inventory Library</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px', marginBottom: '14px' }}>
+            <Card>
+              <KpiLabel>Upstairs Stampers ({data.stampers.length})</KpiLabel>
+              <div style={{ maxHeight: '220px', overflowY: 'auto', marginTop: '8px' }}>
+                {data.stampers.length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px' }}>No data</div>}
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                  <thead><tr style={{ color: COLORS.muted }}><th style={{ textAlign: 'left', paddingBottom: '4px' }}>Matrix</th><th style={{ textAlign: 'left' }}>Box</th><th style={{ textAlign: 'left' }}>Sides</th></tr></thead>
+                  <tbody>
+                    {data.stampers.map((s, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid #222', color: COLORS.text }}>
+                        <td style={{ padding: '3px 6px 3px 0', color: COLORS.green, fontWeight: 700 }}>{s.matrixId}</td>
+                        <td style={{ padding: '3px 6px 3px 0', color: COLORS.muted }}>{s.boxes.join(', ')}</td>
+                        <td style={{ padding: '3px 0', color: COLORS.muted }}>{s.sides}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+            <Card>
+              <KpiLabel>Mothers Inventory ({data.mothers.length})</KpiLabel>
+              <div style={{ maxHeight: '220px', overflowY: 'auto', marginTop: '8px' }}>
+                {data.mothers.length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px' }}>No data</div>}
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                  <thead><tr style={{ color: COLORS.muted }}><th style={{ textAlign: 'left', paddingBottom: '4px' }}>Matrix</th><th style={{ textAlign: 'left' }}>Box</th><th style={{ textAlign: 'left' }}>Sides</th></tr></thead>
+                  <tbody>
+                    {data.mothers.map((m, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid #222', color: COLORS.text }}>
+                        <td style={{ padding: '3px 6px 3px 0', color: '#8B3FCF', fontWeight: 700 }}>{m.matrixId}</td>
+                        <td style={{ padding: '3px 6px 3px 0', color: COLORS.muted }}>{m.box}</td>
+                        <td style={{ padding: '3px 0', color: COLORS.muted }}>{m.sides}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+            <Card>
+              <KpiLabel>SST Catalog ({data.sstCatalog.length} titles)</KpiLabel>
+              <div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '8px' }}>
+                {data.sstCatalog.length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px' }}>No data</div>}
+                {data.sstCatalog.map((s, i) => (
+                  <div key={i} style={{ fontSize: '11px', color: COLORS.text, padding: '4px 0', borderBottom: '1px solid #222' }}>
+                    <div style={{ fontWeight: 700 }}>{s.artist} – {s.title}</div>
+                    <div style={{ color: COLORS.muted, marginTop: '2px' }}>
+                      {s.catNumber && <span style={{ marginRight: '8px' }}>{s.catNumber}</span>}
+                      {s.stampersQty && <span style={{ marginRight: '6px', color: COLORS.green }}>Stmprs: {s.stampersQty}</span>}
+                      {s.labelsQty && <span style={{ marginRight: '6px' }}>Labels: {s.labelsQty}</span>}
+                      {s.jacketsQty && <span>Jackets: {s.jacketsQty}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+            <Card>
+              <KpiLabel>IARC Distribution ({data.iarcSplits.length} orders)</KpiLabel>
+              <div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '8px' }}>
+                {data.iarcSplits.length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px' }}>No data</div>}
+                {data.iarcSplits.map((s, i) => (
+                  <div key={i} style={{ fontSize: '11px', color: COLORS.text, padding: '4px 0', borderBottom: '1px solid #222' }}>
+                    <div style={{ fontWeight: 700 }}>{s.title}</div>
+                    <div style={{ color: COLORS.muted, marginTop: '2px' }}>
+                      {s.variant && <span style={{ marginRight: '8px' }}>{s.variant}</span>}
+                      <span style={{ color: COLORS.green, fontWeight: 700 }}>×{s.qty}</span>
+                      {s.stockInDate && <span style={{ marginLeft: '8px' }}>{s.stockInDate}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+            <Card>
+              <KpiLabel>NOVC Stock ({data.novcStock.length} albums)</KpiLabel>
+              <div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '8px' }}>
+                {data.novcStock.length === 0 && <div style={{ color: COLORS.muted, fontSize: '12px' }}>No data</div>}
+                {data.novcStock.map((n, i) => (
+                  <div key={i} style={{ fontSize: '11px', color: COLORS.text, padding: '4px 0', borderBottom: '1px solid #222' }}>
+                    <div style={{ fontWeight: 700 }}>{n.album}</div>
+                    <div style={{ color: COLORS.muted, marginTop: '2px' }}>
+                      <span style={{ color: n.quantity > 0 ? COLORS.green : COLORS.red, fontWeight: 700 }}>{n.quantity} units</span>
+                      {n.matrixId && <span style={{ marginLeft: '8px' }}>{n.matrixId}</span>}
+                      {n.overflow && <span style={{ marginLeft: '8px', color: '#FFB800' }}>{n.overflow}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </div>
       )}
     </div>
   );

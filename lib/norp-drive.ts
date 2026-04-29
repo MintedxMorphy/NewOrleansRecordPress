@@ -9,6 +9,12 @@ const NORP_LABEL_ART_FOLDER_ID = '1Un6Or5dJOj31vT9WvL6yWYCwuIE8pgdW';
 const NORP_PRIORITY_DOC_ID = '1ErymrvuGgK4CZJDlLxFZviAOsLjG3Au77dPRFekQctg';
 const PAPER_INVENTORY_SHEET_ID = '12mX2-Y1EzRgzm8tghBKqNjlJfu6lI2c-DO68aoGDLRY';
 const LABEL_SHELVES_INVENTORY_SHEET_ID = '19Sdfdw2SHbnCU2skTidXEc8FjzC3koCSQvQuZeHIWcs';
+const UPSTAIRS_STAMPERS_SHEET_ID = '1oxXSrDc9_Uh2LmXVhDBN_7CI2sGuSHvpFzDrFXBaWas';
+const MOTHERS_INVENTORY_SHEET_ID = '1tjdxylZ7djEMjekkI_7jt_SwhcJ7javUGOO6xul5K5E';
+const SST_INVENTORY_SHEET_ID = '1mqkhl56GmxEJu6s2C8K96z_vSNSXT5qalVIvIOHvIFw';
+const IARC_SHIP_SPLITS_SHEET_ID = '15VfWY2hpZCKodjB7eAnZ_zP6LzbXEHXQripxLA7PQjg';
+const NOVC_INVENTORY_SHEET_ID = '1dhq5qxqpFIJNAOna6JSgqWfQNX8Naok5xLKNhYmOFUI';
+const SLEEVER_DOC_ID = '1_W2bsmSyTW1i3uNUqOlh9-65bmxddqYJlirEXPkccCM';
 
 // Subfolders to scan within NORP Label Art (newest months first)
 const ART_SUBFOLDER_NAMES = ['5.2026', '4.2026', '3.2026'];
@@ -357,4 +363,167 @@ export async function getNORPInventorySummary(): Promise<InventorySummary> {
     paperRowCount: paperRows.length,
     labelRowCount: labelRows.length,
   };
+}
+
+// ── New inventory types ───────────────────────────────────────────────────────
+
+export interface StamperEntry {
+  matrixId: string;
+  boxes: string[];
+  sides: string;
+}
+
+export interface MotherEntry {
+  matrixId: string;
+  box: string;
+  sides: string;
+}
+
+export interface SSTEntry {
+  artist: string;
+  title: string;
+  catNumber: string;
+  stampersQty: string;
+  labelsQty: string;
+  jacketsQty: string;
+  insertQty: string;
+}
+
+export interface IARCShipEntry {
+  stockInDate: string;
+  upc: string;
+  catNumber: string;
+  title: string;
+  variant: string;
+  format: string;
+  qty: number;
+}
+
+export interface NOVCEntry {
+  album: string;
+  quantity: number;
+  matrixId: string;
+  overflow: string;
+}
+
+// ── Stampers inventory ────────────────────────────────────────────────────────
+
+export async function getStampersInventory(): Promise<StamperEntry[]> {
+  const rows = await readSheetValues(UPSTAIRS_STAMPERS_SHEET_ID, 'A:D').catch(() => [] as string[][]);
+  const byMatrix: Record<string, StamperEntry> = {};
+  for (const row of rows) {
+    const matrixId = (row[0] || '').trim();
+    if (!matrixId || matrixId.toLowerCase().includes('matrix')) continue;
+    const box = (row[2] || row[1] || '').trim();
+    const sides = (row[3] || '').trim();
+    if (!byMatrix[matrixId]) {
+      byMatrix[matrixId] = { matrixId, boxes: [], sides };
+    }
+    if (box && !byMatrix[matrixId].boxes.includes(box)) {
+      byMatrix[matrixId].boxes.push(box);
+    }
+  }
+  return Object.values(byMatrix).sort((a, b) => a.matrixId.localeCompare(b.matrixId));
+}
+
+// ── Mothers inventory ─────────────────────────────────────────────────────────
+
+export async function getMothersInventory(): Promise<MotherEntry[]> {
+  const rows = await readSheetValues(MOTHERS_INVENTORY_SHEET_ID, 'A:C').catch(() => [] as string[][]);
+  const results: MotherEntry[] = [];
+  for (const row of rows) {
+    const matrixId = (row[0] || '').trim();
+    if (!matrixId || matrixId.toLowerCase() === 'matrix') continue;
+    results.push({
+      matrixId,
+      box: (row[1] || '').trim(),
+      sides: (row[2] || '').trim(),
+    });
+  }
+  return results;
+}
+
+// ── SST catalog inventory ─────────────────────────────────────────────────────
+
+export async function getSSTInventory(): Promise<SSTEntry[]> {
+  const rows = await readSheetValues(SST_INVENTORY_SHEET_ID, 'A:G').catch(() => [] as string[][]);
+  const results: SSTEntry[] = [];
+  for (const row of rows) {
+    const artist = (row[0] || '').trim();
+    if (!artist || artist.toLowerCase() === 'black flag' && !row[1]) continue; // skip pure artist header rows with no title
+    const title = (row[1] || '').trim();
+    if (!title) continue;
+    results.push({
+      artist,
+      title,
+      catNumber: (row[2] || '').trim(),
+      stampersQty: (row[3] || '').trim(),
+      labelsQty: (row[4] || '').trim(),
+      jacketsQty: (row[5] || '').trim(),
+      insertQty: (row[6] || '').trim(),
+    });
+  }
+  return results;
+}
+
+// ── IARC ship splits ──────────────────────────────────────────────────────────
+
+export async function getIARCShipSplits(): Promise<IARCShipEntry[]> {
+  const rows = await readSheetValues(IARC_SHIP_SPLITS_SHEET_ID, 'A:G').catch(() => [] as string[][]);
+  const results: IARCShipEntry[] = [];
+  for (const row of rows) {
+    const catNumber = (row[2] || '').trim();
+    const title = (row[3] || '').trim();
+    if (!catNumber && !title) continue;
+    if (catNumber.toLowerCase().includes('cat') || title.toLowerCase().includes('title')) continue; // header
+    const qtyRaw = (row[6] || '').trim();
+    const qty = qtyRaw ? parseInt(qtyRaw.replace(/,/g, ''), 10) : 0;
+    results.push({
+      stockInDate: (row[0] || '').trim(),
+      upc: (row[1] || '').trim(),
+      catNumber,
+      title,
+      variant: (row[4] || '').trim(),
+      format: (row[5] || '').trim(),
+      qty: isNaN(qty) ? 0 : qty,
+    });
+  }
+  return results;
+}
+
+// ── NOVC inventory ────────────────────────────────────────────────────────────
+
+export async function getNOVCInventory(): Promise<NOVCEntry[]> {
+  const rows = await readSheetValues(NOVC_INVENTORY_SHEET_ID, 'A:F').catch(() => [] as string[][]);
+  const results: NOVCEntry[] = [];
+  for (const row of rows) {
+    const album = (row[1] || '').trim();
+    if (!album || album.toLowerCase() === 'album') continue;
+    const qtyRaw = (row[2] || '').trim();
+    const qty = qtyRaw ? parseInt(qtyRaw, 10) : 0;
+    results.push({
+      album,
+      quantity: isNaN(qty) ? 0 : qty,
+      matrixId: (row[3] || '').trim(),
+      overflow: (row[5] || '').trim(),
+    });
+  }
+  return results;
+}
+
+// ── Sleever sheet (Google Doc) ────────────────────────────────────────────────
+
+export async function getSleeversDoc(): Promise<string> {
+  try {
+    const auth = getPersonalGmailAuth();
+    const docs = google.docs({ version: 'v1', auth });
+    const res = await docs.documents.get({ documentId: SLEEVER_DOC_ID });
+    const content = res.data.body?.content ?? [];
+    return content
+      .flatMap(el => el.paragraph?.elements?.map(e => e.textRun?.content ?? '') ?? [])
+      .join('')
+      .trim();
+  } catch {
+    return ''; // Docs API not yet enabled — returns empty, will work once enabled
+  }
 }
