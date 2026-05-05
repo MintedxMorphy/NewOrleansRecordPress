@@ -15,7 +15,24 @@ async function getCachedToken(): Promise<string> {
   return refreshQBOToken();
 }
 
+async function getStoredRefreshToken(): Promise<string | null> {
+  try {
+    const cached = await findRow('qbo_cache', 'key', 'qbo_refresh_token');
+    return cached?.row['value'] || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function refreshQBOToken(): Promise<string> {
+  // Use stored refresh token (from previous refresh) or fall back to env var
+  const storedToken = await getStoredRefreshToken();
+  const refreshToken = storedToken || process.env.QBO_REFRESH_TOKEN;
+
+  if (!refreshToken) {
+    throw new Error('No QBO refresh token available - re-authenticate at /api/qbo/connect');
+  }
+
   const creds = Buffer.from(`${process.env.QBO_CLIENT_ID}:${process.env.QBO_CLIENT_SECRET}`).toString('base64');
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
@@ -24,20 +41,63 @@ export async function refreshQBOToken(): Promise<string> {
       'Content-Type': 'application/x-www-form-urlencoded',
       Accept: 'application/json',
     },
-    body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(process.env.QBO_REFRESH_TOKEN!)}`,
+    body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}`,
     signal: AbortSignal.timeout(8000), // 8s timeout
   });
-  const data = await res.json() as { access_token: string; expires_in: number };
-  const expiry = Date.now() + (data.expires_in * 1000);
+  const data = await res.json() as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    error?: string;
+    error_description?: string;
+  };
 
-  const existing = await findRow('qbo_cache', 'key', 'qbo_access_token');
-  const row = { key: 'qbo_access_token', value: data.access_token, updated_at: String(expiry) };
-  if (existing) {
-    await updateRow('qbo_cache', existing.rowIndex, row);
-  } else {
-    await appendRow('qbo_cache', row);
+  // Handle refresh error - clear stored token so we fall back to env on retry
+  if (data.error || !data.access_token) {
+    // If stored token failed, try env token once
+    if (storedToken && process.env.QBO_REFRESH_TOKEN && storedToken !== process.env.QBO_REFRESH_TOKEN) {
+      console.log('[QBO] Stored token invalid, trying env token');
+      const retryRes = await fetch(TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${creds}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+        },
+        body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(process.env.QBO_REFRESH_TOKEN)}`,
+        signal: AbortSignal.timeout(8000),
+      });
+      const retryData = await retryRes.json() as typeof data;
+      if (retryData.error || !retryData.access_token) {
+        throw new Error(`QBO refresh failed: ${retryData.error_description || retryData.error || 'unknown'} - re-authenticate at /api/qbo/connect`);
+      }
+      Object.assign(data, retryData);
+    } else {
+      throw new Error(`QBO refresh failed: ${data.error_description || data.error || 'unknown'} - re-authenticate at /api/qbo/connect`);
+    }
   }
-  return data.access_token;
+
+  const expiry = Date.now() + ((data.expires_in ?? 3600) * 1000);
+
+  // Save BOTH access token AND new refresh token (QBO rotates refresh tokens!)
+  const saveToken = async (key: string, value: string, updatedAt: string) => {
+    const existing = await findRow('qbo_cache', 'key', key);
+    const row = { key, value, updated_at: updatedAt };
+    if (existing) {
+      await updateRow('qbo_cache', existing.rowIndex, row);
+    } else {
+      await appendRow('qbo_cache', row);
+    }
+  };
+
+  await saveToken('qbo_access_token', data.access_token!, String(expiry));
+
+  // Critical: persist new refresh token so next refresh uses it
+  if (data.refresh_token) {
+    await saveToken('qbo_refresh_token', data.refresh_token, new Date().toISOString());
+  }
+
+  return data.access_token!;
 }
 
 async function qboFetch(path: string): Promise<any> {

@@ -58,6 +58,8 @@ export async function GET(req: NextRequest) {
         else await appendRow('qbo_cache', row);
       };
       if (realmId) await saveValue('qbo_realm_id_from_oauth', realmId);
+      // Save under both keys: primary key for refresh code, backup key for reference
+      await saveValue('qbo_refresh_token', data.refresh_token);
       await saveValue('qbo_refresh_token_from_oauth', data.refresh_token);
     } catch (_) { /* non-fatal */ }
 
