@@ -47,9 +47,6 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
 .sticky-top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}
 .sticky-message{white-space:pre-wrap;line-height:1.55;color:#f5e6a8;min-height:28px}
 .sticky-meta{font-family:'Space Mono',monospace;color:#a9903a;font-size:12px;margin-top:10px}
-.sticky-edit{display:none;margin-top:14px}
-.sticky-note.editing .sticky-edit{display:block}
-.sticky-note.editing .sticky-display{display:none}
 .filter-bar{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:16px}
 .filter-bar .field{min-width:170px}
 .feed{display:flex;flex-direction:column;gap:14px}
@@ -189,32 +186,23 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
   </section>
 
   <section class="section sticky-note" id="stickyNote">
-    <div class="sticky-top">
-      <div class="section-title" style="margin-bottom:0"><span class="dot" style="background:#F2A623"></span> Message to next shift</div>
-      <button class="small-button" type="button" id="editSticky">Edit</button>
+    <div class="section-title" style="margin-bottom:12px"><span class="dot" style="background:#F2A623"></span> Message to next shift</div>
+    <div class="sticky-meta" id="stickyMeta"></div>
+    <div class="field" style="margin-top:12px">
+      <textarea id="stickyText" placeholder="Leave a message for the next shift..."></textarea>
     </div>
-    <div class="sticky-display">
-      <div class="sticky-message" id="stickyMessage">Loading message...</div>
-      <div class="sticky-meta" id="stickyMeta"></div>
+    <div class="field" style="margin-top:12px">
+      <label for="stickyBy">From</label>
+      <select id="stickyBy">
+        <option value="Sarah">Sarah</option>
+        <option value="August">August</option>
+        <option value="Moon">Moon</option>
+        <option value="Jen">Jen</option>
+        <option value="Anker">Anker</option>
+        <option value="__add_new__">+ Add new worker...</option>
+      </select>
     </div>
-    <div class="sticky-edit">
-      <div class="field">
-        <label for="stickyText">Update message</label>
-        <textarea id="stickyText"></textarea>
-      </div>
-      <div class="field" style="margin-top:12px">
-        <label for="stickyBy">Updated by</label>
-        <select id="stickyBy">
-          <option value="Sarah">Sarah</option>
-          <option value="August">August</option>
-          <option value="Moon">Moon</option>
-          <option value="Jen">Jen</option>
-          <option value="Anker">Anker</option>
-          <option value="__add_new__">+ Add new worker...</option>
-        </select>
-      </div>
-      <button class="submit-button" type="button" id="saveSticky" style="margin-top:14px">Save Message</button>
-    </div>
+    <button class="submit-button" type="button" id="saveSticky" style="margin-top:14px">Post Message</button>
   </section>
 
   <section class="section">
@@ -273,7 +261,6 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
     stickyNote: document.getElementById('stickyNote'),
     stickyMessage: document.getElementById('stickyMessage'),
     stickyMeta: document.getElementById('stickyMeta'),
-    editSticky: document.getElementById('editSticky'),
     stickyText: document.getElementById('stickyText'),
     stickyBy: document.getElementById('stickyBy'),
     saveSticky: document.getElementById('saveSticky'),
@@ -387,12 +374,10 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
 
   function renderSticky() {
     const sticky = state.sticky;
-    const message = sticky && sticky.message ? sticky.message : 'No handoff message yet.';
-    els.stickyMessage.textContent = message;
     els.stickyText.value = sticky && sticky.message ? sticky.message : '';
     els.stickyMeta.textContent = sticky && sticky.updated_at
-      ? `Last updated by ${sticky.updated_by || 'NORP staff'} at ${formatTime(sticky.updated_at)}`
-      : 'Last updated by NORP staff at unknown time';
+      ? `Last message from ${sticky.updated_by || 'NORP staff'} at ${formatTime(sticky.updated_at)}`
+      : '';
   }
 
   async function fetchEntries() {
@@ -511,14 +496,9 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
     }
   });
 
-  els.editSticky.addEventListener('click', () => {
-    els.stickyNote.classList.add('editing');
-    els.stickyText.focus();
-  });
-
   els.saveSticky.addEventListener('click', async () => {
     els.saveSticky.disabled = true;
-    els.saveSticky.textContent = 'Saving...';
+    els.saveSticky.textContent = 'Posting...';
     try {
       const response = await fetch('/api/qc/sticky', {
         method: 'POST',
@@ -532,13 +512,12 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
       const data = await response.json();
       state.sticky = data.sticky || null;
       renderSticky();
-      els.stickyNote.classList.remove('editing');
     } catch (error) {
       console.error(error);
       alert('Could not save the shift message.');
     } finally {
       els.saveSticky.disabled = false;
-      els.saveSticky.textContent = 'Save Message';
+      els.saveSticky.textContent = 'Post Message';
     }
   });
 
