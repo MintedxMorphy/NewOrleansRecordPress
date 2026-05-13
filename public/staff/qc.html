@@ -128,10 +128,11 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
         <label for="workerName">Worker name</label>
         <select id="workerName" required>
           <option value="Sarah">Sarah (QC Director)</option>
-          <option value="Tech 1">Tech 1</option>
-          <option value="Tech 2">Tech 2</option>
-          <option value="Tech 3">Tech 3</option>
-          <option value="Tech 4">Tech 4</option>
+          <option value="August">August</option>
+          <option value="Moon">Moon</option>
+          <option value="Jen">Jen</option>
+          <option value="Anker">Anker</option>
+          <option value="__add_new__">+ Add new worker...</option>
         </select>
       </div>
 
@@ -214,10 +215,11 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
         <label for="stickyBy">Updated by</label>
         <select id="stickyBy">
           <option value="Sarah">Sarah</option>
-          <option value="Tech 1">Tech 1</option>
-          <option value="Tech 2">Tech 2</option>
-          <option value="Tech 3">Tech 3</option>
-          <option value="Tech 4">Tech 4</option>
+          <option value="August">August</option>
+          <option value="Moon">Moon</option>
+          <option value="Jen">Jen</option>
+          <option value="Anker">Anker</option>
+          <option value="__add_new__">+ Add new worker...</option>
         </select>
       </div>
       <button class="submit-button" type="button" id="saveSticky" style="margin-top:14px">Save Message</button>
@@ -240,10 +242,10 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
         <select id="workerFilter">
           <option value="all">All workers</option>
           <option value="Sarah">Sarah</option>
-          <option value="Tech 1">Tech 1</option>
-          <option value="Tech 2">Tech 2</option>
-          <option value="Tech 3">Tech 3</option>
-          <option value="Tech 4">Tech 4</option>
+          <option value="August">August</option>
+          <option value="Moon">Moon</option>
+          <option value="Jen">Jen</option>
+          <option value="Anker">Anker</option>
         </select>
       </div>
       <div class="field">
@@ -557,10 +559,33 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
     }
   });
 
+  // Add new worker handler — works on workerName and stickyBy selects
+  function handleAddNewWorker(selectEl) {
+    if (!selectEl) return;
+    selectEl.addEventListener('change', function() {
+      if (this.value !== '__add_new__') return;
+      const name = prompt('Enter new worker name:');
+      if (!name || !name.trim()) { this.value = 'Sarah'; return; }
+      const trimmed = name.trim();
+      [els.workerName, document.getElementById('stickyBy')].forEach(sel => {
+        if (!sel) return;
+        const exists = Array.from(sel.options).some(o => o.value === trimmed);
+        if (!exists) {
+          const opt = document.createElement('option');
+          opt.value = trimmed; opt.textContent = trimmed;
+          sel.insertBefore(opt, sel.querySelector('option[value="__add_new__"]'));
+        }
+        sel.value = trimmed;
+      });
+    });
+  }
+  handleAddNewWorker(els.workerName);
+  handleAddNewWorker(document.getElementById('stickyBy'));
+
   initializeDefaults();
   fetchSticky();
   fetchEntries();
-  setInterval(fetchEntries, 60000);
+  // auto-refresh removed per user request
 })();
 </script>
 </body>
