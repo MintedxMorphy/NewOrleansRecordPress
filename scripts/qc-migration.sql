@@ -13,7 +13,7 @@ create table if not exists qc_log (
 );
 
 create table if not exists qc_sticky (
-  id integer primary key default 1,
+  id integer primary key,  -- 1 = QC team, 2 = Leadership
   message text,
   updated_by text,
   updated_at timestamptz default now()

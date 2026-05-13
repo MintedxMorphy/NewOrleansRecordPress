@@ -4,15 +4,23 @@ import { createClient } from '@/lib/supabase/server'
 type StickyBody = {
   message?: string
   updated_by?: string
+  target?: string
 }
 
-export async function GET() {
+function targetToId(target?: string): number {
+  return target === 'leadership' ? 2 : 1
+}
+
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const id = targetToId(searchParams.get('target') ?? 'qc')
+
     const supabase = await createClient()
     const { data: sticky, error } = await supabase
       .from('qc_sticky')
       .select('*')
-      .eq('id', 1)
+      .eq('id', id)
       .maybeSingle()
 
     if (error) {
@@ -32,12 +40,13 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as StickyBody
     const message = body.message?.trim() || ''
     const updatedBy = body.updated_by?.trim() || 'NORP staff'
+    const id = targetToId(body.target)
 
     const supabase = await createClient()
     const { data: sticky, error } = await supabase
       .from('qc_sticky')
       .upsert({
-        id: 1,
+        id,
         message,
         updated_by: updatedBy,
         updated_at: new Date().toISOString(),
