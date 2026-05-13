@@ -33,6 +33,10 @@ const nextConfig = {
         source: '/staff/inventory',
         destination: '/staff/inventory.html',
       },
+      {
+        source: '/staff/qc',
+        destination: '/staff/qc.html',
+      },
     ]
   },
 }
