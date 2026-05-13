@@ -151,21 +151,20 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
       </div>
 
       <div class="field">
-        <label for="jobRef">Job/Ref</label>
-        <input id="jobRef" type="text" placeholder="Job number, artist, SKU">
+        <label for="jobRef">Artist &amp; Matrix ID</label>
+        <input id="jobRef" type="text" placeholder="Artist name, matrix ID">
       </div>
 
       <div class="field full">
         <div class="label">Task type</div>
         <div class="tag-row" id="taskTypes">
-          <button type="button" class="tag-button" data-value="Pressing QC">Pressing QC</button>
-          <button type="button" class="tag-button" data-value="Grading">Grading</button>
-          <button type="button" class="tag-button" data-value="Sleeve Inspection">Sleeve Inspection</button>
-          <button type="button" class="tag-button" data-value="Packaging">Packaging</button>
-          <button type="button" class="tag-button" data-value="Rework">Rework</button>
-          <button type="button" class="tag-button" data-value="Label Check">Label Check</button>
-          <button type="button" class="tag-button" data-value="Final Inspection">Final Inspection</button>
-          <button type="button" class="tag-button" data-value="Other">Other</button>
+          <button type="button" class="tag-button" data-value="Pressing QC/Sleeving">Pressing QC/Sleeving</button>
+          <button type="button" class="tag-button" data-value="Assembly">Assembly</button>
+          <button type="button" class="tag-button" data-value="Shrink Wrap">Shrink Wrap</button>
+          <button type="button" class="tag-button" data-value="Boxing &amp; Packaging">Boxing &amp; Packaging</button>
+          <button type="button" class="tag-button" data-value="Sorting">Sorting</button>
+          <button type="button" class="tag-button" data-value="Other" id="tagOther">Other</button>
+          <input id="otherTaskInput" type="text" placeholder="Describe task..." style="display:none;margin-top:8px;background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;padding:8px 12px;color:#e4e2d8;font-family:inherit;font-size:15px;width:100%">
         </div>
       </div>
 
@@ -332,7 +331,11 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
   }
 
   function selectedTasks() {
-    return Array.from(els.taskTypes.querySelectorAll('.active')).map((button) => button.dataset.value);
+    const tasks = Array.from(els.taskTypes.querySelectorAll('.active')).map((button) => button.dataset.value);
+    const otherInput = document.getElementById('otherTaskInput');
+    const otherVal = otherInput && otherInput.value.trim();
+    // Replace generic 'Other' with the typed value if provided
+    return tasks.map(t => (t === 'Other' && otherVal) ? otherVal : t);
   }
 
   function createdAtFromDate(dateValue) {
@@ -390,7 +393,7 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
           </div>
           <div class="entry-body">
             <div>
-              <div class="job"><span>Job/Ref</span> ${escapeHtml(entry.job_ref || 'Not specified')}</div>
+              <div class="job"><span>Artist &amp; Matrix ID</span> ${escapeHtml(entry.job_ref || 'Not specified')}</div>
               <div class="task-tags">${taskHtml}</div>
             </div>
             <div class="metrics">
@@ -475,7 +478,13 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
 
   els.taskTypes.addEventListener('click', (event) => {
     const button = event.target.closest('.tag-button');
-    if (button) button.classList.toggle('active');
+    if (!button) return;
+    button.classList.toggle('active');
+    // Show/hide custom Other input
+    const otherInput = document.getElementById('otherTaskInput');
+    const otherActive = document.getElementById('tagOther').classList.contains('active');
+    otherInput.style.display = otherActive ? 'block' : 'none';
+    if (!otherActive) otherInput.value = '';
   });
 
   els.workerFilter.addEventListener('change', renderEntries);
@@ -517,6 +526,8 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
       if (!response.ok) throw new Error('Failed to submit entry');
       els.form.reset();
       els.taskTypes.querySelectorAll('.active').forEach((button) => button.classList.remove('active'));
+      const otherInput = document.getElementById('otherTaskInput');
+      if (otherInput) { otherInput.value = ''; otherInput.style.display = 'none'; }
       initializeDefaults();
       await fetchEntries();
     } catch (error) {
