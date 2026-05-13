@@ -178,14 +178,6 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
         <input id="quantity" type="number" min="0" step="1" placeholder="Units">
       </div>
 
-      <div class="field wide">
-        <div class="label">Status</div>
-        <div class="segmented" data-toggle="status">
-          <button type="button" class="pass active" data-value="pass">Pass</button>
-          <button type="button" class="flag" data-value="flag">Flag</button>
-          <button type="button" class="fail" data-value="fail">Fail</button>
-        </div>
-      </div>
 
       <div class="field full">
         <label for="notes">Notes</label>
@@ -247,15 +239,6 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
           <option value="Anker">Anker</option>
         </select>
       </div>
-      <div class="field">
-        <label for="statusFilter">Status</label>
-        <select id="statusFilter">
-          <option value="all">All statuses</option>
-          <option value="pass">Pass</option>
-          <option value="flag">Flag</option>
-          <option value="fail">Fail</option>
-        </select>
-      </div>
     </div>
     <div id="feed" class="feed">
       <div class="loading"><div class="spinner"></div>Loading entries...</div>
@@ -267,7 +250,6 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
 (function() {
   const state = {
     shift: 'day',
-    status: 'pass',
     filterShift: 'all',
     entries: [],
     sticky: null,
@@ -287,7 +269,6 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
     feed: document.getElementById('feed'),
     refreshStatus: document.getElementById('refreshStatus'),
     workerFilter: document.getElementById('workerFilter'),
-    statusFilter: document.getElementById('statusFilter'),
     shiftHint: document.getElementById('shiftHint'),
     stickyNote: document.getElementById('stickyNote'),
     stickyMessage: document.getElementById('stickyMessage'),
@@ -351,10 +332,8 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
 
   function entryMatches(entry) {
     const worker = els.workerFilter.value;
-    const status = els.statusFilter.value;
     if (state.filterShift !== 'all' && entry.shift !== state.filterShift) return false;
     if (worker !== 'all' && entry.worker_name !== worker) return false;
-    if (status !== 'all' && entry.status !== status) return false;
     return true;
   }
 
@@ -387,7 +366,6 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
               ${escapeHtml(entry.worker_name)}
               ${entry.is_director ? '<span class="badge director">QC Director</span>' : ''}
               <span class="badge ${escapeHtml(entry.shift)}">${escapeHtml(entry.shift)}</span>
-              <span class="badge ${escapeHtml(entry.status)}">${escapeHtml(entry.status)}</span>
             </div>
             <div class="meta">${formatDateTime(entry.created_at)}</div>
           </div>
@@ -465,10 +443,6 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
     button.addEventListener('click', () => setToggle('shift', button.dataset.value));
   });
 
-  document.querySelectorAll('[data-toggle="status"] button').forEach((button) => {
-    button.addEventListener('click', () => setToggle('status', button.dataset.value));
-  });
-
   document.querySelectorAll('[data-toggle="filterShift"] button').forEach((button) => {
     button.addEventListener('click', () => {
       setToggle('filterShift', button.dataset.value);
@@ -488,7 +462,6 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
   });
 
   els.workerFilter.addEventListener('change', renderEntries);
-  els.statusFilter.addEventListener('change', renderEntries);
 
   els.feed.addEventListener('click', (event) => {
     const button = event.target.closest('.show-more');
@@ -512,7 +485,6 @@ textarea{min-height:108px;resize:vertical;line-height:1.45}
       task_types: selectedTasks(),
       duration_hours: els.durationHours.value || null,
       quantity: els.quantity.value || null,
-      status: state.status,
       notes: els.notes.value,
       created_at: createdAtFromDate(els.entryDate.value),
     };
