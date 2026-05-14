@@ -527,35 +527,49 @@ export async function GET(req: NextRequest) {
         .map((e: any) => `[${e.inbox?.split('@')[0] ?? '?'}] ${e.classification} | ${e.from?.split('<')[0].trim().slice(0,40)} | ${e.subject?.slice(0,70)}${e.amount_usd ? ` | $${e.amount_usd}` : ''}${e.summary ? ` | ${e.summary}` : ''}`)
         .join('\n');
 
-      const briefPrompt = `You are the intelligence layer for New Orleans Record Press (NORP), a vinyl pressing plant. Write a comprehensive daily email intelligence report for Gregory, the managing partner.
+      // Pull last briefing to check for unresolved items to carry forward
+      const prevBriefRows = await getSheet('briefings');
+      const prevBrief = prevBriefRows.length > 0 ? prevBriefRows[prevBriefRows.length - 1]?.briefing_text ?? '' : '';
 
-Be direct and specific. Use plain text with ALL-CAPS section headers. Include dollar amounts, artist/label names, job numbers, and actionable details wherever available. No greetings. No filler.
+      const isAfternoon = now.getHours() >= 15; // UTC 21:00 = CDT 16:00
+      const scanWindow = isAfternoon ? 'last 8 hours (since morning scan)' : 'last 12 hours';
 
-Structure:
+      const briefPrompt = `You are the operations intelligence layer for New Orleans Record Press (NORP), a vinyl pressing plant in New Orleans. Write a ${isAfternoon ? '4 PM' : '8 AM'} update for Gregory, managing partner.
+
+RULES:
+- Direct and specific. No greetings, no filler.
+- Plain text with ALL-CAPS section headers.
+- Include names, dollar amounts, job numbers wherever available.
+- IMPORTANT: If something urgent from the previous briefing (below) has NOT been resolved based on new email activity, repeat it prominently under STILL UNRESOLVED. Don't let things fall through the cracks.
+- Only omit a section if there is truly nothing to report.
+- Target: 500-700 words.
+
+Sections:
 EMAIL SCAN SUMMARY
-NEW BUSINESS (quote requests, new orders)
+STILL UNRESOLVED (carry forward urgent items from last brief that haven't been addressed)
+NEW BUSINESS
 ACTIVE ORDER UPDATES
 VENDOR INVOICES & BILLS
 PAYMENTS RECEIVED
 SHIPPING & TRACKING
 INTERNAL UPDATES
-URGENT ITEMS
 ACTION ITEMS
 
-Target length: 500-700 words. Only include sections with actual data. If a section has nothing, omit it.
-
-SCAN STATS:
-- Mailboxes scanned: ${mailboxes.join(', ')}
-- Total emails processed this run: ${processed.length}
+SCAN STATS (${scanWindow}):
+- Emails this run: ${processed.length}
 - Quote requests: ${(byClass.quote_request ?? []).length}
 - Order updates: ${(byClass.order_update ?? []).length}
 - Vendor invoices: ${(byClass.vendor_invoice ?? []).length}
 - Payments received: ${(byClass.payment_received ?? []).length}
 - Shipping updates: ${(byClass.shipping_update ?? []).length}
-- Other: ${(byClass.other ?? []).length}
 
-EMAIL DETAILS (last 12h):
-${emailDetail || '(no detail available)'}\n\nTime: ${now.toLocaleString('en-US', { timeZone: 'America/Chicago' })} CDT`;
+EMAIL DETAILS:
+${emailDetail || '(no new emails)'}
+
+PREVIOUS BRIEFING (check for unresolved items to carry forward):
+${prevBrief ? prevBrief.slice(0, 2000) : '(none)'}
+
+Time: ${now.toLocaleString('en-US', { timeZone: 'America/Chicago' })} CDT`;
 
       const briefRes = await anthropic.messages.create({
         model: 'claude-opus-4-7',

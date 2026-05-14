@@ -1287,15 +1287,6 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
   return (
     <div style={{ maxWidth: '1800px', margin: '0 auto' }}>
 
-      {/* Permanent KPI strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', marginBottom: '16px' }}>
-        <CashCard bankAccounts={bankAccounts} />
-        <ARCard arAging={arAging} />
-        <BillsCard billsInbox={billsInbox ?? []} />
-        <ActiveJobsCard jobs={jobs} inventory={inventory ?? []} />
-        <ShipmentsCard shipments={shipments ?? []} />
-        <PayrollCard nextPayroll={nextPayroll} bankAccounts={bankAccounts} />
-      </div>
 
       <CollapsibleSection
         id="briefing"
