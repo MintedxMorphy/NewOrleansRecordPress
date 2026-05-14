@@ -24,7 +24,7 @@ export const TAB_HEADERS: Record<string, string[]> = {
   bills_inbox: ['email_id','date_received','sender','vendor_guess','amount_usd','due_date','invoice_number','status','pdf_drive_url','qbo_bill_id','notes'],
   email_log: ['email_id','timestamp','inbox','from','subject','classification','confidence','summary','action_taken','job_id','bill_id'],
   compound_alerts: ['timestamp','mbr1_value','wlk_value','oln_value','cl1_value','alert_level','message'],
-  briefings: ['date','briefing_text','cash_total','ar_total','ap_total','active_jobs_count','low_inventory_count','days_to_next_payroll','next_payroll_amount','payroll_covered'],
+  briefings: ['date','briefing_text','source','cash_total','ar_total','ap_total','active_jobs_count','low_inventory_count','days_to_next_payroll','next_payroll_amount','payroll_covered'],
   shipments: ['tracking_number','job_id','carrier','service','weight_lbs','dimensions','shipped_date','est_delivery','actual_delivery','status','last_status_update','total_cost','base_cost','fuel_surcharge','accessorials','notes'],
   payroll: ['pay_period_start','pay_period_end','check_date','gross_pay','employer_taxes','employer_benefits','total_employer_cost','employee_count','hours_total','status','notes'],
   employees: ['gusto_employee_id','name','role','employment_type','hourly_rate','annual_salary','start_date','active','notes'],

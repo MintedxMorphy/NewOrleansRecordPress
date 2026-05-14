@@ -574,10 +574,14 @@ ${emailDetail || '(no detail available)'}\n\nTime: ${now.toLocaleString('en-US',
         else { await appendRow('qbo_cache', row); }
       };
 
-      await upsert('latest_briefing_text', briefText);
-      await upsert('latest_briefing_date', dateLabel);
-      await upsert('latest_briefing_source', 'email_scan');
-      await upsert('email_intel_summary', briefText); // also cache for morning briefing to reference
+      await upsert('email_intel_summary', briefText); // cache for morning briefing to reference
+
+      // Append to briefings history sheet (stacks up on dashboard — never overwrite)
+      await appendRow('briefings', {
+        date: dateLabel,
+        briefing_text: briefText,
+        source: 'email_scan',
+      });
 
       // Send condensed version to Telegram
       const botToken = process.env.TELEGRAM_BOT_TOKEN;

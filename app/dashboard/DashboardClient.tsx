@@ -577,42 +577,54 @@ function BillsInbox({ bills }: { bills: BillRow[] }) {
   );
 }
 
-function BriefingSection({ briefing }: { briefing: { text: string; date: string; source: string } | null }) {
-  if (!briefing) return (
-    <div>
-      <div style={{ fontSize: '11px', fontWeight: 600, color: COLORS.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>Daily Briefing</div>
-      <div style={{ color: COLORS.muted, fontSize: '12px' }}>No briefing available — runs automatically after each email scan.</div>
-    </div>
-  );
+const SOURCE_LABEL: Record<string, string> = { email_scan: '📬 Email Scan', morning_briefing: '🌅 Morning Brief' };
 
-  // Parse ALL-CAPS section headers for styled rendering
+function BriefingEntry({ briefing, defaultOpen }: { briefing: { text: string; date: string; source: string }; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const lines = briefing.text.split('\n');
-  const SOURCE_LABEL: Record<string, string> = { email_scan: '📬 Email Scan', morning_briefing: '🌅 Morning Brief' };
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-        <div style={{ fontSize: '11px', fontWeight: 600, color: COLORS.muted, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Daily Briefing</div>
-        <div style={{ fontSize: '10px', color: COLORS.muted, background: COLORS.border + '66', borderRadius: '3px', padding: '2px 6px' }}>
+    <div style={{ borderBottom: `1px solid ${COLORS.border}`, marginBottom: '12px', paddingBottom: '12px' }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', userSelect: 'none', marginBottom: open ? '12px' : 0 }}
+      >
+        <span style={{ fontSize: '11px', color: COLORS.muted, fontFamily: 'monospace' }}>{open ? '▼' : '▶'}</span>
+        <span style={{ fontSize: '11px', fontWeight: 600, color: COLORS.text }}>{briefing.date}</span>
+        <span style={{ fontSize: '10px', color: COLORS.muted, background: COLORS.border + '88', borderRadius: '3px', padding: '2px 6px' }}>
           {SOURCE_LABEL[briefing.source] ?? briefing.source}
+        </span>
+      </div>
+      {open && (
+        <div style={{ fontSize: '12px', lineHeight: 1.7, paddingLeft: '16px' }}>
+          {lines.map((line, i) => {
+            const isHeader = /^[A-Z][A-Z &()\-\/]{2,}$/.test(line.trim());
+            const isEmpty = line.trim() === '';
+            if (isEmpty) return <div key={i} style={{ height: '6px' }} />;
+            if (isHeader) return (
+              <div key={i} style={{
+                fontSize: '10px', fontWeight: 700, color: COLORS.green,
+                letterSpacing: '0.1em', marginTop: '14px', marginBottom: '4px',
+                borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '3px',
+              }}>{line.trim()}</div>
+            );
+            return <div key={i} style={{ color: COLORS.text }}>{line}</div>;
+          })}
         </div>
-        <div style={{ fontSize: '10px', color: COLORS.muted, marginLeft: 'auto' }}>{briefing.date}</div>
-      </div>
-      <div style={{ fontSize: '12px', lineHeight: 1.7 }}>
-        {lines.map((line, i) => {
-          const isHeader = /^[A-Z][A-Z &()\-\/]+$/.test(line.trim()) && line.trim().length > 3;
-          const isEmpty = line.trim() === '';
-          if (isEmpty) return <div key={i} style={{ height: '6px' }} />;
-          if (isHeader) return (
-            <div key={i} style={{
-              fontSize: '10px', fontWeight: 700, color: COLORS.green,
-              letterSpacing: '0.1em', marginTop: '14px', marginBottom: '4px',
-              borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '3px',
-            }}>{line.trim()}</div>
-          );
-          return <div key={i} style={{ color: COLORS.text }}>{line}</div>;
-        })}
-      </div>
+      )}
+    </div>
+  );
+}
+
+function BriefingSection({ briefings }: { briefings: { text: string; date: string; source: string }[] }) {
+  if (!briefings.length) return (
+    <div style={{ color: COLORS.muted, fontSize: '12px' }}>No briefings yet — runs automatically after each email scan (8 AM CDT daily).</div>
+  );
+  return (
+    <div>
+      {briefings.map((b, i) => (
+        <BriefingEntry key={i} briefing={b} defaultOpen={i === 0} />
+      ))}
     </div>
   );
 }
@@ -1222,7 +1234,7 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
   const [kpiData, setKpiData] = useState<KpiData>(kpiDataProp ?? EMPTY_KPI);
   const [arData, setArData] = useState<{ invoices: ARInvoice[]; total: number }>({ invoices: [], total: 0 });
   const [apData, setApData] = useState<{ bills: APBill[]; total: number }>({ bills: [], total: 0 });
-  const [briefing, setBriefing] = useState<{ text: string; date: string; source: string } | null>(null);
+  const [briefings, setBriefings] = useState<{ text: string; date: string; source: string }[]>([]);
 
   useEffect(() => {
     // Load jobs from API on mount — keeps initial page response small
@@ -1264,7 +1276,7 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
   useEffect(() => {
     fetch('/api/norp-briefing')
       .then(r => r.json())
-      .then(d => { if (d.ok && d.briefing) setBriefing(d.briefing); })
+      .then(d => { if (d.ok && d.briefings?.length) setBriefings(d.briefings); })
       .catch(console.error);
   }, []);
 
@@ -1290,7 +1302,7 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
         title="Daily Briefing"
         defaultOpen={true}
       >
-        <BriefingSection briefing={briefing} />
+        <BriefingSection briefings={briefings} />
         <div style={{ marginTop: '16px' }}>
           <CompoundWatch alert={latestCompoundAlert ?? null} />
         </div>

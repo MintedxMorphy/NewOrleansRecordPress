@@ -5,21 +5,21 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const cache = await getSheet('qbo_cache');
-    const get = (key: string) => cache.find((r: any) => r.key === key)?.value ?? null;
+    const rows = await getSheet('briefings');
+    if (!rows.length) return NextResponse.json({ ok: true, briefings: [] });
 
-    const text = get('latest_briefing_text');
-    const date = get('latest_briefing_date');
-    const source = get('latest_briefing_source'); // 'email_scan' | 'morning_briefing'
+    // Return last 30, newest first
+    const briefings = rows
+      .filter((r: any) => r.briefing_text)
+      .slice(-30)
+      .reverse()
+      .map((r: any) => ({
+        text: r.briefing_text,
+        date: r.date,
+        source: r.source ?? 'morning_briefing',
+      }));
 
-    if (!text) {
-      return NextResponse.json({ ok: true, briefing: null });
-    }
-
-    return NextResponse.json({
-      ok: true,
-      briefing: { text, date, source },
-    });
+    return NextResponse.json({ ok: true, briefings });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message }, { status: 500 });
   }

@@ -177,10 +177,11 @@ ${latestAlert ? `MBR1: $${latestAlert.mbr1_value} | WLK: $${latestAlert.wlk_valu
       upsertCache('latest_briefing_source', 'morning_briefing', freshCache),
     ]);
 
-    // Also append to briefings history sheet
+    // Append to briefings history sheet (never overwrite — stacks up for dashboard history)
     await appendRow('briefings', {
-      date: dateStr,
+      date: `${dateStr} ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Chicago' })} CDT`,
       briefing_text: briefingText,
+      source: 'morning_briefing',
       cash_total: String(cashTotal.toFixed(0)),
       ar_total: String((arAging.total ?? 0).toFixed(0)),
       ap_total: String((apAging.total ?? 0).toFixed(0)),
