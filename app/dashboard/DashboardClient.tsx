@@ -1286,6 +1286,17 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
       </div>
 
       <CollapsibleSection
+        id="briefing"
+        title="Daily Briefing"
+        defaultOpen={true}
+      >
+        <BriefingSection briefing={briefing} />
+        <div style={{ marginTop: '16px' }}>
+          <CompoundWatch alert={latestCompoundAlert ?? null} />
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
         id="production"
         title="🎵 Production Board"
         badge={`${jobs.filter(j => j.stage !== 'paid').length} active`}
@@ -1335,16 +1346,7 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
         <BillsInbox bills={billsInbox ?? []} />
       </CollapsibleSection>
 
-      <CollapsibleSection
-        id="briefing"
-        title="Daily Briefing"
-        defaultOpen={false}
-      >
-        <BriefingSection briefing={briefing} />
-        <div style={{ marginTop: '16px' }}>
-          <CompoundWatch alert={latestCompoundAlert ?? null} />
-        </div>
-      </CollapsibleSection>
+
 
       {/* Low stock */}
       <LowStockTable inventory={inventory ?? []} />
