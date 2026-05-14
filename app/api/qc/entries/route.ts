@@ -14,7 +14,6 @@ type QcEntryBody = {
 }
 
 const VALID_SHIFTS = new Set(['day', 'night'])
-const VALID_STATUSES = new Set(['pass', 'flag', 'fail'])
 
 export async function GET() {
   try {
@@ -43,9 +42,8 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as QcEntryBody
     const workerName = body.worker_name?.trim()
     const shift = body.shift?.toLowerCase()
-    const status = body.status?.toLowerCase()
 
-    if (!workerName || !shift || !VALID_SHIFTS.has(shift) || !status || !VALID_STATUSES.has(status)) {
+    if (!workerName || !shift || !VALID_SHIFTS.has(shift)) {
       return NextResponse.json({ error: 'Missing or invalid required fields' }, { status: 400 })
     }
 
@@ -80,7 +78,6 @@ export async function POST(request: NextRequest) {
         task_types: Array.isArray(body.task_types) ? body.task_types : [],
         duration_hours: durationHours,
         quantity,
-        status,
         notes: body.notes?.trim() || null,
         is_director: workerName === 'Sarah',
         ...(createdAt ? { created_at: createdAt.toISOString() } : {}),
