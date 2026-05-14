@@ -126,7 +126,7 @@ textarea{min-height:80px;resize:vertical;line-height:1.45}
   </div>
 
   <div class="grid-2x2">
-  <section class="section">
+  <section class="section" style="grid-column:1;grid-row:1">
     <div class="section-title"><span class="dot"></span> New Entry</div>
     <form id="entryForm" class="form-grid">
       <div class="field">
@@ -193,7 +193,7 @@ textarea{min-height:80px;resize:vertical;line-height:1.45}
     </form>
   </section>
 
-  <section class="section sticky-note" id="stickyNote">
+  <section class="section sticky-note" id="stickyNote" style="grid-column:1;grid-row:2">
     <div class="section-title" style="margin-bottom:12px"><span class="dot" style="background:#F2A623"></span> Message Board</div>
     <div class="field" style="margin-bottom:12px">
       <div class="label">To</div>
@@ -220,7 +220,7 @@ textarea{min-height:80px;resize:vertical;line-height:1.45}
     <button class="submit-button" type="button" id="saveSticky" style="margin-top:14px">Post Message</button>
   </section>
   <!-- top-right: Log Feed (spans 2 rows) -->
-  <section class="section" style="grid-row:1/3">
+  <section class="section" style="grid-column:2;grid-row:1">
     <div class="section-title"><span class="dot"></span> Log Feed</div>
     <div class="filter-bar">
       <div class="field">
@@ -249,7 +249,7 @@ textarea{min-height:80px;resize:vertical;line-height:1.45}
   </section>
 
   <!-- bottom-left: Current Messages display -->
-  <section class="section sticky-note" id="messagesDisplay">
+  <section class="section sticky-note" id="messagesDisplay" style="grid-column:2;grid-row:2">
     <div class="section-title" style="margin-bottom:12px"><span class="dot" style="background:#F2A623"></span> Current Messages</div>
     <div class="msg-display">
       <div class="msg-display-label">→ QC Team</div>
