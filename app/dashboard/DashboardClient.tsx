@@ -577,29 +577,42 @@ function BillsInbox({ bills }: { bills: BillRow[] }) {
   );
 }
 
-function BriefingSection({ briefing }: { briefing: Record<string, string> | null }) {
+function BriefingSection({ briefing }: { briefing: { text: string; date: string; source: string } | null }) {
   if (!briefing) return (
     <div>
-      <div style={{ fontSize: '11px', fontWeight: 600, color: COLORS.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>Today&apos;s Briefing</div>
-      <div style={{ color: COLORS.muted, fontSize: '12px' }}>No briefing available</div>
+      <div style={{ fontSize: '11px', fontWeight: 600, color: COLORS.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>Daily Briefing</div>
+      <div style={{ color: COLORS.muted, fontSize: '12px' }}>No briefing available — runs automatically after each email scan.</div>
     </div>
   );
+
+  // Parse ALL-CAPS section headers for styled rendering
+  const lines = briefing.text.split('\n');
+  const SOURCE_LABEL: Record<string, string> = { email_scan: '📬 Email Scan', morning_briefing: '🌅 Morning Brief' };
+
   return (
     <div>
-      <div style={{ fontSize: '11px', fontWeight: 600, color: COLORS.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '10px' }}>
-        Today&apos;s Briefing <span style={{ color: COLORS.muted, fontWeight: 400 }}>{briefing.date}</span>
-      </div>
-      <div style={{ fontSize: '12px', color: COLORS.text, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{briefing.briefing_text}</div>
-      {briefing.cash_total && (
-        <div style={{ marginTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px' }}>
-          {[['Cash', briefing.cash_total], ['AR', briefing.ar_total], ['AP', briefing.ap_total], ['Active Jobs', briefing.active_jobs_count]].filter(([,v]) => v).map(([k,v]) => (
-            <div key={k} style={{ background: COLORS.border + '44', borderRadius: '4px', padding: '4px 6px' }}>
-              <span style={{ color: COLORS.muted }}>{k}: </span>
-              <span style={{ color: COLORS.text }}>{v}</span>
-            </div>
-          ))}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: COLORS.muted, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Daily Briefing</div>
+        <div style={{ fontSize: '10px', color: COLORS.muted, background: COLORS.border + '66', borderRadius: '3px', padding: '2px 6px' }}>
+          {SOURCE_LABEL[briefing.source] ?? briefing.source}
         </div>
-      )}
+        <div style={{ fontSize: '10px', color: COLORS.muted, marginLeft: 'auto' }}>{briefing.date}</div>
+      </div>
+      <div style={{ fontSize: '12px', lineHeight: 1.7 }}>
+        {lines.map((line, i) => {
+          const isHeader = /^[A-Z][A-Z &()\-\/]+$/.test(line.trim()) && line.trim().length > 3;
+          const isEmpty = line.trim() === '';
+          if (isEmpty) return <div key={i} style={{ height: '6px' }} />;
+          if (isHeader) return (
+            <div key={i} style={{
+              fontSize: '10px', fontWeight: 700, color: COLORS.green,
+              letterSpacing: '0.1em', marginTop: '14px', marginBottom: '4px',
+              borderBottom: `1px solid ${COLORS.border}`, paddingBottom: '3px',
+            }}>{line.trim()}</div>
+          );
+          return <div key={i} style={{ color: COLORS.text }}>{line}</div>;
+        })}
+      </div>
     </div>
   );
 }
@@ -1209,6 +1222,7 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
   const [kpiData, setKpiData] = useState<KpiData>(kpiDataProp ?? EMPTY_KPI);
   const [arData, setArData] = useState<{ invoices: ARInvoice[]; total: number }>({ invoices: [], total: 0 });
   const [apData, setApData] = useState<{ bills: APBill[]; total: number }>({ bills: [], total: 0 });
+  const [briefing, setBriefing] = useState<{ text: string; date: string; source: string } | null>(null);
 
   useEffect(() => {
     // Load jobs from API on mount — keeps initial page response small
@@ -1244,6 +1258,13 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
     fetch('/api/norp-ap')
       .then(r => r.json())
       .then(d => { if (!d.error) setApData(d); })
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/norp-briefing')
+      .then(r => r.json())
+      .then(d => { if (d.ok && d.briefing) setBriefing(d.briefing); })
       .catch(console.error);
   }, []);
 
@@ -1319,7 +1340,7 @@ export default function DashboardClient({ kpiData: kpiDataProp, jobs: initialJob
         title="Daily Briefing"
         defaultOpen={false}
       >
-        <BriefingSection briefing={latestBriefing ?? null} />
+        <BriefingSection briefing={briefing} />
         <div style={{ marginTop: '16px' }}>
           <CompoundWatch alert={latestCompoundAlert ?? null} />
         </div>

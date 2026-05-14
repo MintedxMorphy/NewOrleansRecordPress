@@ -497,9 +497,10 @@ export async function GET(req: NextRequest) {
   }
 
   const flatResults = allResults.flat();
+  const now = new Date();
 
   // Update last run timestamp
-  const tsRow = { key: 'email_last_run', value: String(Date.now()), updated_at: new Date().toISOString() };
+  const tsRow = { key: 'email_last_run', value: String(Date.now()), updated_at: now.toISOString() };
   const existing = await findRow('qbo_cache', 'key', 'email_last_run');
   if (existing) {
     await updateRow('qbo_cache', existing.rowIndex, tsRow);
@@ -507,11 +508,107 @@ export async function GET(req: NextRequest) {
     await appendRow('qbo_cache', tsRow);
   }
 
+  // ── Generate comprehensive brief and push to dashboard ────────────────────
+  const processed = flatResults.filter(r => r.action !== 'mailbox_scan_failed' && r.action !== 'failed');
+  const byClass: Record<string, ScanResult[]> = {};
+  for (const r of processed) {
+    if (!byClass[r.classification]) byClass[r.classification] = [];
+    byClass[r.classification].push(r);
+  }
+
+  if (processed.length > 0) {
+    try {
+      // Pull summaries from the email log for richer context
+      const recentLog = await getSheet('email_log');
+      const cutoff = Date.now() - 12 * 60 * 60 * 1000; // last 12h
+      const recentEntries = (recentLog as any[]).filter((e: any) => new Date(e.timestamp || 0).getTime() > cutoff);
+
+      const emailDetail = recentEntries
+        .map((e: any) => `[${e.inbox?.split('@')[0] ?? '?'}] ${e.classification} | ${e.from?.split('<')[0].trim().slice(0,40)} | ${e.subject?.slice(0,70)}${e.amount_usd ? ` | $${e.amount_usd}` : ''}${e.summary ? ` | ${e.summary}` : ''}`)
+        .join('\n');
+
+      const briefPrompt = `You are the intelligence layer for New Orleans Record Press (NORP), a vinyl pressing plant. Write a comprehensive daily email intelligence report for Gregory, the managing partner.
+
+Be direct and specific. Use plain text with ALL-CAPS section headers. Include dollar amounts, artist/label names, job numbers, and actionable details wherever available. No greetings. No filler.
+
+Structure:
+EMAIL SCAN SUMMARY
+NEW BUSINESS (quote requests, new orders)
+ACTIVE ORDER UPDATES
+VENDOR INVOICES & BILLS
+PAYMENTS RECEIVED
+SHIPPING & TRACKING
+INTERNAL UPDATES
+URGENT ITEMS
+ACTION ITEMS
+
+Target length: 500-700 words. Only include sections with actual data. If a section has nothing, omit it.
+
+SCAN STATS:
+- Mailboxes scanned: ${mailboxes.join(', ')}
+- Total emails processed this run: ${processed.length}
+- Quote requests: ${(byClass.quote_request ?? []).length}
+- Order updates: ${(byClass.order_update ?? []).length}
+- Vendor invoices: ${(byClass.vendor_invoice ?? []).length}
+- Payments received: ${(byClass.payment_received ?? []).length}
+- Shipping updates: ${(byClass.shipping_update ?? []).length}
+- Other: ${(byClass.other ?? []).length}
+
+EMAIL DETAILS (last 12h):
+${emailDetail || '(no detail available)'}\n\nTime: ${now.toLocaleString('en-US', { timeZone: 'America/Chicago' })} CDT`;
+
+      const briefRes = await anthropic.messages.create({
+        model: 'claude-opus-4-7',
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: briefPrompt }],
+      });
+
+      const briefText = (briefRes.content[0] as any).text?.trim() ?? '';
+      const dateLabel = `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Chicago' })} CDT`;
+
+      // Write to qbo_cache for dashboard
+      const upsert = async (key: string, value: string) => {
+        const row = { key, value, updated_at: now.toISOString() };
+        const found = await findRow('qbo_cache', 'key', key);
+        if (found) { await updateRow('qbo_cache', found.rowIndex, row); }
+        else { await appendRow('qbo_cache', row); }
+      };
+
+      await upsert('latest_briefing_text', briefText);
+      await upsert('latest_briefing_date', dateLabel);
+      await upsert('latest_briefing_source', 'email_scan');
+      await upsert('email_intel_summary', briefText); // also cache for morning briefing to reference
+
+      // Send condensed version to Telegram
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const chatId = process.env.TELEGRAM_CHAT_ID || '6912503868';
+      if (botToken) {
+        // Telegram message: header + first ~800 chars of brief
+        const telegramMsg = `📬 *NORP Email Scan — ${dateLabel}*\n${processed.length} emails\n\n${briefText.slice(0, 3000)}`;
+        const https = await import('https');
+        await new Promise<void>((resolve) => {
+          const body = JSON.stringify({ chat_id: chatId, text: telegramMsg, parse_mode: 'Markdown' });
+          const req2 = https.default.request({
+            hostname: 'api.telegram.org',
+            path: `/bot${botToken}/sendMessage`,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+          }, () => resolve());
+          req2.on('error', () => resolve());
+          req2.write(body);
+          req2.end();
+        });
+      }
+    } catch (briefErr: any) {
+      console.error('[scan-email] Brief generation failed:', briefErr?.message);
+    }
+  }
+
   const summary = {
     ok: true,
     mode: hasServiceAccount() ? 'service_account_dwd' : 'oauth_fallback',
     mailboxesScanned: mailboxes.length,
-    totalProcessed: flatResults.filter(r => r.action !== 'mailbox_scan_failed').length,
+    totalProcessed: processed.length,
     errors: flatResults.filter(r => r.error).length,
     results: flatResults,
   };
