@@ -1,11 +1,12 @@
 {
   "crons": [
-    { "path": "/api/cron/scan-email", "schedule": "0 13 * * *" },
-    { "path": "/api/cron/scan-email", "schedule": "0 21 * * *" },
-    { "path": "/api/cron/qbo-sync", "schedule": "0 14 * * *" },
+    { "path": "/api/cron/scan-email",    "schedule": "0 13 * * *" },
+    { "path": "/api/cron/gen-brief",      "schedule": "15 13 * * *" },
+    { "path": "/api/cron/scan-email",    "schedule": "0 21 * * *" },
+    { "path": "/api/cron/gen-brief",      "schedule": "15 21 * * *" },
+    { "path": "/api/cron/qbo-sync",       "schedule": "0 14 * * *" },
     { "path": "/api/cron/compound-check", "schedule": "30 11 * * *" },
-    { "path": "/api/cron/ups-tracking", "schedule": "0 15 * * *" },
-    { "path": "/api/cron/gusto-sync", "schedule": "0 11 * * *" },
-    { "path": "/api/cron/morning-briefing", "schedule": "30 14 * * *" }
+    { "path": "/api/cron/ups-tracking",   "schedule": "0 15 * * *" },
+    { "path": "/api/cron/gusto-sync",     "schedule": "0 11 * * *" }
   ]
 }
