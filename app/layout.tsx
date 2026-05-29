@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
-import { Space_Grotesk, DM_Mono } from 'next/font/google'
+import { Cormorant_Garamond, DM_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
-const spaceGrotesk = Space_Grotesk({ 
+const cormorantGaramond = Cormorant_Garamond({ 
   subsets: ["latin"],
+  weight: ['300', '400', '500', '600', '700'],
+  style: ['normal', 'italic'],
   variable: '--font-sans'
 });
 const dmMono = DM_Mono({ 
@@ -43,7 +45,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${spaceGrotesk.variable} ${dmMono.variable} font-sans antialiased`}>
+      <body className={`${cormorantGaramond.variable} ${dmMono.variable} font-sans antialiased`}>
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
