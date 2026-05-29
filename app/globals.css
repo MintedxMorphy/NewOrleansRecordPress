@@ -4,75 +4,75 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Refined palette - black base, charcoal surfaces, neon green CTAs, gold accents, cream text */
+  /* Black base, royal blue CTAs and accents, white text */
   --background: #0a0a0a;
   --foreground: #F0ECE2;
-  --card: #141414;
+  --card: #111111;
   --card-foreground: #F0ECE2;
-  --popover: #141414;
+  --popover: #111111;
   --popover-foreground: #F0ECE2;
-  --primary: #00E86A;
-  --primary-foreground: #0a0a0a;
+  --primary: #1A53FF;
+  --primary-foreground: #ffffff;
   --secondary: #1a1a1a;
   --secondary-foreground: #F0ECE2;
   --muted: #1a1a1a;
   --muted-foreground: #888888;
-  --accent: #C9A84C;
-  --accent-foreground: #0a0a0a;
+  --accent: #1A53FF;
+  --accent-foreground: #ffffff;
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: #F0ECE2;
-  --border: #2a2a2a;
+  --border: #222222;
   --input: #1a1a1a;
-  --ring: #00E86A;
-  --chart-1: #00E86A;
-  --chart-2: #C9A84C;
+  --ring: #1A53FF;
+  --chart-1: #1A53FF;
+  --chart-2: #4D7CFF;
   --chart-3: #888888;
   --chart-4: #F0ECE2;
   --chart-5: #3a3a3a;
   --radius: 0.5rem;
   --sidebar: #0a0a0a;
   --sidebar-foreground: #F0ECE2;
-  --sidebar-primary: #00E86A;
-  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-primary: #1A53FF;
+  --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #1a1a1a;
   --sidebar-accent-foreground: #F0ECE2;
-  --sidebar-border: #2a2a2a;
-  --sidebar-ring: #00E86A;
+  --sidebar-border: #222222;
+  --sidebar-ring: #1A53FF;
 }
 
 .dark {
   --background: #0a0a0a;
   --foreground: #F0ECE2;
-  --card: #141414;
+  --card: #111111;
   --card-foreground: #F0ECE2;
-  --popover: #141414;
+  --popover: #111111;
   --popover-foreground: #F0ECE2;
-  --primary: #00E86A;
-  --primary-foreground: #0a0a0a;
+  --primary: #1A53FF;
+  --primary-foreground: #ffffff;
   --secondary: #1a1a1a;
   --secondary-foreground: #F0ECE2;
   --muted: #1a1a1a;
   --muted-foreground: #888888;
-  --accent: #C9A84C;
-  --accent-foreground: #0a0a0a;
+  --accent: #1A53FF;
+  --accent-foreground: #ffffff;
   --destructive: oklch(0.396 0.141 25.723);
   --destructive-foreground: #F0ECE2;
-  --border: #2a2a2a;
+  --border: #222222;
   --input: #1a1a1a;
-  --ring: #00E86A;
-  --chart-1: #00E86A;
-  --chart-2: #C9A84C;
+  --ring: #1A53FF;
+  --chart-1: #1A53FF;
+  --chart-2: #4D7CFF;
   --chart-3: #888888;
   --chart-4: #F0ECE2;
   --chart-5: #3a3a3a;
   --sidebar: #0a0a0a;
   --sidebar-foreground: #F0ECE2;
-  --sidebar-primary: #00E86A;
-  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-primary: #1A53FF;
+  --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #1a1a1a;
   --sidebar-accent-foreground: #F0ECE2;
-  --sidebar-border: #2a2a2a;
-  --sidebar-ring: #00E86A;
+  --sidebar-border: #222222;
+  --sidebar-ring: #1A53FF;
 }
 
 @theme inline {
@@ -122,6 +122,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-weight: 600;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
   }
 }
 
@@ -143,12 +147,12 @@
     transform: translateX(0);
   }
   100% {
-    transform: translateX(-33.333%);
+    transform: translateX(-50%);
   }
 }
 
 .animate-marquee {
-  animation: marquee 30s linear infinite;
+  animation: marquee 35s linear infinite;
 }
 
 /* Smooth scrolling */
@@ -156,23 +160,19 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Glow effects - using #00E86A neon green */
-.glow-green {
-  box-shadow: 0 0 20px rgba(0, 232, 106, 0.3), 0 0 40px rgba(0, 232, 106, 0.1);
+/* Glow effects - using #1A53FF royal blue */
+.glow-green, .glow-blue {
+  box-shadow: 0 0 20px rgba(26, 83, 255, 0.35), 0 0 40px rgba(26, 83, 255, 0.15);
 }
 
-.glow-green-strong {
-  box-shadow: 0 0 30px rgba(0, 232, 106, 0.5), 0 0 60px rgba(0, 232, 106, 0.2);
-}
-
-.glow-gold {
-  box-shadow: 0 0 20px rgba(201, 168, 76, 0.3), 0 0 40px rgba(201, 168, 76, 0.1);
+.glow-green-strong, .glow-blue-strong {
+  box-shadow: 0 0 30px rgba(26, 83, 255, 0.55), 0 0 60px rgba(26, 83, 255, 0.25);
 }
 
 /* Hover glow transitions */
-.hover-glow-green {
+.hover-glow-green, .hover-glow-blue {
   transition: box-shadow 0.3s ease;
 }
-.hover-glow-green:hover {
-  box-shadow: 0 0 25px rgba(0, 232, 106, 0.4), 0 0 50px rgba(0, 232, 106, 0.15);
+.hover-glow-green:hover, .hover-glow-blue:hover {
+  box-shadow: 0 0 25px rgba(26, 83, 255, 0.45), 0 0 50px rgba(26, 83, 255, 0.2);
 }

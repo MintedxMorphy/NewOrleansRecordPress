@@ -68,7 +68,7 @@ const S = {
   label: { color: '#888', fontSize: 11, display: 'block', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.5px', fontFamily: 'monospace' },
   input: { background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 6, padding: '8px 10px', color: '#F0ECE2', fontSize: 13, width: '100%', boxSizing: 'border-box' as const },
   numInput: { background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 4, padding: '4px 8px', color: '#F0ECE2', fontSize: 13 } as React.CSSProperties,
-  btnGreen: { background: '#00E86A', color: '#0a0a0a', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
+  btnGreen: { background: '#1A53FF', color: '#0a0a0a', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
   btnGhost: { background: 'none', border: '1px solid #2a2a2a', borderRadius: 8, color: '#888', fontSize: 13, padding: '8px 16px', cursor: 'pointer', textDecoration: 'none', display: 'inline-block' } as React.CSSProperties,
   btnDanger: { background: 'none', border: '1px solid #3a1a1a', borderRadius: 4, color: '#ff6b6b', fontSize: 12, padding: '4px 10px', cursor: 'pointer' } as React.CSSProperties,
   btnBlue: { background: '#1a1a2a', border: '1px solid #3a3a5a', borderRadius: 8, color: '#aaaaee', fontSize: 14, fontWeight: 600, padding: '10px 20px', cursor: 'pointer' } as React.CSSProperties,
@@ -236,7 +236,7 @@ function InventoryTab({ password, inventory, setInventory }: {
     <div>
       {/* Save Bar */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, alignItems: 'center', marginBottom: 24 }}>
-        {saveMsg && <span style={{ color: saveMsg === 'Saved!' ? '#00E86A' : '#ff6b6b', fontSize: 14 }}>{saveMsg}</span>}
+        {saveMsg && <span style={{ color: saveMsg === 'Saved!' ? '#1A53FF' : '#ff6b6b', fontSize: 14 }}>{saveMsg}</span>}
         <button onClick={save} disabled={saving} style={{ ...S.btnGreen, opacity: saving ? 0.7 : 1 }}>
           {saving ? 'Saving…' : 'Save Inventory'}
         </button>
@@ -305,7 +305,7 @@ function InventoryTab({ password, inventory, setInventory }: {
                     id={`order-${key}`}
                     checked={onOrder}
                     onChange={e => setPVCStatus(key, e.target.checked ? 'on order' : '')}
-                    style={{ accentColor: '#00E86A', width: 14, height: 14 }}
+                    style={{ accentColor: '#1A53FF', width: 14, height: 14 }}
                   />
                   <label htmlFor={`order-${key}`} style={{ color: onOrder ? '#F2A623' : '#555', fontSize: 12, cursor: 'pointer' }}>
                     {onOrder ? 'ON ORDER' : 'mark on order'}
@@ -452,7 +452,7 @@ function ShopProductsTab({ password }: { password: string }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, alignItems: 'center', marginBottom: 24 }}>
-        {saveMsg && <span style={{ color: saveMsg === 'Saved!' ? '#00E86A' : '#ff6b6b', fontSize: 14 }}>{saveMsg}</span>}
+        {saveMsg && <span style={{ color: saveMsg === 'Saved!' ? '#1A53FF' : '#ff6b6b', fontSize: 14 }}>{saveMsg}</span>}
         <button onClick={saveAll} disabled={saving} style={{ ...S.btnGreen, opacity: saving ? 0.7 : 1 }}>
           {saving ? 'Saving...' : 'Save All Changes'}
         </button>
@@ -493,7 +493,7 @@ function ShopProductsTab({ password }: { password: string }) {
                     type="number"
                     value={p.stock}
                     onChange={e => updateProduct(p.id, 'stock', parseInt(e.target.value) || 0)}
-                    style={{ ...S.numInput, width: 70, color: p.stock > 0 ? '#00E86A' : '#888' }}
+                    style={{ ...S.numInput, width: 70, color: p.stock > 0 ? '#1A53FF' : '#888' }}
                     min="0"
                   />
                 </td>
@@ -615,7 +615,7 @@ function TeamTab({ password }: { password: string }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, alignItems: 'center', marginBottom: 24 }}>
-        {saveMsg && <span style={{ color: saveMsg === 'Saved!' ? '#00E86A' : '#ff6b6b', fontSize: 14 }}>{saveMsg}</span>}
+        {saveMsg && <span style={{ color: saveMsg === 'Saved!' ? '#1A53FF' : '#ff6b6b', fontSize: 14 }}>{saveMsg}</span>}
         {saving && <span style={{ color: '#888', fontSize: 14 }}>Saving...</span>}
       </div>
 
@@ -632,7 +632,7 @@ function TeamTab({ password }: { password: string }) {
             {members.map((m, i) => (
               <tr key={m.id} style={{ borderBottom: '1px solid #1a1a1a', background: i % 2 === 0 ? 'transparent' : '#0f0f0f' }}>
                 <td style={{ padding: '10px 16px', fontSize: 14, fontWeight: 600, color: '#F0ECE2' }}>{m.name}</td>
-                <td style={{ padding: '10px 16px', fontSize: 13, color: '#00E86A' }}>{m.title}</td>
+                <td style={{ padding: '10px 16px', fontSize: 13, color: '#1A53FF' }}>{m.title}</td>
                 <td style={{ padding: '10px 16px', fontSize: 13, color: '#888' }}>{m.department}</td>
                 <td style={{ padding: '10px 16px', fontSize: 12, color: '#555', fontFamily: 'monospace', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {m.image || <span style={{ color: '#333' }}>—</span>}
@@ -699,7 +699,7 @@ export default function AdminPage() {
     color: activeTab === tab ? '#F0ECE2' : '#666',
     background: 'none',
     border: 'none',
-    borderBottom: activeTab === tab ? '2px solid #00E86A' : '2px solid transparent',
+    borderBottom: activeTab === tab ? '2px solid #1A53FF' : '2px solid transparent',
     cursor: 'pointer',
     transition: 'all 0.15s',
   })

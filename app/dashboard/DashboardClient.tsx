@@ -51,7 +51,7 @@ const STAGE_LABELS: Record<Stage, string> = {
 
 const COLORS = {
   bg: '#0A0A0A', card: '#141414', elevated: '#1A1A1A',
-  green: '#00E86A', purple: '#8B3FCF', gold: '#C9A84C',
+  green: '#1A53FF', purple: '#8B3FCF', gold: '#C9A84C',
   text: '#E8E8E8', muted: '#9A9A9A', border: '#2A2A2A',
   red: '#FF4444', yellow: '#FFB800', orange: '#FF8C00',
 };
@@ -864,8 +864,8 @@ interface DriveIntelData {
 
 const STAGE_BADGE_COLOR: Record<string, string> = {
   quote: '#9A9A9A', deposit: '#C9A84C', plates: '#8B3FCF',
-  test_pressing: '#FFB800', approved: '#00E86A', pressing: '#00E86A',
-  qc: '#FF8C00', pack: '#FF8C00', ship: '#00E86A', paid: '#9A9A9A',
+  test_pressing: '#FFB800', approved: '#1A53FF', pressing: '#1A53FF',
+  qc: '#FF8C00', pack: '#FF8C00', ship: '#1A53FF', paid: '#9A9A9A',
 };
 
 function PressQueueRow({ job, artIndex }: { job: PressQueueJob; artIndex: Record<string, ArtFileEntry> }) {
