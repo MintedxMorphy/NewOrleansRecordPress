@@ -80,7 +80,7 @@ export function Services() {
           <div className="flex flex-col md:flex-row md:items-center gap-6 justify-between">
             <div className="border-l-2 border-primary pl-6">
               <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-2">Current Turnaround</p>
-              <p className="text-2xl md:text-3xl font-bold text-foreground">~3-4 Months</p>
+              <p className="text-2xl md:text-3xl font-bold text-foreground">~2-3 Months</p>
             </div>
             <div className="h-px md:h-16 w-full md:w-px bg-border" />
             <div className="border-l-2 border-primary pl-6">

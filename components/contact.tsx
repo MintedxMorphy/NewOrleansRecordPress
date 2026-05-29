@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Phone, Mail, MapPin, Send, ArrowRight } from "lucide-react"
+import { Phone, Mail, MapPin, ArrowRight } from "lucide-react"
 
 export function Contact() {
   const [formData, setFormData] = useState({
@@ -12,12 +12,28 @@ export function Contact() {
     quantity: "",
     message: "",
   })
+  const [status, setStatus] = useState<"idle" | "sending" | "success" | "error">("idle")
+  const [errorMsg, setErrorMsg] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Handle form submission - would connect to backend
-    const mailtoLink = `mailto:info@neworleansrecordpress.com?subject=Quote Request from ${formData.name}&body=Name: ${formData.name}%0D%0AEmail: ${formData.email}%0D%0APhone: ${formData.phone}%0D%0AProject Type: ${formData.projectType}%0D%0AQuantity: ${formData.quantity}%0D%0A%0D%0AMessage:%0D%0A${formData.message}`
-    window.location.href = mailtoLink
+    setStatus("sending")
+    setErrorMsg("")
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Unknown error")
+      }
+      setStatus("success")
+    } catch (err) {
+      setStatus("error")
+      setErrorMsg(err instanceof Error ? err.message : "Something went wrong. Please try again.")
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -193,13 +209,25 @@ export function Contact() {
                 />
               </div>
 
-              <button
-                type="submit"
-                className="w-full px-8 py-4 bg-primary text-primary-foreground font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-all inline-flex items-center justify-center gap-2 group glow-green hover:glow-green-strong rounded-lg"
-              >
-                Send Request
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
+              {status === "success" ? (
+                <div className="w-full px-8 py-4 bg-primary/10 border border-primary text-primary font-medium text-sm text-center">
+                  ✓ Message sent! We&apos;ll be in touch soon.
+                </div>
+              ) : (
+                <>
+                  {status === "error" && (
+                    <p className="text-sm text-red-400">{errorMsg || "Failed to send. Please try again."}</p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={status === "sending"}
+                    className="w-full px-8 py-4 bg-primary text-primary-foreground font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-all inline-flex items-center justify-center gap-2 group glow-green hover:glow-green-strong rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {status === "sending" ? "Sending..." : "Send Request"}
+                    {status !== "sending" && <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
+                  </button>
+                </>
+              )}
             </form>
           </div>
         </div>

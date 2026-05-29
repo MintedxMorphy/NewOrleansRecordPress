@@ -28,6 +28,17 @@ export function Hero() {
         </div>
       </div>
 
+      {/* 10-Year Anniversary Badge — top-right, transparent PNG */}
+      <div className="absolute top-44 right-24 z-20 hidden lg:block opacity-80 hover:opacity-100 transition-opacity duration-300">
+        <Image
+          src="/images/10-year-badge-v2.png"
+          alt="Celebrating 10 Years in the Art of Pressing Vinyl"
+          width={400}
+          height={400}
+          className="w-[315px] xl:w-[370px] h-auto"
+        />
+      </div>
+
       <div className="relative z-10 w-full px-6 pt-28 pb-20">
         <div className="flex flex-col items-start gap-6 max-w-3xl mx-auto lg:mx-0 lg:ml-[8%]">
           {/* Logo - smaller */}
@@ -43,13 +54,13 @@ export function Hero() {
           </div>
           
           {/* Headline */}
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground leading-tight max-w-lg">
-            Custom Vinyl Pressing in the Heart of New Orleans
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground leading-tight max-w-lg">
+            Pure Analog Craftsmanship from the Heart of New Orleans
           </h1>
           
           {/* Description */}
           <p className="text-base md:text-lg text-[#aaaaaa] max-w-lg leading-relaxed">
-            Independently owned vinyl record manufacturing plant offering custom pressing for 12&quot; and 7&quot; records. From 100 units to commercial runs in the thousands.
+            An independent, artisan vinyl press dedicated to flawless 12&quot; and 7&quot; high-fidelity playback. From exclusive 100-unit private pressings to expansive audiophile runs in the tens of thousands, we preserve the warmth of your sound with uncompromising quality control.
           </p>
 
           {/* Single CTA Button */}

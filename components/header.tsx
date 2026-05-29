@@ -5,12 +5,13 @@ import Link from "next/link"
 import { Menu, X } from "lucide-react"
 
 const navLinks = [
-  { href: "#services", label: "Services" },
+  { href: "/", label: "Home" },
+  { href: "/#services", label: "Services" },
   { href: "/vinyl-colors", label: "Vinyl Colors" },
-  { href: "/quote", label: "Quote" },
-  { href: "#about", label: "About" },
+  { href: "/quote", label: "Quote Calculator" },
+  { href: "/story", label: "Story" },
   { href: "/team", label: "Team" },
-  { href: "#contact", label: "Contact" },
+  { href: "/#contact", label: "Contact" },
   { href: "/shop", label: "Shop" },
 ]
 
@@ -19,38 +20,54 @@ export function Header() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
-      <div className="max-w-7xl mx-auto px-6 py-3">
-        <nav className="flex items-center justify-center">
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-8">
+      <div className="px-6 py-3">
+        {/* Desktop: 3-column grid so nav is truly centered and CTA stays right */}
+        <nav className="hidden md:grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+          {/* Left spacer */}
+          <div />
+
+          {/* Center: nav links */}
+          <div className="flex items-center gap-6">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors"
+                className="text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors whitespace-nowrap px-2 py-3 -my-3"
               >
                 {link.label}
               </Link>
             ))}
+          </div>
+
+          {/* Right: Get a Quote always pinned here */}
+          <div className="flex justify-end">
             <Link
               href="/quote"
-              className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors rounded-lg"
+              className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors rounded-lg whitespace-nowrap"
             >
               Get a Quote
             </Link>
           </div>
+        </nav>
 
-          {/* Mobile Menu Button */}
+        {/* Mobile: hamburger + CTA side by side */}
+        <div className="md:hidden flex items-center justify-between">
+          <Link
+            href="/quote"
+            className="px-3 py-2 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors rounded-lg"
+          >
+            Get a Quote
+          </Link>
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden p-2 text-foreground hover:text-primary transition-colors"
+            className="p-2 text-foreground hover:text-primary transition-colors"
             aria-label="Toggle menu"
           >
             {isOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
-        </nav>
+        </div>
 
-        {/* Mobile Navigation */}
+        {/* Mobile dropdown */}
         {isOpen && (
           <div className="md:hidden absolute top-full left-0 right-0 bg-background border-b border-border">
             <div className="flex flex-col p-6 gap-4">
@@ -59,18 +76,11 @@ export function Header() {
                   key={link.href}
                   href={link.href}
                   onClick={() => setIsOpen(false)}
-                  className="text-lg font-medium uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors py-2 border-b border-border"
+                  className="text-lg font-bold uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors py-2 border-b border-border"
                 >
                   {link.label}
                 </Link>
               ))}
-              <Link
-                href="/quote"
-                onClick={() => setIsOpen(false)}
-                className="mt-4 px-6 py-3 bg-primary text-primary-foreground text-center text-sm font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors rounded-lg"
-              >
-                Get a Quote
-              </Link>
             </div>
           </div>
         )}
