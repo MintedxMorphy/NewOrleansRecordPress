@@ -31,7 +31,7 @@ export function Hero() {
       {/* 10-Year Anniversary Badge — top-right, transparent PNG */}
       <div className="absolute top-44 right-24 z-20 hidden lg:block opacity-80 hover:opacity-100 transition-opacity duration-300">
         <Image
-          src="/images/10-year-badge-check.png"
+          src="/images/10-year-badge.png"
           alt="Celebrating 10 Years in the Art of Pressing Vinyl"
           width={400}
           height={400}
