@@ -1,0 +1,79 @@
+[
+  {
+    "id": "gregory-gremillion",
+    "name": "Gregory Gremillion",
+    "title": "Partner",
+    "department": "Strategy, Tech & Partnerships",
+    "image": ""
+  },
+  {
+    "id": "scott-borne",
+    "name": "Scott Borne",
+    "title": "Partner",
+    "department": "Artist & Label Relations, Sales",
+    "image": ""
+  },
+  {
+    "id": "brice-white",
+    "name": "Brice White",
+    "title": "Partner",
+    "department": "Press Operations & Shipping",
+    "image": ""
+  },
+  {
+    "id": "sarah-taylor",
+    "name": "Sarah Taylor",
+    "title": "Quality Control Director",
+    "department": "Quality Control",
+    "image": ""
+  },
+  {
+    "id": "patrick-bailey",
+    "name": "Patrick Bailey",
+    "title": "Production Manager",
+    "department": "Production & Graphic Design",
+    "image": ""
+  },
+  {
+    "id": "stormy-bumfield",
+    "name": "Stormy Bumfield",
+    "title": "Press Operator",
+    "department": "Production",
+    "image": ""
+  },
+  {
+    "id": "blake-quick",
+    "name": "Blake Quick",
+    "title": "Press Operator",
+    "department": "Production",
+    "image": ""
+  },
+  {
+    "id": "jennifer-dante",
+    "name": "Jennifer Dante",
+    "title": "Quality Control",
+    "department": "Quality Control",
+    "image": ""
+  },
+  {
+    "id": "august-cullaro",
+    "name": "August Cullaro",
+    "title": "Quality Control",
+    "department": "Quality Control",
+    "image": ""
+  },
+  {
+    "id": "mun-underwood",
+    "name": "Mun Underwood",
+    "title": "Quality Control",
+    "department": "Quality Control",
+    "image": ""
+  },
+  {
+    "id": "vincent-harvey",
+    "name": "Vincent Harvey",
+    "title": "Sustainability & Recycling",
+    "department": "Operations",
+    "image": ""
+  }
+]

@@ -547,14 +547,141 @@ function ShopProductsTab({ password }: { password: string }) {
   )
 }
 
+// ─── Team Tab ────────────────────────────────────────────────────────────────
+
+interface TeamMember {
+  id: string
+  name: string
+  title: string
+  department: string
+  image: string
+}
+
+function TeamTab({ password }: { password: string }) {
+  const [members, setMembers] = useState<TeamMember[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
+  const [newMember, setNewMember] = useState<Partial<TeamMember>>({ name: '', title: '', department: '', image: '' })
+
+  const loadMembers = useCallback(() => {
+    setLoading(true)
+    fetch('/api/team')
+      .then(r => r.json())
+      .then(data => { setMembers(data); setLoading(false) })
+  }, [])
+
+  useEffect(() => { loadMembers() }, [loadMembers])
+
+  async function saveAll(updated: TeamMember[]) {
+    setSaving(true)
+    setSaveMsg('')
+    const res = await fetch('/api/team', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ members: updated, password }),
+    })
+    const data = await res.json()
+    setSaving(false)
+    setSaveMsg(data.ok ? 'Saved!' : 'Error saving.')
+    setTimeout(() => setSaveMsg(''), 2500)
+  }
+
+  function deleteMember(id: string) {
+    if (!confirm('Remove this team member?')) return
+    const updated = members.filter(m => m.id !== id)
+    setMembers(updated)
+    saveAll(updated)
+  }
+
+  function addMember() {
+    if (!newMember.name) return
+    const id = newMember.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    const m: TeamMember = {
+      id,
+      name: newMember.name!,
+      title: newMember.title || '',
+      department: newMember.department || '',
+      image: newMember.image || '',
+    }
+    const updated = [...members, m]
+    setMembers(updated)
+    saveAll(updated)
+    setNewMember({ name: '', title: '', department: '', image: '' })
+  }
+
+  if (loading) return <p style={{ color: '#555' }}>Loading team...</p>
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, alignItems: 'center', marginBottom: 24 }}>
+        {saveMsg && <span style={{ color: saveMsg === 'Saved!' ? '#00E86A' : '#ff6b6b', fontSize: 14 }}>{saveMsg}</span>}
+        {saving && <span style={{ color: '#888', fontSize: 14 }}>Saving...</span>}
+      </div>
+
+      <div style={S.card}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #2a2a2a' }}>
+              {['Name', 'Title', 'Department', 'Image URL', 'Actions'].map(h => (
+                <th key={h} style={{ padding: '12px 16px', textAlign: 'left', color: '#888', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontFamily: 'monospace' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((m, i) => (
+              <tr key={m.id} style={{ borderBottom: '1px solid #1a1a1a', background: i % 2 === 0 ? 'transparent' : '#0f0f0f' }}>
+                <td style={{ padding: '10px 16px', fontSize: 14, fontWeight: 600, color: '#F0ECE2' }}>{m.name}</td>
+                <td style={{ padding: '10px 16px', fontSize: 13, color: '#00E86A' }}>{m.title}</td>
+                <td style={{ padding: '10px 16px', fontSize: 13, color: '#888' }}>{m.department}</td>
+                <td style={{ padding: '10px 16px', fontSize: 12, color: '#555', fontFamily: 'monospace', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {m.image || <span style={{ color: '#333' }}>—</span>}
+                </td>
+                <td style={{ padding: '10px 16px' }}>
+                  <button onClick={() => deleteMember(m.id)} style={S.btnDanger}>Remove</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={S.cardPad}>
+        <h2 style={{ ...S.sectionTitle, marginBottom: 20 }}>Add Team Member</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+          {[
+            { key: 'name', label: 'Full Name' },
+            { key: 'title', label: 'Title / Role' },
+            { key: 'department', label: 'Department' },
+            { key: 'image', label: 'Image URL (optional)' },
+          ].map(f => (
+            <div key={f.key}>
+              <label style={S.label}>{f.label}</label>
+              <input
+                type="text"
+                value={newMember[f.key as keyof TeamMember] ?? ''}
+                onChange={e => setNewMember(prev => ({ ...prev, [f.key]: e.target.value }))}
+                style={S.input}
+                placeholder={f.key === 'name' ? 'Required' : ''}
+              />
+            </div>
+          ))}
+        </div>
+        <button onClick={addMember} style={{ ...S.btnBlue, marginTop: 16 }}>+ Add Member</button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Admin Page ──────────────────────────────────────────────────────────
 
-type Tab = 'inventory' | 'shop'
+type Tab = 'inventory' | 'shop' | 'team'
 
 export default function AdminPage() {
   const [password, setPassword] = useState('')
   const [authed, setAuthed] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('inventory')
+  // team tab loaded on demand
   const [inventory, setInventory] = useState<Inventory | null>(null)
 
   function handleAuth(pw: string) {
@@ -587,6 +714,7 @@ export default function AdminPage() {
           <span style={S.navBrand}>NORP Admin</span>
           <button onClick={() => setActiveTab('inventory')} style={tabStyle('inventory')}>Inventory</button>
           <button onClick={() => setActiveTab('shop')} style={tabStyle('shop')}>Shop Products</button>
+          <button onClick={() => setActiveTab('team')} style={tabStyle('team')}>Team</button>
         </div>
         <div style={S.navRight}>
           <a href="/dashboard" style={{ ...S.btnGreen, textDecoration: 'none', display: 'inline-block' }}>Operations Dashboard</a>
@@ -599,12 +727,14 @@ export default function AdminPage() {
       <div style={S.content}>
         <div style={{ marginBottom: 28 }}>
           <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>
-            {activeTab === 'inventory' ? 'Inventory' : 'Shop Products'}
+            {activeTab === 'inventory' ? 'Inventory' : activeTab === 'shop' ? 'Shop Products' : 'Team'}
           </h1>
           <p style={{ color: '#888', fontSize: 14 }}>
             {activeTab === 'inventory'
               ? 'Track PVC compound, inner sleeves, and outer sleeves'
-              : 'Manage products, stock, and pricing'}
+              : activeTab === 'shop'
+              ? 'Manage products, stock, and pricing'
+              : 'Add or remove team members shown on the public /team page'}
           </p>
         </div>
 
@@ -613,6 +743,9 @@ export default function AdminPage() {
         )}
         {activeTab === 'shop' && (
           <ShopProductsTab password={password} />
+        )}
+        {activeTab === 'team' && (
+          <TeamTab password={password} />
         )}
       </div>
     </div>
