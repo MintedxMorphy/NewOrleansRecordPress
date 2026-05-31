@@ -35,7 +35,7 @@ export function Hero() {
           alt="Celebrating 10 Years in the Art of Pressing Vinyl"
           width={400}
           height={400}
-          className="w-[315px] xl:w-[370px] h-auto"
+          className="w-[315px] xl:w-[370px] h-auto [clip-path:circle(50%)] block"
         />
       </div>
 
