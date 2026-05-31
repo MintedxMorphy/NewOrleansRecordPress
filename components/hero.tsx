@@ -29,13 +29,13 @@ export function Hero() {
       </div>
 
       {/* 10-Year Anniversary Badge — top-right, black bg blends via screen mode */}
-      <div className="absolute top-44 right-24 z-20 hidden lg:block opacity-90 hover:opacity-100 transition-opacity duration-300">
+      <div className="absolute top-44 right-24 z-20 hidden lg:block opacity-60 hover:opacity-80 transition-opacity duration-300">
         <Image
           src="/images/10-year-badge.png"
           alt="Celebrating 10 Years in the Art of Pressing Vinyl"
-          width={350}
-          height={281}
-          className="w-[280px] xl:w-[340px] h-auto block [mix-blend-mode:screen]"
+          width={438}
+          height={351}
+          className="w-[350px] xl:w-[425px] h-auto block [mix-blend-mode:screen]"
         />
       </div>
 
