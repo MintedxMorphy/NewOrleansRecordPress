@@ -156,6 +156,20 @@ function stationJobs(jobs: Job[], station: Station) {
   return sortJobs(jobs.filter(job => stationOf(job) === station));
 }
 
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setMatches(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [query]);
+
+  return matches;
+}
+
 function persistReorder(updates: Job[]) {
   return fetch('/api/jobs/reorder', {
     method: 'PATCH',
@@ -212,10 +226,12 @@ function JobCard({
   job,
   onOpen,
   onComplete,
+  compact = false,
 }: {
   job: Job;
   onOpen: () => void;
   onComplete: () => void;
+  compact?: boolean;
 }) {
   const station = stationOf(job);
   const meta = STATION_META[station];
@@ -244,7 +260,7 @@ function JobCard({
         boxShadow: station === 'now_pressing' ? `0 0 0 1px ${meta.color}44, 0 12px 30px #00000055` : '0 8px 18px #00000035',
         cursor: 'pointer',
         marginBottom: '8px',
-        padding: '9px',
+        padding: compact ? '12px' : '9px',
       }}
       onMouseEnter={e => (e.currentTarget.style.borderColor = meta.color)}
       onMouseLeave={e => {
@@ -253,11 +269,11 @@ function JobCard({
       }}
     >
       <div>
-        <div style={{ color: COLORS.text, fontSize: '12px', fontWeight: 850, lineHeight: 1.25 }}>
-          {customer.length > 58 ? `${customer.slice(0, 58)}...` : customer}
+        <div style={{ color: COLORS.text, fontSize: compact ? '15px' : '12px', fontWeight: 850, lineHeight: 1.25 }}>
+          {customer.length > (compact ? 90 : 58) ? `${customer.slice(0, compact ? 90 : 58)}...` : customer}
         </div>
         {matrix && (
-          <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: '10px', marginTop: '3px' }}>
+          <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: compact ? '12px' : '10px', marginTop: '3px' }}>
             {matrix}
           </div>
         )}
@@ -342,11 +358,13 @@ function Pipeline({
   onJobsChange,
   onJobOpen,
   onError,
+  isMobile = false,
 }: {
   jobs: Job[];
   onJobsChange: (jobs: Job[]) => void;
   onJobOpen: (job: Job) => void;
   onError: (message: string) => void;
+  isMobile?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -447,8 +465,8 @@ function Pipeline({
     <DragDropContext onDragEnd={onDragEnd}>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-        gap: '10px',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(0, 1fr))',
+        gap: isMobile ? '14px' : '10px',
         paddingBottom: '12px',
       }}>
         {STATIONS.map(station => {
@@ -464,9 +482,9 @@ function Pipeline({
                 border: `1px solid ${isNowPressing ? meta.color : COLORS.border}`,
                 borderRadius: '8px',
                 boxShadow: isNowPressing ? `0 0 28px ${meta.color}30` : undefined,
-                minHeight: '620px',
+                minHeight: isMobile ? 'auto' : '620px',
                 minWidth: 0,
-                padding: '8px',
+                padding: isMobile ? '10px' : '8px',
               }}
             >
               <div style={{ borderBottom: `1px solid ${COLORS.border}`, marginBottom: '8px', paddingBottom: '9px' }}>
@@ -476,7 +494,7 @@ function Pipeline({
                     <div style={{ minWidth: 0 }}>
                       <div style={{
                         color: meta.color,
-                        fontSize: isNowPressing ? '11px' : '10px',
+                        fontSize: isMobile ? '15px' : isNowPressing ? '11px' : '10px',
                         fontWeight: 950,
                         letterSpacing: '0.06em',
                         textTransform: 'uppercase',
@@ -485,7 +503,7 @@ function Pipeline({
                       }}>
                         {meta.label}
                       </div>
-                      <div style={{ color: COLORS.faint, fontSize: '10px', marginTop: '2px', lineHeight: 1.15 }}>
+                      <div style={{ color: COLORS.faint, fontSize: isMobile ? '12px' : '10px', marginTop: '2px', lineHeight: 1.15 }}>
                         {meta.description}
                       </div>
                     </div>
@@ -515,9 +533,9 @@ function Pipeline({
                     style={{
                       background: snapshot.isDraggingOver ? `${meta.color}14` : 'transparent',
                       borderRadius: '8px',
-                      minHeight: '540px',
-                      transition: 'background 0.15s',
-                    }}
+                    minHeight: isMobile ? '72px' : '540px',
+                    transition: 'background 0.15s',
+                  }}
                   >
                     {list.map((job, index) => (
                       <Draggable key={jobKey(job)} draggableId={jobKey(job)} index={index}>
@@ -531,7 +549,7 @@ function Pipeline({
                               opacity: dragSnapshot.isDragging ? 0.88 : 1,
                             }}
                           >
-                            <JobCard job={job} onOpen={() => onJobOpen(job)} onComplete={() => completeJob(job)} />
+                            <JobCard job={job} onOpen={() => onJobOpen(job)} onComplete={() => completeJob(job)} compact={isMobile} />
                           </div>
                         )}
                       </Draggable>
@@ -641,6 +659,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   const [source, setSource] = useState('');
   const [error, setError] = useState('');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const isMobile = useMediaQuery('(max-width: 760px)');
 
   useEffect(() => {
     fetch('/api/norp-jobs')
@@ -665,18 +684,26 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
         'radial-gradient(circle at 18% 0%, rgba(0,232,106,0.12), transparent 28%), radial-gradient(circle at 78% 8%, rgba(77,163,255,0.12), transparent 24%), #090909',
       color: COLORS.text,
       minHeight: '100vh',
-      padding: '18px',
+      padding: isMobile ? '12px' : '18px',
     }}>
-      <header style={{ alignItems: 'flex-end', display: 'flex', gap: '18px', justifyContent: 'space-between', margin: '0 auto 18px', maxWidth: '1920px' }}>
+      <header style={{
+        alignItems: isMobile ? 'flex-start' : 'flex-end',
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        gap: isMobile ? '10px' : '18px',
+        justifyContent: 'space-between',
+        margin: '0 auto 18px',
+        maxWidth: '1920px',
+      }}>
         <div>
           <div style={{ color: COLORS.green, fontSize: '12px', fontWeight: 950, letterSpacing: '0.12em', marginBottom: '7px', textTransform: 'uppercase' }}>
             New Orleans Record Press
           </div>
-          <h1 style={{ color: COLORS.text, fontSize: '36px', lineHeight: 1.05, margin: 0 }}>
+          <h1 style={{ color: COLORS.text, fontSize: isMobile ? '27px' : '36px', lineHeight: 1.05, margin: 0 }}>
             Press Room Production Pipeline
           </h1>
         </div>
-        <div style={{ color: COLORS.muted, fontSize: '12px', textAlign: 'right' }}>
+        <div style={{ color: COLORS.muted, fontSize: '12px', textAlign: isMobile ? 'left' : 'right' }}>
           {loading ? 'Loading Airtable...' : `${activeJobs.length} active jobs`}
           {source && <div style={{ marginTop: '4px' }}>Source: {source === 'airtable' ? 'Airtable' : 'Sheet fallback'}</div>}
         </div>
@@ -684,10 +711,15 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
 
       <section style={{
         display: 'grid',
-        gap: '10px',
-        gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+        gap: isMobile ? '8px' : '10px',
+        gridAutoColumns: isMobile ? '118px' : undefined,
+        gridAutoFlow: isMobile ? 'column' : undefined,
+        gridTemplateColumns: isMobile ? undefined : 'repeat(7, minmax(0, 1fr))',
         margin: '0 auto 16px',
         maxWidth: '1920px',
+        overflowX: isMobile ? 'auto' : undefined,
+        paddingBottom: isMobile ? '6px' : undefined,
+        WebkitOverflowScrolling: isMobile ? 'touch' : undefined,
       }}>
         {STATIONS.map(station => {
           const meta = STATION_META[station];
@@ -701,7 +733,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
               gap: '8px',
               minHeight: '66px',
               minWidth: 0,
-              padding: '9px',
+              padding: isMobile ? '8px' : '9px',
             }}>
               <StationIcon station={station} size={17} />
               <div>
@@ -729,7 +761,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       )}
 
       <div style={{ margin: '0 auto', maxWidth: '1920px' }}>
-        <Pipeline jobs={jobs} onJobsChange={setJobs} onJobOpen={setSelectedJob} onError={setError} />
+        <Pipeline jobs={jobs} onJobsChange={setJobs} onJobOpen={setSelectedJob} onError={setError} isMobile={isMobile} />
       </div>
 
       {selectedJob && <JobDrawer job={selectedJob} onClose={() => setSelectedJob(null)} />}
