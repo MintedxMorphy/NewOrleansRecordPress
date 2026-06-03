@@ -239,8 +239,8 @@ function JobCard({
         borderRadius: '8px',
         boxShadow: station === 'now_pressing' ? `0 0 0 1px ${meta.color}44, 0 12px 30px #00000055` : '0 8px 18px #00000035',
         cursor: 'pointer',
-        marginBottom: '10px',
-        padding: '12px',
+        marginBottom: '8px',
+        padding: '9px',
       }}
       onMouseEnter={e => (e.currentTarget.style.borderColor = meta.color)}
       onMouseLeave={e => {
@@ -250,11 +250,11 @@ function JobCard({
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'flex-start' }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 850, lineHeight: 1.25 }}>
-            {customer.length > 64 ? `${customer.slice(0, 64)}...` : customer}
+          <div style={{ color: COLORS.text, fontSize: '12px', fontWeight: 850, lineHeight: 1.25 }}>
+            {customer.length > 52 ? `${customer.slice(0, 52)}...` : customer}
           </div>
           {matrix && (
-            <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: '12px', marginTop: '4px' }}>
+            <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: '10px', marginTop: '3px' }}>
               {matrix}
             </div>
           )}
@@ -274,10 +274,10 @@ function JobCard({
             cursor: 'pointer',
             display: 'flex',
             flexShrink: 0,
-            fontSize: '11px',
+            fontSize: '10px',
             fontWeight: 850,
             gap: '4px',
-            padding: '5px 7px',
+            padding: '4px 6px',
           }}
         >
           <BadgeCheck size={13} />
@@ -285,7 +285,7 @@ function JobCard({
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
         {quantity && <StatusPill color={meta.color}>{quantity}</StatusPill>}
         {colors && <StatusPill color="#C9A84C">{colors}</StatusPill>}
         {weight && <StatusPill color="#9CCFFF">{weight.replace('1900-05-29T00:00:00.000Z', '180g')}</StatusPill>}
@@ -298,7 +298,7 @@ function JobCard({
         <div style={{
           color: COLORS.muted,
           display: '-webkit-box',
-          fontSize: '12px',
+          fontSize: '11px',
           lineHeight: 1.35,
           marginTop: '9px',
           overflow: 'hidden',
@@ -416,11 +416,9 @@ function Pipeline({
     <DragDropContext onDragEnd={onDragEnd}>
       <div style={{
         display: 'grid',
-        gridAutoColumns: 'minmax(250px, 1fr)',
-        gridAutoFlow: 'column',
-        gap: '14px',
-        overflowX: 'auto',
-        paddingBottom: '14px',
+        gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+        gap: '10px',
+        paddingBottom: '12px',
       }}>
         {STATIONS.map(station => {
           const meta = STATION_META[station];
@@ -436,25 +434,27 @@ function Pipeline({
                 borderRadius: '8px',
                 boxShadow: isNowPressing ? `0 0 28px ${meta.color}30` : undefined,
                 minHeight: '620px',
-                padding: '12px',
+                minWidth: 0,
+                padding: '8px',
               }}
             >
-              <div style={{ borderBottom: `1px solid ${COLORS.border}`, marginBottom: '10px', paddingBottom: '12px' }}>
-                <div style={{ alignItems: 'center', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
-                  <div style={{ alignItems: 'center', display: 'flex', gap: '10px', minWidth: 0 }}>
-                    <StationIcon station={station} size={20} />
+              <div style={{ borderBottom: `1px solid ${COLORS.border}`, marginBottom: '8px', paddingBottom: '9px' }}>
+                <div style={{ alignItems: 'center', display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
+                  <div style={{ alignItems: 'center', display: 'flex', gap: '8px', minWidth: 0 }}>
+                    <StationIcon station={station} size={16} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{
                         color: meta.color,
-                        fontSize: isNowPressing ? '13px' : '12px',
+                        fontSize: isNowPressing ? '11px' : '10px',
                         fontWeight: 950,
-                        letterSpacing: '0.08em',
+                        letterSpacing: '0.06em',
                         textTransform: 'uppercase',
-                        whiteSpace: 'nowrap',
+                        whiteSpace: 'normal',
+                        lineHeight: 1.1,
                       }}>
                         {meta.label}
                       </div>
-                      <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '2px' }}>
+                      <div style={{ color: COLORS.faint, fontSize: '10px', marginTop: '2px', lineHeight: 1.15 }}>
                         {meta.description}
                       </div>
                     </div>
@@ -464,11 +464,12 @@ function Pipeline({
                     border: `1px solid ${meta.color}66`,
                     borderRadius: '999px',
                     color: meta.color,
-                    fontSize: '12px',
+                    fontSize: '11px',
                     fontWeight: 900,
-                    minWidth: '32px',
-                    padding: '3px 9px',
+                    minWidth: '28px',
+                    padding: '2px 7px',
                     textAlign: 'center',
+                    flexShrink: 0,
                   }}>
                     {list.length}
                   </div>
@@ -653,7 +654,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       <section style={{
         display: 'grid',
         gap: '10px',
-        gridTemplateColumns: 'repeat(7, minmax(112px, 1fr))',
+        gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
         margin: '0 auto 16px',
         maxWidth: '1920px',
       }}>
@@ -666,13 +667,14 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
               border: `1px solid ${station === 'now_pressing' ? meta.color : COLORS.border}`,
               borderRadius: '8px',
               display: 'flex',
-              gap: '10px',
-              minHeight: '72px',
-              padding: '12px',
+              gap: '8px',
+              minHeight: '66px',
+              minWidth: 0,
+              padding: '9px',
             }}>
               <StationIcon station={station} size={17} />
               <div>
-                <div style={{ color: meta.color, fontSize: '26px', fontWeight: 950, lineHeight: 1 }}>{counts[station]}</div>
+                <div style={{ color: meta.color, fontSize: '24px', fontWeight: 950, lineHeight: 1 }}>{counts[station]}</div>
                 <div style={{ color: COLORS.muted, fontSize: '10px', fontWeight: 850, letterSpacing: '0.06em', marginTop: '4px', textTransform: 'uppercase' }}>{meta.shortLabel}</div>
               </div>
             </div>
