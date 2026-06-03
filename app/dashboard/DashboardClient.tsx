@@ -156,6 +156,10 @@ function stationJobs(jobs: Job[], station: Station) {
   return sortJobs(jobs.filter(job => stationOf(job) === station));
 }
 
+function stationAnchor(station: Station) {
+  return `station-${station}`;
+}
+
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(false);
 
@@ -476,6 +480,7 @@ function Pipeline({
 
           return (
             <section
+              id={stationAnchor(station)}
               key={station}
               style={{
                 background: isNowPressing ? `linear-gradient(180deg, ${meta.color}18 0%, ${COLORS.panel} 24%)` : COLORS.panel,
@@ -485,6 +490,7 @@ function Pipeline({
                 minHeight: isMobile ? 'auto' : '620px',
                 minWidth: 0,
                 padding: isMobile ? '10px' : '8px',
+                scrollMarginTop: isMobile ? '96px' : '112px',
               }}
             >
               <div style={{ borderBottom: `1px solid ${COLORS.border}`, marginBottom: '8px', paddingBottom: '9px' }}>
@@ -678,6 +684,12 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     STATIONS.map(station => [station, stationJobs(jobs, station).length])
   ) as Record<Station, number>, [jobs]);
 
+  const jumpToStation = (station: Station) => {
+    const element = document.getElementById(stationAnchor(station));
+    if (!element) return;
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <main style={{
       background:
@@ -724,23 +736,31 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
         {STATIONS.map(station => {
           const meta = STATION_META[station];
           return (
-            <div key={station} style={{
+            <button
+              key={station}
+              type="button"
+              onClick={() => jumpToStation(station)}
+              aria-label={`Jump to ${meta.label}`}
+              style={{
               alignItems: 'center',
               background: station === 'now_pressing' ? `${meta.color}18` : COLORS.panel,
               border: `1px solid ${station === 'now_pressing' ? meta.color : COLORS.border}`,
               borderRadius: '8px',
+              cursor: 'pointer',
               display: 'flex',
               gap: '8px',
+              font: 'inherit',
               minHeight: '66px',
               minWidth: 0,
               padding: isMobile ? '8px' : '9px',
+              textAlign: 'left',
             }}>
               <StationIcon station={station} size={17} />
               <div>
                 <div style={{ color: meta.color, fontSize: '24px', fontWeight: 950, lineHeight: 1 }}>{counts[station]}</div>
                 <div style={{ color: COLORS.muted, fontSize: '10px', fontWeight: 850, letterSpacing: '0.06em', marginTop: '4px', textTransform: 'uppercase' }}>{meta.shortLabel}</div>
               </div>
-            </div>
+            </button>
           );
         })}
       </section>
