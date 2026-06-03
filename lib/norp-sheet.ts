@@ -26,6 +26,9 @@ export interface NORPJob {
   notes: string;
   due_note: string;
   stage: string;
+  stage_source?: string;
+  inferred_stage_reason?: string;
+  inferred_stage_at?: string;
 }
 
 function inferStage(row: string[]): string {

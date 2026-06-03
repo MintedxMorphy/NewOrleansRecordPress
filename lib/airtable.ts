@@ -224,6 +224,7 @@ function mapRecordToJob(record: AirtableRecord): NORPJob & { airtable_record_id:
     notes: field(fields, FIELD_ALIASES.notes),
     due_note: field(fields, FIELD_ALIASES.due_note),
     stage: inferStage(fields),
+    stage_source: field(fields, FIELD_ALIASES.stage) ? 'airtable_dashboard_stage' : 'airtable_fields',
     dashboard_order: field(fields, ['Dashboard Order', 'Sort Order', 'Order', 'Board Order']),
   };
 }

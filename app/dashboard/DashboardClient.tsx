@@ -227,6 +227,8 @@ function JobCard({
   const speed = value(job, ['speed', 'SPEED', 'Speed', 'RPM']);
   const shipDate = value(job, ['ship_date', 'SHIP DATE', 'Ship Date']);
   const notes = value(job, ['notes', 'Notes', 'Project Notes', 'Production Notes']);
+  const inferredReason = value(job, ['inferred_stage_reason']);
+  const inferredAt = value(job, ['inferred_stage_at']);
   const artReady = job.art_received === true || job.art_received === 'true';
   const canComplete = station === 'shipping';
 
@@ -281,6 +283,23 @@ function JobCard({
           WebkitLineClamp: 2,
         }}>
           {notes}
+        </div>
+      )}
+
+      {inferredReason && (
+        <div style={{
+          background: `${meta.color}12`,
+          border: `1px solid ${meta.color}44`,
+          borderRadius: '6px',
+          color: COLORS.muted,
+          fontSize: '10px',
+          fontWeight: 750,
+          lineHeight: 1.35,
+          marginTop: '9px',
+          padding: '6px 7px',
+        }}>
+          <span style={{ color: meta.color }}>Log signal:</span> {inferredReason}
+          {inferredAt && <span> · {new Date(inferredAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>}
         </div>
       )}
 

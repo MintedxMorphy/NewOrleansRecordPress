@@ -2,13 +2,20 @@ import { NextResponse } from 'next/server';
 import { getNORPJobs } from '@/lib/norp-sheet';
 import { getNORPArtFiles } from '@/lib/norp-drive';
 import { getAirtableJobs, isAirtableConfigured } from '@/lib/airtable';
+import { applyProductionLogInferences } from '@/lib/production-log-inference';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
     const source = isAirtableConfigured() ? 'airtable' : 'google_sheet';
-    const jobs = source === 'airtable' ? await getAirtableJobs() : await getNORPJobs();
+    const baseJobs = source === 'airtable' ? await getAirtableJobs() : await getNORPJobs();
+    let jobs = baseJobs;
+    try {
+      jobs = await applyProductionLogInferences(baseJobs);
+    } catch (e) {
+      console.error('[norp-jobs] production log inference failed:', e);
+    }
 
     // Best-effort enrichment with art file index. If Drive call fails,
     // jobs still return — we just skip art status.
