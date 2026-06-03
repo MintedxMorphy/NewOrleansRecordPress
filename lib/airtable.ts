@@ -112,7 +112,10 @@ function hasValue(fields: Record<string, unknown>, aliases: string[]) {
 
 function isYes(value: string) {
   const normalized = value.trim().toLowerCase();
-  return ['yes', 'y', 'true', 'done', 'complete', 'completed', 'approved', 'sent', 'arrived', 'ordered', '1'].includes(normalized);
+  if (!normalized || ['no', 'n', 'false', '0'].includes(normalized)) return false;
+  return ['yes', 'y', 'true', 'done', 'complete', 'completed', 'approved', 'sent', 'arrived', 'ordered', '1'].some(term =>
+    normalized === term || normalized.startsWith(`${term} `)
+  );
 }
 
 function isOrdered(value: string) {

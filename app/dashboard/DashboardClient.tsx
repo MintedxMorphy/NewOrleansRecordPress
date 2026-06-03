@@ -114,6 +114,18 @@ function jobKey(job: Job) {
   return value(job, ['airtable_record_id', 'job_id', 'matrix', 'MATRIX']);
 }
 
+function affirmative(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || ['no', 'n', 'false', '0'].includes(normalized)) return false;
+  return ['yes', 'y', 'true', 'approved', 'done', 'complete', 'completed', '1'].some(term =>
+    normalized === term || normalized.startsWith(`${term} `)
+  );
+}
+
+function testPressingApproved(job: Job) {
+  return affirmative(value(job, ['test_pressings_approved', 'approved?', 'Test Pressings Approved', 'TP Approved']));
+}
+
 function stationOf(job: Job): Station {
   const raw = value(job, ['stage', 'Dashboard Stage']).toLowerCase().replace(/[\s-]+/g, '_');
   if (STATIONS.includes(raw as Station)) return raw as Station;
@@ -339,6 +351,12 @@ function Pipeline({
     const [moved] = sourceList.splice(result.source.index, 1);
 
     if (!moved) return;
+
+    if (toStation === 'now_pressing' && !testPressingApproved(moved)) {
+      onError('Test pressing must be approved before a job can move into NOW PRESSING.');
+      return;
+    }
+
     const movedNext = { ...moved, stage: toStation };
 
     if (fromStation === toStation) {
