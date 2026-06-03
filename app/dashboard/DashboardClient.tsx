@@ -229,6 +229,7 @@ function JobCard({
   const notes = value(job, ['notes', 'Notes', 'Project Notes', 'Production Notes']);
   const inferredReason = value(job, ['inferred_stage_reason']);
   const inferredAt = value(job, ['inferred_stage_at']);
+  const duplicateCount = value(job, ['duplicate_count']);
   const artReady = job.art_received === true || job.art_received === 'true';
   const canComplete = station === 'shipping';
 
@@ -269,6 +270,7 @@ function JobCard({
         {speed && <StatusPill color="#B781FF">{speed}</StatusPill>}
         {artReady && <StatusPill color={COLORS.green}>Art</StatusPill>}
         {shipDate && <StatusPill color="#4DA3FF">{shipDate}</StatusPill>}
+        {duplicateCount && Number(duplicateCount) > 1 && <StatusPill color="#FFB84D">{duplicateCount} merged</StatusPill>}
       </div>
 
       {notes && (
@@ -328,7 +330,7 @@ function JobCard({
           }}
         >
           <BadgeCheck size={13} />
-          Complete
+          Mark Complete
         </button>
       )}
     </div>

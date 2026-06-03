@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findRow, updateRow } from '@/lib/sheets';
-import { getAirtableJobs, isAirtableConfigured, updateAirtableJobPosition } from '@/lib/airtable';
+import { completeAirtableJob, getAirtableJobs, isAirtableConfigured, updateAirtableJobPosition } from '@/lib/airtable';
 
 function isApproved(value = '') {
   const normalized = value.trim().toLowerCase();
@@ -15,6 +15,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ jo
     const { job_id } = await params;
     const { stage, order } = await req.json() as { stage: string; order?: number };
     if (isAirtableConfigured()) {
+      if (stage === 'completed') {
+        const result = await completeAirtableJob(job_id);
+        return NextResponse.json({ ok: true, source: 'airtable', job: { job_id, stage }, ...result });
+      }
+
       if (stage === 'now_pressing') {
         const jobs = await getAirtableJobs();
         const job = jobs.find(item => item.job_id === job_id || item.airtable_record_id === job_id);

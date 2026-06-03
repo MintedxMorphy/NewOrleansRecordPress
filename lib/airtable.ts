@@ -47,6 +47,23 @@ type AirtableListResponse = {
   error?: { type?: string; message?: string };
 };
 
+type AirtableFieldMeta = {
+  id: string;
+  name: string;
+  type: string;
+};
+
+type AirtableTableMeta = {
+  id: string;
+  name: string;
+  fields: AirtableFieldMeta[];
+};
+
+type AirtableMetaResponse = {
+  tables?: AirtableTableMeta[];
+  error?: { message?: string };
+};
+
 function airtableToken() {
   return process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN || process.env.AIRTABLE_PAT;
 }
@@ -57,6 +74,10 @@ function airtableBaseId() {
 
 function airtableJobsTable() {
   return process.env.AIRTABLE_JOBS_TABLE || 'Jobs';
+}
+
+function airtableCompletedTable() {
+  return process.env.AIRTABLE_COMPLETED_TABLE || 'Completed';
 }
 
 function airtableStageField() {
@@ -84,10 +105,16 @@ function airtableHeaders() {
   };
 }
 
-function tableUrl(path = '') {
+function tableUrl(path = '', table = airtableJobsTable()) {
   const baseId = airtableBaseId();
   if (!baseId) throw new Error('Missing AIRTABLE_BASE_ID');
-  return `${AIRTABLE_API_URL}/${encodeURIComponent(baseId)}/${encodeURIComponent(airtableJobsTable())}${path}`;
+  return `${AIRTABLE_API_URL}/${encodeURIComponent(baseId)}/${encodeURIComponent(table)}${path}`;
+}
+
+function baseMetaUrl() {
+  const baseId = airtableBaseId();
+  if (!baseId) throw new Error('Missing AIRTABLE_BASE_ID');
+  return `${AIRTABLE_API_URL}/meta/bases/${encodeURIComponent(baseId)}/tables`;
 }
 
 function stringValue(value: unknown): string {
@@ -283,6 +310,103 @@ async function findAirtableRecordId(jobId: string) {
   }
 
   return data.records?.[0]?.id;
+}
+
+async function getAirtableRecord(recordId: string) {
+  const res = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+    headers: airtableHeaders(),
+    cache: 'no-store',
+  });
+  const data = await res.json() as AirtableRecord & { error?: { message?: string } };
+
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Airtable record lookup failed (${res.status})`);
+  }
+
+  return data;
+}
+
+async function getAirtableTablesMeta() {
+  const res = await fetch(baseMetaUrl(), {
+    headers: airtableHeaders(),
+    cache: 'no-store',
+  });
+  const data = await res.json() as AirtableMetaResponse;
+
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Airtable metadata lookup failed (${res.status})`);
+  }
+
+  return data.tables || [];
+}
+
+function isWritableField(field: AirtableFieldMeta) {
+  return ![
+    'aiText',
+    'autoNumber',
+    'button',
+    'count',
+    'createdBy',
+    'createdTime',
+    'externalSyncSource',
+    'formula',
+    'lastModifiedBy',
+    'lastModifiedTime',
+    'lookup',
+    'multipleLookupValues',
+    'rollup',
+  ].includes(field.type);
+}
+
+export async function completeAirtableJob(jobId: string) {
+  const recordId = await findAirtableRecordId(jobId);
+  if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
+
+  const [record, tables] = await Promise.all([
+    getAirtableRecord(recordId),
+    getAirtableTablesMeta(),
+  ]);
+
+  const production = tables.find(table => table.name === airtableJobsTable());
+  const completed = tables.find(table => table.name === airtableCompletedTable());
+
+  if (!production) throw new Error(`Airtable table not found: ${airtableJobsTable()}`);
+  if (!completed) throw new Error(`Airtable table not found: ${airtableCompletedTable()}`);
+
+  const fields: Record<string, unknown> = {};
+  const max = Math.min(production.fields.length, completed.fields.length);
+
+  for (let index = 0; index < max; index += 1) {
+    const sourceField = production.fields[index];
+    const targetField = completed.fields[index];
+    const value = record.fields[sourceField.name];
+
+    if (value === undefined || !isWritableField(targetField)) continue;
+    fields[targetField.name] = value;
+  }
+
+  const createRes = await fetch(tableUrl('', completed.name), {
+    method: 'POST',
+    headers: airtableHeaders(),
+    body: JSON.stringify({ fields, typecast: true }),
+  });
+  const created = await createRes.json() as { id?: string; error?: { message?: string } };
+
+  if (!createRes.ok) {
+    throw new Error(created.error?.message || `Airtable completed record create failed (${createRes.status})`);
+  }
+
+  const deleteRes = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+    method: 'DELETE',
+    headers: airtableHeaders(),
+  });
+  const deleted = await deleteRes.json() as { deleted?: boolean; error?: { message?: string } };
+
+  if (!deleteRes.ok || !deleted.deleted) {
+    throw new Error(deleted.error?.message || `Airtable production record delete failed (${deleteRes.status})`);
+  }
+
+  return { completedRecordId: created.id, deletedRecordId: recordId };
 }
 
 export async function updateAirtableJobStage(jobId: string, stage: string) {
