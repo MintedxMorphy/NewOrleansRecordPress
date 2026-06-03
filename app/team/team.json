@@ -4,21 +4,21 @@
     "name": "Gregory Gremillion",
     "title": "Partner",
     "department": "Strategy, Tech & Partnerships",
-    "image": ""
+    "image": "/images/team/gregory-gremillion.jpg"
   },
   {
     "id": "scott-borne",
     "name": "Scott Borne",
     "title": "Partner",
     "department": "Artist & Label Relations, Sales",
-    "image": ""
+    "image": "/images/team/scott-borne.jpg"
   },
   {
     "id": "brice-white",
     "name": "Brice White",
     "title": "Partner",
     "department": "Press Operations & Shipping",
-    "image": ""
+    "image": "/images/team/brice-white.jpg"
   },
   {
     "id": "sarah-taylor",
@@ -32,7 +32,7 @@
     "name": "Patrick Bailey",
     "title": "Production Manager",
     "department": "Production & Graphic Design",
-    "image": ""
+    "image": "/images/team/patrick-bailey.jpg"
   },
   {
     "id": "stormy-bumfield",
@@ -46,7 +46,7 @@
     "name": "Blake Quick",
     "title": "Press Operator",
     "department": "Production",
-    "image": ""
+    "image": "/images/team/blake-quick.jpg"
   },
   {
     "id": "jennifer-dante",
@@ -63,11 +63,11 @@
     "image": ""
   },
   {
-    "id": "mun-underwood",
-    "name": "Mun Underwood",
+    "id": "otura-mun",
+    "name": "Otura Mun",
     "title": "Quality Control",
     "department": "Quality Control",
-    "image": ""
+    "image": "/images/team/otura-mun.jpg"
   },
   {
     "id": "vincent-harvey",

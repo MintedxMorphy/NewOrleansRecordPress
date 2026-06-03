@@ -28,6 +28,36 @@ Set all of the following in Vercel → Project → Settings → Environment Vari
 | `ANTHROPIC_API_KEY` | Claude API key | [console.anthropic.com](https://console.anthropic.com) → API Keys |
 | `NEXTAUTH_SECRET` | Random secret for NextAuth | `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | Public URL of the app | `https://nolavinyl.com` |
+| `AIRTABLE_PAT` | Airtable personal access token for the production board | Airtable → Builder hub → Personal access tokens |
+| `AIRTABLE_BASE_ID` | Airtable base ID for the production board | Airtable API docs for the base, starts with `app...` |
+| `AIRTABLE_JOBS_TABLE` | Jobs table name or table ID | Defaults to `Jobs` when omitted; table IDs start with `tbl...` |
+| `AIRTABLE_JOBS_VIEW` | Optional Airtable view name for dashboard jobs | Use when the board should only show one filtered/sorted view |
+| `AIRTABLE_JOB_ID_FIELD` | Field used to find a job when a card moves | Defaults to `Job ID` |
+| `AIRTABLE_STAGE_FIELD` | Airtable field that stores the production station | Defaults to `Dashboard Stage` |
+| `AIRTABLE_ORDER_FIELD` | Airtable field that stores card order inside each station | Defaults to `Dashboard Order` |
+| `AIRTABLE_STAGE_WRITE_MODE` | Writes stage values as labels or dashboard keys | Defaults to `label`; use `key` for values like `test_pressing` |
+
+---
+
+## Airtable Production Board
+
+The dashboard now uses Airtable first when `AIRTABLE_PAT` and `AIRTABLE_BASE_ID` are set. If those are missing, it falls back to the older Google Sheet source.
+
+The Airtable token needs these scopes:
+
+- `data.records:read`
+- `data.records:write`
+- `schema.bases:read`
+
+Grant the token access to the whole workspace if the dashboard should inspect all tables, or to the specific production base if it should be limited.
+
+The Airtable Jobs table can use friendly field names. The dashboard looks for common names like `Job ID`, `Customer`, `Matrix`, `Quantity`, `Colors`, `Stage`, `Due Date`, and `Notes`. Moving a card on `/dashboard` updates the Airtable `Stage` field.
+
+Recommended Airtable production station labels:
+
+`Pre-Production`, `Press Queue`, `NOW PRESSING`, `Quality Control`, `Sleeving`, `Assembly`, `Shipping`, `Completed`
+
+The Production table also needs a number field named `Dashboard Order`. If the Airtable single select uses machine-style values instead, set `AIRTABLE_STAGE_WRITE_MODE=key`.
 
 ---
 

@@ -1,0 +1,282 @@
+import type { NORPJob } from './norp-sheet';
+
+const AIRTABLE_API_URL = 'https://api.airtable.com/v0';
+
+const STAGE_LABELS: Record<string, string> = {
+  pre_production: 'Pre-Production',
+  press_queue: 'Press Queue',
+  now_pressing: 'NOW PRESSING',
+  quality_control: 'Quality Control',
+  sleeving: 'Sleeving',
+  assembly: 'Assembly',
+  shipping: 'Shipping',
+  completed: 'Completed',
+};
+
+const FIELD_ALIASES: Record<keyof NORPJob, string[]> = {
+  job_id: ['Job ID', 'Job Id', 'JobID', 'ID', 'Matrix', 'MATRIX', 'Matrix ID', 'Order Number', 'ORDER NUMBER'],
+  customer: ['Customer', 'Customer Name', 'Client', 'Project', 'Project Name', 'Artist', 'Title', '1'],
+  matrix: ['Matrix', 'MATRIX', 'Matrix ID', 'Catalog Number', 'Catalog #'],
+  quantity: ['Quantity', 'Qty', 'Units', 'Run Size'],
+  colors: ['Colors', 'Color', 'Vinyl Color', 'Vinyl Colors'],
+  weight: ['Weight', 'weight', 'Weight (g)', 'Vinyl Weight'],
+  speed: ['Speed', 'RPM'],
+  lacquer: ['Lacquer', 'Lacquer Ordered', 'Lacquer Date'],
+  stampers: ['Stampers', 'Stampers Done', 'Plates', 'Plating'],
+  test_pressings_sent: ['Test Pressings Sent', 'Test pressings', 'Sent?', 'TP Sent', 'TPs Sent'],
+  test_pressings_approved: ['Test Pressings Approved', 'approved?', 'TP Approved', 'TPs Approved'],
+  labels_arrived: ['Labels Arrived', 'center labels', 'arrived?', 'Labels'],
+  sleeves_arrived: ['Sleeves Arrived', 'Inner sleeves', 'arrived? 2', 'Sleeves'],
+  jackets_arrived: ['Jackets Arrived', 'Jackets', 'arrived? 3'],
+  ship_date: ['Ship Date', 'SHIP DATE', 'Shipped Date', 'Date Shipped'],
+  order_number: ['Order Number', 'ORDER NUMBER', 'Order #', 'Invoice Number'],
+  deposit: ['Deposit', 'DEPOSIT? Y/N', 'Deposit Received'],
+  notes: ['Notes', 'Production Notes', 'Project Notes'],
+  due_note: ['Due Note', 'Due', 'Due Date', 'Target Date'],
+  stage: ['Dashboard Stage', 'Stage', 'Status', 'Production Stage'],
+};
+
+type AirtableRecord = {
+  id: string;
+  fields: Record<string, unknown>;
+};
+
+type AirtableListResponse = {
+  records?: AirtableRecord[];
+  offset?: string;
+  error?: { type?: string; message?: string };
+};
+
+function airtableToken() {
+  return process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN || process.env.AIRTABLE_PAT;
+}
+
+function airtableBaseId() {
+  return process.env.AIRTABLE_BASE_ID;
+}
+
+function airtableJobsTable() {
+  return process.env.AIRTABLE_JOBS_TABLE || 'Jobs';
+}
+
+function airtableStageField() {
+  return process.env.AIRTABLE_STAGE_FIELD || 'Dashboard Stage';
+}
+
+function airtableOrderField() {
+  return process.env.AIRTABLE_ORDER_FIELD || 'Dashboard Order';
+}
+
+function airtableJobIdField() {
+  return process.env.AIRTABLE_JOB_ID_FIELD || 'Job ID';
+}
+
+export function isAirtableConfigured() {
+  return Boolean(airtableToken() && airtableBaseId() && airtableJobsTable());
+}
+
+function airtableHeaders() {
+  const token = airtableToken();
+  if (!token) throw new Error('Missing AIRTABLE_API_KEY, AIRTABLE_TOKEN, or AIRTABLE_PAT');
+  return {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+function tableUrl(path = '') {
+  const baseId = airtableBaseId();
+  if (!baseId) throw new Error('Missing AIRTABLE_BASE_ID');
+  return `${AIRTABLE_API_URL}/${encodeURIComponent(baseId)}/${encodeURIComponent(airtableJobsTable())}${path}`;
+}
+
+function stringValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) return value.map(stringValue).filter(Boolean).join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function field(fields: Record<string, unknown>, aliases: string[]) {
+  for (const alias of aliases) {
+    const matchingKey = Object.keys(fields).find(key => key.toLowerCase() === alias.toLowerCase());
+    const value = matchingKey ? fields[matchingKey] : undefined;
+    if (value !== null && value !== undefined && value !== '') return stringValue(value);
+  }
+  return '';
+}
+
+function hasValue(fields: Record<string, unknown>, aliases: string[]) {
+  return Boolean(field(fields, aliases));
+}
+
+function isYes(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return ['yes', 'y', 'true', 'done', 'complete', 'completed', 'approved', 'sent', 'arrived', 'ordered', '1'].includes(normalized);
+}
+
+function inferStage(fields: Record<string, unknown>) {
+  const explicitStage = field(fields, FIELD_ALIASES.stage);
+  if (explicitStage) return normalizeStage(explicitStage);
+
+  const shipDate = field(fields, FIELD_ALIASES.ship_date);
+  if (shipDate) return 'shipping';
+
+  const jacketsArrived = field(fields, FIELD_ALIASES.jackets_arrived);
+  const sleevesArrived = field(fields, FIELD_ALIASES.sleeves_arrived);
+  const labelsArrived = field(fields, FIELD_ALIASES.labels_arrived);
+  if (isYes(jacketsArrived) && isYes(sleevesArrived) && isYes(labelsArrived)) return 'assembly';
+  if (isYes(sleevesArrived) || isYes(labelsArrived)) return 'sleeving';
+
+  const approved = field(fields, FIELD_ALIASES.test_pressings_approved);
+  if (isYes(approved)) return 'press_queue';
+
+  const sent = field(fields, FIELD_ALIASES.test_pressings_sent);
+  if (hasValue(fields, ['Test pressings']) || isYes(sent)) return 'quality_control';
+
+  if (hasValue(fields, FIELD_ALIASES.stampers) || hasValue(fields, FIELD_ALIASES.lacquer)) return 'pre_production';
+
+  const deposit = field(fields, FIELD_ALIASES.deposit);
+  if (isYes(deposit)) return 'pre_production';
+
+  return 'pre_production';
+}
+
+function normalizeStage(stage: string) {
+  const value = stage.trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (value === 'preproduction' || value === 'pre_prod' || value === 'quote' || value === 'deposit' || value === 'plates') return 'pre_production';
+  if (value === 'press' || value === 'pressing' || value === 'now_pressing') return 'now_pressing';
+  if (value === 'test_press' || value === 'test_presses' || value === 'test_pressings' || value === 'test_pressing' || value === 'approved') return 'press_queue';
+  if (value === 'qc' || value === 'quality' || value === 'quality_control') return 'quality_control';
+  if (value === 'sleeve' || value === 'sleeving') return 'sleeving';
+  if (value === 'pack' || value === 'packing' || value === 'assembly') return 'assembly';
+  if (value === 'ship' || value === 'shipped' || value === 'shipping') return 'shipping';
+  if (value === 'paid' || value === 'paid_in_full' || value === 'complete' || value === 'completed') return 'completed';
+  return value;
+}
+
+function stageForAirtable(stage: string) {
+  const mode = process.env.AIRTABLE_STAGE_WRITE_MODE || 'label';
+  if (mode === 'key') return stage;
+  return STAGE_LABELS[stage] || stage;
+}
+
+function escapeFormulaValue(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function mapRecordToJob(record: AirtableRecord): NORPJob & { airtable_record_id: string; dashboard_order: string } {
+  const fields = record.fields;
+  const jobId =
+    field(fields, FIELD_ALIASES.job_id) ||
+    field(fields, FIELD_ALIASES.matrix) ||
+    record.id;
+
+  return {
+    airtable_record_id: record.id,
+    job_id: jobId,
+    customer: field(fields, FIELD_ALIASES.customer),
+    matrix: field(fields, FIELD_ALIASES.matrix),
+    quantity: field(fields, FIELD_ALIASES.quantity),
+    colors: field(fields, FIELD_ALIASES.colors),
+    weight: field(fields, FIELD_ALIASES.weight),
+    speed: field(fields, FIELD_ALIASES.speed),
+    lacquer: field(fields, FIELD_ALIASES.lacquer),
+    stampers: field(fields, FIELD_ALIASES.stampers),
+    test_pressings_sent: field(fields, FIELD_ALIASES.test_pressings_sent),
+    test_pressings_approved: field(fields, FIELD_ALIASES.test_pressings_approved),
+    labels_arrived: field(fields, FIELD_ALIASES.labels_arrived),
+    sleeves_arrived: field(fields, FIELD_ALIASES.sleeves_arrived),
+    jackets_arrived: field(fields, FIELD_ALIASES.jackets_arrived),
+    ship_date: field(fields, FIELD_ALIASES.ship_date),
+    order_number: field(fields, FIELD_ALIASES.order_number),
+    deposit: field(fields, FIELD_ALIASES.deposit),
+    notes: field(fields, FIELD_ALIASES.notes),
+    due_note: field(fields, FIELD_ALIASES.due_note),
+    stage: inferStage(fields),
+    dashboard_order: field(fields, ['Dashboard Order', 'Sort Order', 'Order', 'Board Order']),
+  };
+}
+
+export async function getAirtableJobs(): Promise<(NORPJob & { airtable_record_id: string; dashboard_order: string })[]> {
+  const jobs: (NORPJob & { airtable_record_id: string; dashboard_order: string })[] = [];
+  let offset: string | undefined;
+
+  // Airtable is the dashboard source of truth at read time. Some upstream
+  // Google Sheet/Drive inputs may still be manually copied into Airtable;
+  // revisit this boundary if that sync becomes automated or bidirectional.
+  do {
+    const params = new URLSearchParams({ pageSize: '100' });
+    const view = process.env.AIRTABLE_JOBS_VIEW;
+    if (view) params.set('view', view);
+    if (offset) params.set('offset', offset);
+
+    const res = await fetch(`${tableUrl()}?${params.toString()}`, {
+      headers: airtableHeaders(),
+      cache: 'no-store',
+    });
+    const data = (await res.json()) as AirtableListResponse;
+
+    if (!res.ok) {
+      throw new Error(data.error?.message || `Airtable jobs request failed (${res.status})`);
+    }
+
+    for (const record of data.records || []) {
+      const job = mapRecordToJob(record);
+      if (job.customer || job.matrix || job.job_id) jobs.push(job);
+    }
+    offset = data.offset;
+  } while (offset);
+
+  return jobs;
+}
+
+async function findAirtableRecordId(jobId: string) {
+  const recordIdPattern = /^rec[a-zA-Z0-9]{14,}$/;
+  if (recordIdPattern.test(jobId)) return jobId;
+
+  const fieldName = airtableJobIdField();
+  const params = new URLSearchParams({
+    maxRecords: '1',
+    filterByFormula: `{${fieldName}}='${escapeFormulaValue(jobId)}'`,
+  });
+
+  const res = await fetch(`${tableUrl()}?${params.toString()}`, {
+    headers: airtableHeaders(),
+    cache: 'no-store',
+  });
+  const data = (await res.json()) as AirtableListResponse;
+
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Airtable lookup failed (${res.status})`);
+  }
+
+  return data.records?.[0]?.id;
+}
+
+export async function updateAirtableJobStage(jobId: string, stage: string) {
+  return updateAirtableJobPosition(jobId, stage);
+}
+
+export async function updateAirtableJobPosition(jobId: string, stage: string, order?: number) {
+  const recordId = await findAirtableRecordId(jobId);
+  if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
+
+  const fields: Record<string, string | number> = {
+    [airtableStageField()]: stageForAirtable(stage),
+  };
+  if (typeof order === 'number') fields[airtableOrderField()] = order;
+
+  const res = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+    method: 'PATCH',
+    headers: airtableHeaders(),
+    body: JSON.stringify({
+      fields,
+    }),
+  });
+  const data = await res.json() as { error?: { message?: string } };
+
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Airtable stage update failed (${res.status})`);
+  }
+}

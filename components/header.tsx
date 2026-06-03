@@ -9,7 +9,6 @@ const navLinks = [
   { href: "/#services", label: "Services" },
   { href: "/vinyl-colors", label: "Vinyl Colors" },
   { href: "/quote", label: "Quote Calculator" },
-  { href: "/story", label: "Story" },
   { href: "/team", label: "Team" },
   { href: "/#contact", label: "Contact" },
   { href: "/shop", label: "Shop" },

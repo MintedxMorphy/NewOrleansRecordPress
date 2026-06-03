@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getNORPJobs } from '@/lib/norp-sheet';
 import { getNORPArtFiles } from '@/lib/norp-drive';
+import { getAirtableJobs, isAirtableConfigured } from '@/lib/airtable';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const jobs = await getNORPJobs();
+    const source = isAirtableConfigured() ? 'airtable' : 'google_sheet';
+    const jobs = source === 'airtable' ? await getAirtableJobs() : await getNORPJobs();
 
     // Best-effort enrichment with art file index. If Drive call fails,
     // jobs still return — we just skip art status.
@@ -27,7 +29,7 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ count: enriched.length, jobs: enriched });
+    return NextResponse.json({ count: enriched.length, jobs: enriched, source });
   } catch (error) {
     console.error('[norp-jobs] Error:', error);
     return NextResponse.json(
