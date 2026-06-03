@@ -27,12 +27,22 @@ function cleanKey(value = '') {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
 }
 
+function matrixKey(value = '') {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function isRealMatrix(value = '') {
+  const normalized = matrixKey(value);
+  return normalized.length >= 4 && !['tbc', 'tbd', 'na', 'none', 'unknown'].includes(normalized);
+}
+
 function dedupeKey(job: any) {
   const customer = cleanKey(job.customer || '');
-  const matrix = cleanKey(job.matrix || job.job_id || '');
+  const rawMatrix = job.matrix || job.job_id || '';
+  const matrix = matrixKey(rawMatrix);
   const orderNumber = cleanKey(job.order_number || '');
 
-  if (customer && matrix && !['tbc', 'tbd', 'n a', 'na'].includes(matrix)) return `${customer}::${matrix}`;
+  if (isRealMatrix(rawMatrix)) return `matrix::${matrix}`;
   if (customer && orderNumber) return `${customer}::${orderNumber}`;
   if (customer) return `customer::${customer}`;
   return job.airtable_record_id || job.job_id || matrix;
