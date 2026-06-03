@@ -358,6 +358,10 @@ function isWritableField(field: AirtableFieldMeta) {
   ].includes(field.type);
 }
 
+function resolveAirtableTable(tables: AirtableTableMeta[], configuredTable: string) {
+  return tables.find(table => table.id === configuredTable || table.name === configuredTable);
+}
+
 export async function completeAirtableJob(jobId: string) {
   const recordId = await findAirtableRecordId(jobId);
   if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
@@ -367,21 +371,24 @@ export async function completeAirtableJob(jobId: string) {
     getAirtableTablesMeta(),
   ]);
 
-  const production = tables.find(table => table.name === airtableJobsTable());
-  const completed = tables.find(table => table.name === airtableCompletedTable());
+  const production = resolveAirtableTable(tables, airtableJobsTable());
+  const completed = resolveAirtableTable(tables, airtableCompletedTable());
 
   if (!production) throw new Error(`Airtable table not found: ${airtableJobsTable()}`);
   if (!completed) throw new Error(`Airtable table not found: ${airtableCompletedTable()}`);
 
   const fields: Record<string, unknown> = {};
-  const max = Math.min(production.fields.length, completed.fields.length);
 
-  for (let index = 0; index < max; index += 1) {
-    const sourceField = production.fields[index];
+  for (let index = 0; index < completed.fields.length; index += 1) {
     const targetField = completed.fields[index];
-    const value = record.fields[sourceField.name];
+    if (!isWritableField(targetField)) continue;
 
-    if (value === undefined || !isWritableField(targetField)) continue;
+    const sourceField =
+      production.fields.find(field => field.name === targetField.name) ||
+      production.fields[index];
+    const value = sourceField ? record.fields[sourceField.name] : undefined;
+
+    if (value === undefined) continue;
     fields[targetField.name] = value;
   }
 

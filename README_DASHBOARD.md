@@ -31,6 +31,7 @@ Set all of the following in Vercel → Project → Settings → Environment Vari
 | `AIRTABLE_PAT` | Airtable personal access token for the production board | Airtable → Builder hub → Personal access tokens |
 | `AIRTABLE_BASE_ID` | Airtable base ID for the production board | Airtable API docs for the base, starts with `app...` |
 | `AIRTABLE_JOBS_TABLE` | Jobs table name or table ID | Defaults to `Jobs` when omitted; table IDs start with `tbl...` |
+| `AIRTABLE_COMPLETED_TABLE` | Completed jobs table name or table ID | Defaults to `Completed` when omitted; table IDs start with `tbl...` |
 | `AIRTABLE_JOBS_VIEW` | Optional Airtable view name for dashboard jobs | Use when the board should only show one filtered/sorted view |
 | `AIRTABLE_JOB_ID_FIELD` | Field used to find a job when a card moves | Defaults to `Job ID` |
 | `AIRTABLE_STAGE_FIELD` | Airtable field that stores the production station | Defaults to `Dashboard Stage` |

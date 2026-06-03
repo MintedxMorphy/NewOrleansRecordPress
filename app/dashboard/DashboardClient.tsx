@@ -252,6 +252,7 @@ function JobCard({
   const duplicateCount = value(job, ['duplicate_count']);
   const artReady = job.art_received === true || job.art_received === 'true';
   const canComplete = station === 'shipping';
+  const completeColor = COLORS.red;
 
   return (
     <div
@@ -332,12 +333,15 @@ function JobCard({
             event.stopPropagation();
             onComplete();
           }}
+          onMouseDown={event => event.stopPropagation()}
+          onPointerDown={event => event.stopPropagation()}
+          onTouchStart={event => event.stopPropagation()}
           style={{
             alignItems: 'center',
-            background: `${meta.color}18`,
-            border: `1px solid ${meta.color}66`,
+            background: `${completeColor}22`,
+            border: `1px solid ${completeColor}88`,
             borderRadius: '6px',
-            color: meta.color,
+            color: completeColor,
             cursor: 'pointer',
             display: 'flex',
             fontSize: '10px',
@@ -371,6 +375,7 @@ function Pipeline({
   isMobile?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
+  const [confirmCompleteJob, setConfirmCompleteJob] = useState<Job | null>(null);
   useEffect(() => setMounted(true), []);
 
   const saveStation = async (nextJobs: Job[], touchedStations: Station[]) => {
@@ -380,6 +385,13 @@ function Pipeline({
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || `Airtable save failed (${response.status})`);
     }
+  };
+
+  const confirmComplete = async () => {
+    const job = confirmCompleteJob;
+    setConfirmCompleteJob(null);
+    if (!job) return;
+    await completeJob(job);
   };
 
   const onDragEnd = async (result: DropResult) => {
@@ -555,7 +567,7 @@ function Pipeline({
                               opacity: dragSnapshot.isDragging ? 0.88 : 1,
                             }}
                           >
-                            <JobCard job={job} onOpen={() => onJobOpen(job)} onComplete={() => completeJob(job)} compact={isMobile} />
+                            <JobCard job={job} onOpen={() => onJobOpen(job)} onComplete={() => setConfirmCompleteJob(job)} compact={isMobile} />
                           </div>
                         )}
                       </Draggable>
@@ -568,6 +580,79 @@ function Pipeline({
           );
         })}
       </div>
+      {confirmCompleteJob && (
+        <>
+          <div
+            onClick={() => setConfirmCompleteJob(null)}
+            style={{
+              background: '#000000AA',
+              inset: 0,
+              position: 'fixed',
+              zIndex: 120,
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="complete-confirm-title"
+            style={{
+              background: COLORS.panel,
+              border: `1px solid ${COLORS.red}77`,
+              borderRadius: '8px',
+              boxShadow: '0 24px 70px #000000AA',
+              left: '50%',
+              maxWidth: 'min(360px, calc(100vw - 32px))',
+              padding: '20px',
+              position: 'fixed',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '100%',
+              zIndex: 121,
+            }}
+          >
+            <div id="complete-confirm-title" style={{ color: COLORS.text, fontSize: '18px', fontWeight: 900, lineHeight: 1.25 }}>
+              are you sure slick?
+            </div>
+            <div style={{ color: COLORS.muted, fontSize: '13px', lineHeight: 1.45, marginTop: '8px' }}>
+              This will mark the job complete and move it into the Completed Airtable database.
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '18px' }}>
+              <button
+                type="button"
+                onClick={() => setConfirmCompleteJob(null)}
+                style={{
+                  background: COLORS.elevated,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '6px',
+                  color: COLORS.text,
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 850,
+                  padding: '9px 14px',
+                }}
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={confirmComplete}
+                style={{
+                  background: COLORS.red,
+                  border: `1px solid ${COLORS.red}`,
+                  borderRadius: '6px',
+                  color: '#FFFFFF',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 900,
+                  padding: '9px 14px',
+                }}
+              >
+                Yes
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </DragDropContext>
   );
 }
