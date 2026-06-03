@@ -8,10 +8,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-height:100vh;padding:0;font-size:17px}
-.nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:16px 32px;display:flex;gap:16px;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;flex-wrap:wrap}
-.nav a{color:#6a6858;text-decoration:none;font-size:18px;font-weight:600;padding:10px 20px;border-radius:8px;transition:all .2s}
-.nav a:hover{color:#e4e2d8;background:#1a1d24}
-.nav a.active{color:#5DCAA5;background:#0a1a15;border:1px solid #1a3a2a}
+.nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:16px 28px;display:flex;gap:14px;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;flex-wrap:wrap;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.nav a{color:#d2d0c3;text-decoration:none;font-size:24px;font-weight:800;padding:13px 18px;border-radius:10px;border:1px solid #2a2c33;background:#14161b;transition:all .2s;white-space:nowrap;line-height:1}
+.nav a:hover{color:#f5f3e8;background:#1c2028;border-color:#4a4c53;transform:translateY(-1px)}
+.nav a.active{color:#5DCAA5;background:#0a1a15;border:1px solid #1f7d5b;box-shadow:0 0 0 1px rgba(93,202,165,.18),0 8px 18px rgba(0,0,0,.18)}
 .content{padding:32px}
 h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:#f5f3e8}
 .subtitle{font-size:18px;color:#8a8878;margin-bottom:32px;font-family:'Space Mono',monospace}
@@ -38,8 +38,8 @@ h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:
 .call-text strong{color:#e4e2d8}
 @media(max-width:768px){
 .content{padding:16px}
-.nav{padding:12px 16px;gap:6px;flex-direction:column}
-.nav a{font-size:16px;padding:10px 16px;width:100%;text-align:center}
+.nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:16px 28px;display:flex;gap:14px;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;flex-wrap:wrap;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.nav a{color:#d2d0c3;text-decoration:none;font-size:24px;font-weight:800;padding:13px 18px;border-radius:10px;border:1px solid #2a2c33;background:#14161b;transition:all .2s;white-space:nowrap;line-height:1}
 .nav img{height:60px !important;margin:0 auto 4px !important}
 h1{font-size:26px}
 .subtitle{font-size:14px;margin-bottom:20px}
@@ -55,14 +55,15 @@ h1{font-size:26px}
 <body>
 
 <div class="nav">
-<img src="/staff/norp-logo.png" alt="NORP" style="height:90px;margin-right:12px">
+<img src="/staff/norp-logo.png" alt="NORP" style="height:70px;margin-right:8px">
 <a href="/staff">Operations Guide</a>
+<a href="/staff/dashboard">Production Board</a>
 <a href="/staff/pricing">Pricing & Market</a>
 <a href="/staff/suppliers" class="active">PVC Suppliers</a>
 <a href="/staff/plants">Plant Directory</a>
 <a href="/staff/mastering">Mastering &amp; Plating</a>
 <a href="/staff/inventory">Inventory</a>
-<a href="/staff/qc">QC Log</a>
+<a href="/staff/qc">Shift Logs</a>
 </div>
 
 <div class="content">

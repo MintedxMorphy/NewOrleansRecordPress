@@ -8,10 +8,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-height:100vh;padding:0;font-size:17px}
-.nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:8px 24px;display:flex;gap:6px;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;flex-wrap:wrap}
-.nav a{color:#6a6858;text-decoration:none;font-size:13px;font-weight:600;padding:6px 12px;border-radius:6px;transition:all .2s;white-space:nowrap}
-.nav a:hover{color:#e4e2d8;background:#1a1d24}
-.nav a.active{color:#5DCAA5;background:#0a1a15;border:1px solid #1a3a2a}
+.nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:16px 28px;display:flex;gap:14px;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;flex-wrap:wrap;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.nav a{color:#d2d0c3;text-decoration:none;font-size:24px;font-weight:800;padding:13px 18px;border-radius:10px;border:1px solid #2a2c33;background:#14161b;transition:all .2s;white-space:nowrap;line-height:1}
+.nav a:hover{color:#f5f3e8;background:#1c2028;border-color:#4a4c53;transform:translateY(-1px)}
+.nav a.active{color:#5DCAA5;background:#0a1a15;border:1px solid #1f7d5b;box-shadow:0 0 0 1px rgba(93,202,165,.18),0 8px 18px rgba(0,0,0,.18)}
 .content{padding:16px 24px;max-width:1600px;margin:0 auto}
 /* Shift Wars */
 .shift-wars{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:20px 24px;margin-bottom:16px;position:relative;overflow:hidden}
@@ -133,8 +133,9 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
 </head>
 <body>
 <div class="nav">
-  <img src="/staff/norp-logo.png" alt="NORP" style="height:36px;margin-right:8px">
+  <img src="/staff/norp-logo.png" alt="NORP" style="height:70px;margin-right:8px">
   <a href="/staff">Operations Guide</a>
+<a href="/staff/dashboard">Production Board</a>
   <a href="/staff/pricing">Pricing &amp; Market</a>
   <a href="/staff/suppliers">PVC Suppliers</a>
   <a href="/staff/plants">Plant Directory</a>
@@ -345,7 +346,7 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
 
       <!-- Tab switcher -->
       <div class="log-tabs">
-        <button class="log-tab active" data-feed="qc">QC Log</button>
+        <button class="log-tab active" data-feed="qc">Shift Logs</button>
         <button class="log-tab press-tab" data-feed="press">Press Log</button>
       </div>
 
