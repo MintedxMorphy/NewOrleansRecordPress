@@ -115,6 +115,31 @@ function isYes(value: string) {
   return ['yes', 'y', 'true', 'done', 'complete', 'completed', 'approved', 'sent', 'arrived', 'ordered', '1'].includes(normalized);
 }
 
+function isOrdered(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return Boolean(normalized) && (
+    normalized.includes('ordered') ||
+    normalized.includes('yes') ||
+    normalized.includes('done') ||
+    normalized.includes('complete')
+  );
+}
+
+function isNo(value: string) {
+  return ['no', 'n', 'false', 'none', 'not needed', 'n/a', 'na'].includes(value.trim().toLowerCase());
+}
+
+function readyForPressQueue(fields: Record<string, unknown>) {
+  const lacquerOrdered = isOrdered(field(fields, FIELD_ALIASES.lacquer));
+  const labelsOrdered = isOrdered(field(fields, ['ordered?', 'Center Labels Ordered', 'Labels Ordered']));
+  const stampersOrdered = isOrdered(field(fields, FIELD_ALIASES.stampers));
+  const jacketsOrdered = isOrdered(field(fields, ['ordered? 3', 'Jackets Ordered']));
+  const miscPrint = field(fields, ['Misc print', 'Misc Print']);
+  const miscPrintOrdered = isNo(miscPrint) || isOrdered(field(fields, ['ordered? 4', 'Misc Print Ordered']));
+
+  return lacquerOrdered && labelsOrdered && stampersOrdered && jacketsOrdered && miscPrintOrdered;
+}
+
 function inferStage(fields: Record<string, unknown>) {
   const explicitStage = field(fields, FIELD_ALIASES.stage);
   if (explicitStage) return normalizeStage(explicitStage);
@@ -128,8 +153,10 @@ function inferStage(fields: Record<string, unknown>) {
   if (isYes(jacketsArrived) && isYes(sleevesArrived) && isYes(labelsArrived)) return 'assembly';
   if (isYes(sleevesArrived) || isYes(labelsArrived)) return 'sleeving';
 
-  const approved = field(fields, FIELD_ALIASES.test_pressings_approved);
-  if (isYes(approved)) return 'press_queue';
+  // Auto-placement uses Airtable's current production fields. Airtable is still
+  // fed by staff-maintained upstream Sheets/Drive docs, so this readiness check
+  // should be revisited if that upstream sync becomes automated.
+  if (readyForPressQueue(fields)) return 'press_queue';
 
   const sent = field(fields, FIELD_ALIASES.test_pressings_sent);
   if (hasValue(fields, ['Test pressings']) || isYes(sent)) return 'quality_control';
@@ -223,7 +250,7 @@ export async function getAirtableJobs(): Promise<(NORPJob & { airtable_record_id
 
     for (const record of data.records || []) {
       const job = mapRecordToJob(record);
-      if (job.customer || job.matrix || job.job_id) jobs.push(job);
+      if (job.customer || job.matrix || job.order_number) jobs.push(job);
     }
     offset = data.offset;
   } while (offset);
