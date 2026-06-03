@@ -140,17 +140,6 @@ function sortJobs(jobs: Job[]) {
   });
 }
 
-function nextStation(station: Station) {
-  const index = STATIONS.indexOf(station);
-  return STATIONS[index + 1];
-}
-
-function completionLabel(station: Station) {
-  const next = nextStation(station);
-  if (!next) return 'Complete Job';
-  return `To ${STATION_META[next].shortLabel}`;
-}
-
 function stationJobs(jobs: Job[], station: Station) {
   return sortJobs(jobs.filter(job => stationOf(job) === station));
 }
@@ -227,7 +216,7 @@ function JobCard({
   const shipDate = value(job, ['ship_date', 'SHIP DATE', 'Ship Date']);
   const notes = value(job, ['notes', 'Notes', 'Project Notes', 'Production Notes']);
   const artReady = job.art_received === true || job.art_received === 'true';
-  const actionLabel = completionLabel(station);
+  const canComplete = station === 'shipping';
 
   return (
     <div
@@ -248,41 +237,15 @@ function JobCard({
         e.currentTarget.style.borderLeftColor = meta.color;
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'flex-start' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ color: COLORS.text, fontSize: '12px', fontWeight: 850, lineHeight: 1.25 }}>
-            {customer.length > 52 ? `${customer.slice(0, 52)}...` : customer}
-          </div>
-          {matrix && (
-            <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: '10px', marginTop: '3px' }}>
-              {matrix}
-            </div>
-          )}
+      <div>
+        <div style={{ color: COLORS.text, fontSize: '12px', fontWeight: 850, lineHeight: 1.25 }}>
+          {customer.length > 58 ? `${customer.slice(0, 58)}...` : customer}
         </div>
-        <button
-          type="button"
-          onClick={event => {
-            event.stopPropagation();
-            onComplete();
-          }}
-          style={{
-            alignItems: 'center',
-            background: `${meta.color}18`,
-            border: `1px solid ${meta.color}66`,
-            borderRadius: '6px',
-            color: meta.color,
-            cursor: 'pointer',
-            display: 'flex',
-            flexShrink: 0,
-            fontSize: '10px',
-            fontWeight: 850,
-            gap: '4px',
-            padding: '4px 6px',
-          }}
-        >
-          <BadgeCheck size={13} />
-          {actionLabel}
-        </button>
+        {matrix && (
+          <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: '10px', marginTop: '3px' }}>
+            {matrix}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
@@ -307,6 +270,35 @@ function JobCard({
         }}>
           {notes}
         </div>
+      )}
+
+      {canComplete && (
+        <button
+          type="button"
+          onClick={event => {
+            event.stopPropagation();
+            onComplete();
+          }}
+          style={{
+            alignItems: 'center',
+            background: `${meta.color}18`,
+            border: `1px solid ${meta.color}66`,
+            borderRadius: '6px',
+            color: meta.color,
+            cursor: 'pointer',
+            display: 'flex',
+            fontSize: '10px',
+            fontWeight: 850,
+            gap: '5px',
+            justifyContent: 'center',
+            marginTop: '9px',
+            padding: '6px 8px',
+            width: '100%',
+          }}
+        >
+          <BadgeCheck size={13} />
+          Complete
+        </button>
       )}
     </div>
   );
@@ -383,8 +375,8 @@ function Pipeline({
 
   const completeJob = async (job: Job) => {
     const current = stationOf(job);
-    const next = nextStation(current);
-    const target = next ?? 'completed';
+    if (current !== 'shipping') return;
+    const target = 'completed';
     const nextJobs = jobs.map(candidate => (
       jobKey(candidate) === jobKey(job) ? { ...candidate, stage: target, dashboard_order: '999999' } : candidate
     ));
