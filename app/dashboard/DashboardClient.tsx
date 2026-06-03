@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { DragDropContext, Draggable, Droppable, DropResult } from '@hello-pangea/dnd';
+import { DragDropContext, Draggable, Droppable, DraggableProvidedDragHandleProps, DropResult } from '@hello-pangea/dnd';
 import {
   BadgeCheck,
   Boxes,
@@ -230,11 +230,13 @@ function JobCard({
   job,
   onOpen,
   onComplete,
+  dragHandleProps,
   compact = false,
 }: {
   job: Job;
   onOpen: () => void;
   onComplete: () => void;
+  dragHandleProps?: DraggableProvidedDragHandleProps | null;
   compact?: boolean;
 }) {
   const station = stationOf(job);
@@ -273,58 +275,60 @@ function JobCard({
         e.currentTarget.style.borderLeftColor = meta.color;
       }}
     >
-      <div>
-        <div style={{ color: COLORS.text, fontSize: compact ? '15px' : '12px', fontWeight: 850, lineHeight: 1.25 }}>
-          {customer.length > (compact ? 90 : 58) ? `${customer.slice(0, compact ? 90 : 58)}...` : customer}
+      <div {...dragHandleProps}>
+        <div>
+          <div style={{ color: COLORS.text, fontSize: compact ? '15px' : '12px', fontWeight: 850, lineHeight: 1.25 }}>
+            {customer.length > (compact ? 90 : 58) ? `${customer.slice(0, compact ? 90 : 58)}...` : customer}
+          </div>
+          {matrix && (
+            <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: compact ? '12px' : '10px', marginTop: '3px' }}>
+              {matrix}
+            </div>
+          )}
         </div>
-        {matrix && (
-          <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: compact ? '12px' : '10px', marginTop: '3px' }}>
-            {matrix}
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
+          {quantity && <StatusPill color={meta.color}>{quantity}</StatusPill>}
+          {colors && <StatusPill color="#C9A84C">{colors}</StatusPill>}
+          {weight && <StatusPill color="#9CCFFF">{weight.replace('1900-05-29T00:00:00.000Z', '180g')}</StatusPill>}
+          {speed && <StatusPill color="#B781FF">{speed}</StatusPill>}
+          {artReady && <StatusPill color={COLORS.green}>Art</StatusPill>}
+          {shipDate && <StatusPill color="#4DA3FF">{shipDate}</StatusPill>}
+          {duplicateCount && Number(duplicateCount) > 1 && <StatusPill color="#FFB84D">{duplicateCount} merged</StatusPill>}
+        </div>
+
+        {notes && (
+          <div style={{
+            color: COLORS.muted,
+            display: '-webkit-box',
+            fontSize: '11px',
+            lineHeight: 1.35,
+            marginTop: '9px',
+            overflow: 'hidden',
+            WebkitBoxOrient: 'vertical',
+            WebkitLineClamp: 2,
+          }}>
+            {notes}
+          </div>
+        )}
+
+        {inferredReason && (
+          <div style={{
+            background: `${meta.color}12`,
+            border: `1px solid ${meta.color}44`,
+            borderRadius: '6px',
+            color: COLORS.muted,
+            fontSize: '10px',
+            fontWeight: 750,
+            lineHeight: 1.35,
+            marginTop: '9px',
+            padding: '6px 7px',
+          }}>
+            <span style={{ color: meta.color }}>Log signal:</span> {inferredReason}
+            {inferredAt && <span> · {new Date(inferredAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>}
           </div>
         )}
       </div>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
-        {quantity && <StatusPill color={meta.color}>{quantity}</StatusPill>}
-        {colors && <StatusPill color="#C9A84C">{colors}</StatusPill>}
-        {weight && <StatusPill color="#9CCFFF">{weight.replace('1900-05-29T00:00:00.000Z', '180g')}</StatusPill>}
-        {speed && <StatusPill color="#B781FF">{speed}</StatusPill>}
-        {artReady && <StatusPill color={COLORS.green}>Art</StatusPill>}
-        {shipDate && <StatusPill color="#4DA3FF">{shipDate}</StatusPill>}
-        {duplicateCount && Number(duplicateCount) > 1 && <StatusPill color="#FFB84D">{duplicateCount} merged</StatusPill>}
-      </div>
-
-      {notes && (
-        <div style={{
-          color: COLORS.muted,
-          display: '-webkit-box',
-          fontSize: '11px',
-          lineHeight: 1.35,
-          marginTop: '9px',
-          overflow: 'hidden',
-          WebkitBoxOrient: 'vertical',
-          WebkitLineClamp: 2,
-        }}>
-          {notes}
-        </div>
-      )}
-
-      {inferredReason && (
-        <div style={{
-          background: `${meta.color}12`,
-          border: `1px solid ${meta.color}44`,
-          borderRadius: '6px',
-          color: COLORS.muted,
-          fontSize: '10px',
-          fontWeight: 750,
-          lineHeight: 1.35,
-          marginTop: '9px',
-          padding: '6px 7px',
-        }}>
-          <span style={{ color: meta.color }}>Log signal:</span> {inferredReason}
-          {inferredAt && <span> · {new Date(inferredAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>}
-        </div>
-      )}
 
       {canComplete && (
         <button
@@ -333,6 +337,9 @@ function JobCard({
             event.stopPropagation();
             onComplete();
           }}
+          onMouseDownCapture={event => event.stopPropagation()}
+          onPointerDownCapture={event => event.stopPropagation()}
+          onTouchStartCapture={event => event.stopPropagation()}
           onMouseDown={event => event.stopPropagation()}
           onPointerDown={event => event.stopPropagation()}
           onTouchStart={event => event.stopPropagation()}
@@ -561,13 +568,18 @@ function Pipeline({
                           <div
                             ref={dragProvided.innerRef}
                             {...dragProvided.draggableProps}
-                            {...dragProvided.dragHandleProps}
                             style={{
                               ...dragProvided.draggableProps.style,
                               opacity: dragSnapshot.isDragging ? 0.88 : 1,
                             }}
                           >
-                            <JobCard job={job} onOpen={() => onJobOpen(job)} onComplete={() => setConfirmCompleteJob(job)} compact={isMobile} />
+                            <JobCard
+                              job={job}
+                              onOpen={() => onJobOpen(job)}
+                              onComplete={() => setConfirmCompleteJob(job)}
+                              dragHandleProps={dragProvided.dragHandleProps}
+                              compact={isMobile}
+                            />
                           </div>
                         )}
                       </Draggable>
