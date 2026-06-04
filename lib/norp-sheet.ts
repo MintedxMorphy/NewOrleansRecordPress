@@ -24,6 +24,7 @@ export interface NORPJob {
   order_number: string;
   deposit: string;
   notes: string;
+  dash_notes?: string;
   due_note: string;
   stage: string;
   stage_source?: string;

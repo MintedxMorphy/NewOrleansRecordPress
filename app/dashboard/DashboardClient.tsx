@@ -30,6 +30,7 @@ const STATIONS = [
 ] as const;
 
 type Station = typeof STATIONS[number];
+type DashboardStage = Station | 'completed';
 
 const STATION_META: Record<Station, {
   label: string;
@@ -114,19 +115,7 @@ function jobKey(job: Job) {
   return value(job, ['airtable_record_id', 'job_id', 'matrix', 'MATRIX']);
 }
 
-function affirmative(value: string) {
-  const normalized = value.trim().toLowerCase();
-  if (!normalized || ['no', 'n', 'false', '0'].includes(normalized)) return false;
-  return ['yes', 'y', 'true', 'approved', 'done', 'complete', 'completed', '1'].some(term =>
-    normalized === term || normalized.startsWith(`${term} `)
-  );
-}
-
-function testPressingApproved(job: Job) {
-  return affirmative(value(job, ['test_pressings_approved', 'approved?', 'Test Pressings Approved', 'TP Approved']));
-}
-
-function stationOf(job: Job): Station {
+function stationOf(job: Job): DashboardStage {
   const raw = value(job, ['stage', 'Dashboard Stage']).toLowerCase().replace(/[\s-]+/g, '_');
   if (STATIONS.includes(raw as Station)) return raw as Station;
   if (['quote', 'deposit', 'plates'].includes(raw)) return 'pre_production';
@@ -135,6 +124,7 @@ function stationOf(job: Job): Station {
   if (['qc', 'quality'].includes(raw)) return 'quality_control';
   if (['pack', 'packing'].includes(raw)) return 'assembly';
   if (['ship', 'shipped'].includes(raw)) return 'shipping';
+  if (['paid', 'paid_in_full', 'complete', 'completed'].includes(raw)) return 'completed';
   return 'pre_production';
 }
 
@@ -195,7 +185,7 @@ function StatusPill({ children, color }: { children: React.ReactNode; color: str
       background: `${color}1F`,
       border: `1px solid ${color}66`,
       borderRadius: '999px',
-      fontSize: '10px',
+      fontSize: '11px',
       fontWeight: 800,
       letterSpacing: '0.05em',
       padding: '3px 8px',
@@ -239,7 +229,8 @@ function JobCard({
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
   compact?: boolean;
 }) {
-  const station = stationOf(job);
+  const jobStage = stationOf(job);
+  const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
   const meta = STATION_META[station];
   const customer = value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']) || 'Untitled job';
   const matrix = value(job, ['matrix', 'MATRIX', 'Matrix ID', 'job_id']);
@@ -249,6 +240,7 @@ function JobCard({
   const speed = value(job, ['speed', 'SPEED', 'Speed', 'RPM']);
   const shipDate = value(job, ['ship_date', 'SHIP DATE', 'Ship Date']);
   const notes = value(job, ['notes', 'Notes', 'Project Notes', 'Production Notes']);
+  const dashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
   const inferredReason = value(job, ['inferred_stage_reason']);
   const inferredAt = value(job, ['inferred_stage_at']);
   const duplicateCount = value(job, ['duplicate_count']);
@@ -277,11 +269,11 @@ function JobCard({
     >
       <div {...dragHandleProps}>
         <div>
-          <div style={{ color: COLORS.text, fontSize: compact ? '15px' : '12px', fontWeight: 850, lineHeight: 1.25 }}>
-            {customer.length > (compact ? 90 : 58) ? `${customer.slice(0, compact ? 90 : 58)}...` : customer}
+          <div style={{ color: COLORS.text, fontSize: compact ? '16px' : '14px', fontWeight: 850, lineHeight: 1.22 }}>
+            {customer.length > (compact ? 96 : 72) ? `${customer.slice(0, compact ? 96 : 72)}...` : customer}
           </div>
           {matrix && (
-            <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: compact ? '12px' : '10px', marginTop: '3px' }}>
+            <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: compact ? '12px' : '11px', marginTop: '4px' }}>
               {matrix}
             </div>
           )}
@@ -301,7 +293,7 @@ function JobCard({
           <div style={{
             color: COLORS.muted,
             display: '-webkit-box',
-            fontSize: '11px',
+            fontSize: compact ? '13px' : '12px',
             lineHeight: 1.35,
             marginTop: '9px',
             overflow: 'hidden',
@@ -309,6 +301,25 @@ function JobCard({
             WebkitLineClamp: 2,
           }}>
             {notes}
+          </div>
+        )}
+
+        {dashNotes && (
+          <div style={{
+            background: `${meta.color}12`,
+            border: `1px solid ${meta.color}38`,
+            borderRadius: '6px',
+            color: COLORS.text,
+            display: '-webkit-box',
+            fontSize: compact ? '13px' : '12px',
+            lineHeight: 1.35,
+            marginTop: '9px',
+            overflow: 'hidden',
+            padding: '7px 8px',
+            WebkitBoxOrient: 'vertical',
+            WebkitLineClamp: 3,
+          }}>
+            <span style={{ color: meta.color, fontWeight: 850 }}>Dash:</span> {dashNotes}
           </div>
         )}
 
@@ -413,11 +424,6 @@ function Pipeline({
     const [moved] = sourceList.splice(result.source.index, 1);
 
     if (!moved) return;
-
-    if (toStation === 'now_pressing' && !testPressingApproved(moved)) {
-      onError('Test pressing must be approved before a job can move into NOW PRESSING.');
-      return;
-    }
 
     const movedNext = { ...moved, stage: toStation };
 
@@ -669,11 +675,30 @@ function Pipeline({
   );
 }
 
-function JobDrawer({ job, onClose }: { job: Job; onClose: () => void }) {
-  const station = stationOf(job);
+function JobDrawer({
+  job,
+  onClose,
+  onDashNotesSave,
+}: {
+  job: Job;
+  onClose: () => void;
+  onDashNotesSave: (job: Job, dashNotes: string) => Promise<void>;
+}) {
+  const jobStage = stationOf(job);
+  const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
   const meta = STATION_META[station];
+  const dashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
+  const [draftDashNotes, setDraftDashNotes] = useState(dashNotes);
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesError, setNotesError] = useState('');
+
+  useEffect(() => {
+    setDraftDashNotes(dashNotes);
+    setNotesError('');
+  }, [dashNotes, job]);
+
   const details = [
-    ['Station', meta.label],
+    ['Station', jobStage === 'completed' ? 'Completed' : meta.label],
     ['Customer', value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title'])],
     ['Matrix', value(job, ['matrix', 'MATRIX', 'Matrix ID'])],
     ['Quantity', value(job, ['quantity', 'Quantity', 'Qty'])],
@@ -691,6 +716,18 @@ function JobDrawer({ job, onClose }: { job: Job; onClose: () => void }) {
     ['Order', value(job, ['order_number', 'ORDER NUMBER'])],
   ].filter(([, detail]) => detail);
   const notes = value(job, ['notes', 'Notes', 'Project Notes', 'Production Notes']);
+  const saveDashNotes = async () => {
+    setSavingNotes(true);
+    setNotesError('');
+    try {
+      await onDashNotesSave(job, draftDashNotes);
+    } catch (error) {
+      setNotesError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingNotes(false);
+    }
+  };
+  const notesDirty = draftDashNotes !== dashNotes;
 
   return (
     <>
@@ -744,13 +781,62 @@ function JobDrawer({ job, onClose }: { job: Job; onClose: () => void }) {
         {notes && (
           <div style={{ marginTop: '26px' }}>
             <div style={{ color: COLORS.muted, fontSize: '10px', fontWeight: 850, letterSpacing: '0.08em', marginBottom: '8px', textTransform: 'uppercase' }}>
-              Notes
+              Production Notes
             </div>
             <div style={{ color: COLORS.text, fontSize: '14px', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
               {notes}
             </div>
           </div>
         )}
+
+        <div style={{ marginTop: '26px' }}>
+          <div style={{ color: meta.color, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', marginBottom: '8px', textTransform: 'uppercase' }}>
+            Dash Notes
+          </div>
+          <textarea
+            value={draftDashNotes}
+            onChange={event => setDraftDashNotes(event.target.value)}
+            placeholder="Add a dashboard note..."
+            style={{
+              background: COLORS.card,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: '8px',
+              color: COLORS.text,
+              font: 'inherit',
+              fontSize: '15px',
+              lineHeight: 1.45,
+              minHeight: '130px',
+              outline: 'none',
+              padding: '12px',
+              resize: 'vertical',
+              width: '100%',
+              boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ alignItems: 'center', display: 'flex', gap: '10px', justifyContent: 'space-between', marginTop: '10px' }}>
+            <div style={{ color: notesError ? COLORS.red : COLORS.muted, fontSize: '12px', lineHeight: 1.35 }}>
+              {notesError || (notesDirty ? 'Unsaved changes' : 'Saved to Airtable Dash Notes.')}
+            </div>
+            <button
+              type="button"
+              disabled={savingNotes || !notesDirty}
+              onClick={saveDashNotes}
+              style={{
+                background: savingNotes || !notesDirty ? COLORS.elevated : meta.color,
+                border: `1px solid ${savingNotes || !notesDirty ? COLORS.border : meta.color}`,
+                borderRadius: '6px',
+                color: savingNotes || !notesDirty ? COLORS.muted : '#050505',
+                cursor: savingNotes || !notesDirty ? 'default' : 'pointer',
+                flexShrink: 0,
+                fontSize: '13px',
+                fontWeight: 900,
+                padding: '9px 13px',
+              }}
+            >
+              {savingNotes ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
       </aside>
     </>
   );
@@ -785,6 +871,27 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     const element = document.getElementById(stationAnchor(station));
     if (!element) return;
     element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const saveDashNotes = async (job: Job, dashNotes: string) => {
+    const key = jobKey(job);
+    const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/dash-notes`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dash_notes: dashNotes }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || `Airtable notes save failed (${response.status})`);
+    }
+
+    const updateJob = (candidate: Job) => (
+      jobKey(candidate) === key ? { ...candidate, dash_notes: dashNotes, 'Dash Notes': dashNotes } : candidate
+    );
+    setJobs(current => current.map(updateJob));
+    setSelectedJob(current => current && jobKey(current) === key ? updateJob(current) : current);
+    setError('');
   };
 
   return (
@@ -881,7 +988,13 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
         <Pipeline jobs={jobs} onJobsChange={setJobs} onJobOpen={setSelectedJob} onError={setError} isMobile={isMobile} />
       </div>
 
-      {selectedJob && <JobDrawer job={selectedJob} onClose={() => setSelectedJob(null)} />}
+      {selectedJob && (
+        <JobDrawer
+          job={selectedJob}
+          onClose={() => setSelectedJob(null)}
+          onDashNotesSave={saveDashNotes}
+        />
+      )}
     </main>
   );
 }

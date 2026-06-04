@@ -13,7 +13,7 @@ const STAGE_LABELS: Record<string, string> = {
   completed: 'Completed',
 };
 
-const FIELD_ALIASES: Record<keyof NORPJob, string[]> = {
+const FIELD_ALIASES: Record<string, string[]> = {
   job_id: ['Job ID', 'Job Id', 'JobID', 'ID', 'Matrix', 'MATRIX', 'Matrix ID', 'Order Number', 'ORDER NUMBER'],
   customer: ['Customer', 'Customer Name', 'Client', 'Project', 'Project Name', 'Artist', 'Title', '1'],
   matrix: ['Matrix', 'MATRIX', 'Matrix ID', 'Catalog Number', 'Catalog #'],
@@ -32,6 +32,7 @@ const FIELD_ALIASES: Record<keyof NORPJob, string[]> = {
   order_number: ['Order Number', 'ORDER NUMBER', 'Order #', 'Invoice Number'],
   deposit: ['Deposit', 'DEPOSIT? Y/N', 'Deposit Received'],
   notes: ['Notes', 'Production Notes', 'Project Notes'],
+  dash_notes: ['Dash Notes', 'Dashboard Notes', 'dash notes'],
   due_note: ['Due Note', 'Due', 'Due Date', 'Target Date'],
   stage: ['Dashboard Stage', 'Stage', 'Status', 'Production Stage'],
 };
@@ -90,6 +91,10 @@ function airtableOrderField() {
 
 function airtableJobIdField() {
   return process.env.AIRTABLE_JOB_ID_FIELD || 'Job ID';
+}
+
+function airtableDashNotesField() {
+  return process.env.AIRTABLE_DASH_NOTES_FIELD || 'Dash Notes';
 }
 
 export function isAirtableConfigured() {
@@ -249,6 +254,7 @@ function mapRecordToJob(record: AirtableRecord): NORPJob & { airtable_record_id:
     order_number: field(fields, FIELD_ALIASES.order_number),
     deposit: field(fields, FIELD_ALIASES.deposit),
     notes: field(fields, FIELD_ALIASES.notes),
+    dash_notes: field(fields, FIELD_ALIASES.dash_notes),
     due_note: field(fields, FIELD_ALIASES.due_note),
     stage: inferStage(fields),
     stage_source: field(fields, FIELD_ALIASES.stage) ? 'airtable_dashboard_stage' : 'airtable_fields',
@@ -440,5 +446,25 @@ export async function updateAirtableJobPosition(jobId: string, stage: string, or
 
   if (!res.ok) {
     throw new Error(data.error?.message || `Airtable stage update failed (${res.status})`);
+  }
+}
+
+export async function updateAirtableJobDashNotes(jobId: string, dashNotes: string) {
+  const recordId = await findAirtableRecordId(jobId);
+  if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
+
+  const res = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+    method: 'PATCH',
+    headers: airtableHeaders(),
+    body: JSON.stringify({
+      fields: {
+        [airtableDashNotesField()]: dashNotes,
+      },
+    }),
+  });
+  const data = await res.json() as { error?: { message?: string } };
+
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Airtable dash notes update failed (${res.status})`);
   }
 }
