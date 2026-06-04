@@ -185,7 +185,7 @@ function StatusPill({ children, color }: { children: React.ReactNode; color: str
       background: `${color}1F`,
       border: `1px solid ${color}66`,
       borderRadius: '999px',
-      fontSize: '11px',
+      fontSize: '14px',
       fontWeight: 800,
       letterSpacing: '0.05em',
       padding: '3px 8px',
@@ -259,7 +259,7 @@ function JobCard({
         boxShadow: station === 'now_pressing' ? `0 0 0 1px ${meta.color}44, 0 12px 30px #00000055` : '0 8px 18px #00000035',
         cursor: 'pointer',
         marginBottom: '8px',
-        padding: compact ? '12px' : '9px',
+        padding: compact ? '13px' : '10px',
       }}
       onMouseEnter={e => (e.currentTarget.style.borderColor = meta.color)}
       onMouseLeave={e => {
@@ -269,17 +269,17 @@ function JobCard({
     >
       <div {...dragHandleProps}>
         <div>
-          <div style={{ color: COLORS.text, fontSize: compact ? '16px' : '14px', fontWeight: 850, lineHeight: 1.22 }}>
+          <div style={{ color: COLORS.text, fontSize: compact ? '20px' : '18px', fontWeight: 850, lineHeight: 1.18 }}>
             {customer.length > (compact ? 96 : 72) ? `${customer.slice(0, compact ? 96 : 72)}...` : customer}
           </div>
           {matrix && (
-            <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: compact ? '12px' : '11px', marginTop: '4px' }}>
+            <div style={{ color: COLORS.muted, fontFamily: 'monospace', fontSize: compact ? '15px' : '14px', marginTop: '5px' }}>
               {matrix}
             </div>
           )}
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '9px' }}>
           {quantity && <StatusPill color={meta.color}>{quantity}</StatusPill>}
           {colors && <StatusPill color="#C9A84C">{colors}</StatusPill>}
           {weight && <StatusPill color="#9CCFFF">{weight.replace('1900-05-29T00:00:00.000Z', '180g')}</StatusPill>}
@@ -293,7 +293,7 @@ function JobCard({
           <div style={{
             color: COLORS.muted,
             display: '-webkit-box',
-            fontSize: compact ? '13px' : '12px',
+            fontSize: compact ? '16px' : '15px',
             lineHeight: 1.35,
             marginTop: '9px',
             overflow: 'hidden',
@@ -311,7 +311,7 @@ function JobCard({
             borderRadius: '6px',
             color: COLORS.text,
             display: '-webkit-box',
-            fontSize: compact ? '13px' : '12px',
+            fontSize: compact ? '16px' : '15px',
             lineHeight: 1.35,
             marginTop: '9px',
             overflow: 'hidden',
@@ -329,7 +329,7 @@ function JobCard({
             border: `1px solid ${meta.color}44`,
             borderRadius: '6px',
             color: COLORS.muted,
-            fontSize: '10px',
+            fontSize: '13px',
             fontWeight: 750,
             lineHeight: 1.35,
             marginTop: '9px',
@@ -362,7 +362,7 @@ function JobCard({
             color: completeColor,
             cursor: 'pointer',
             display: 'flex',
-            fontSize: '10px',
+            fontSize: '13px',
             fontWeight: 850,
             gap: '5px',
             justifyContent: 'center',
@@ -525,7 +525,7 @@ function Pipeline({
                     <div style={{ minWidth: 0 }}>
                       <div style={{
                         color: meta.color,
-                        fontSize: isMobile ? '15px' : isNowPressing ? '11px' : '10px',
+                        fontSize: isMobile ? '19px' : isNowPressing ? '14px' : '13px',
                         fontWeight: 950,
                         letterSpacing: '0.06em',
                         textTransform: 'uppercase',
@@ -534,7 +534,7 @@ function Pipeline({
                       }}>
                         {meta.label}
                       </div>
-                      <div style={{ color: COLORS.faint, fontSize: isMobile ? '12px' : '10px', marginTop: '2px', lineHeight: 1.15 }}>
+                      <div style={{ color: COLORS.faint, fontSize: isMobile ? '15px' : '13px', marginTop: '3px', lineHeight: 1.15 }}>
                         {meta.description}
                       </div>
                     </div>
@@ -544,7 +544,7 @@ function Pipeline({
                     border: `1px solid ${meta.color}66`,
                     borderRadius: '999px',
                     color: meta.color,
-                    fontSize: '11px',
+                    fontSize: '14px',
                     fontWeight: 900,
                     minWidth: '28px',
                     padding: '2px 7px',
@@ -890,7 +890,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       jobKey(candidate) === key ? { ...candidate, dash_notes: dashNotes, 'Dash Notes': dashNotes } : candidate
     );
     setJobs(current => current.map(updateJob));
-    setSelectedJob(current => current && jobKey(current) === key ? updateJob(current) : current);
+    setSelectedJob(null);
     setError('');
   };
 
@@ -961,8 +961,8 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
             }}>
               <StationIcon station={station} size={17} />
               <div>
-                <div style={{ color: meta.color, fontSize: '24px', fontWeight: 950, lineHeight: 1 }}>{counts[station]}</div>
-                <div style={{ color: COLORS.muted, fontSize: '10px', fontWeight: 850, letterSpacing: '0.06em', marginTop: '4px', textTransform: 'uppercase' }}>{meta.shortLabel}</div>
+                <div style={{ color: meta.color, fontSize: '30px', fontWeight: 950, lineHeight: 1 }}>{counts[station]}</div>
+                <div style={{ color: COLORS.muted, fontSize: '13px', fontWeight: 850, letterSpacing: '0.06em', marginTop: '4px', textTransform: 'uppercase' }}>{meta.shortLabel}</div>
               </div>
             </button>
           );
