@@ -60,6 +60,7 @@ function airtableQuoteTable() {
 function airtableQuoteTableCandidates() {
   return Array.from(new Set([
     airtableQuoteTable(),
+    "Quote Request",
     QUOTE_TABLE_FALLBACK,
     "Quotes",
     "On Hold",
@@ -205,9 +206,11 @@ async function saveQuoteToAirtable(body: Record<string, any>, submissionType: st
 
   const estimate = body.estimate || {}
   const summary = quoteSummary(body, submissionType)
+  const leadTitle = `${submissionType}: ${body.name || "Unknown"}`
   const fields: Record<string, unknown> = {}
 
-  assignAirtableField(table, fields, ["Name", "Customer", "Customer Name"], body.name)
+  assignAirtableField(table, fields, ["Name"], leadTitle)
+  assignAirtableField(table, fields, ["Customer", "Customer Name"], body.name)
   assignAirtableField(table, fields, ["Email", "Customer Email"], body.email)
   assignAirtableField(table, fields, ["Phone", "Customer Phone"], body.phone)
   assignAirtableField(table, fields, ["Submission Type", "Type", "Action"], submissionType)
@@ -232,10 +235,10 @@ async function saveQuoteToAirtable(body: Record<string, any>, submissionType: st
   assignAirtableField(table, fields, ["Payload", "Raw Payload"], JSON.stringify(body, null, 2))
   assignAirtableField(table, fields, ["Submitted At", "Created At", "Date"], new Date().toISOString())
 
-  // Until the base has a dedicated Quote Requests table, save calculator leads
-  // into the existing On Hold table as a full summary so no quote data is lost.
+  // Keep On Hold as the emergency fallback if the quote table is renamed or
+  // temporarily unavailable, but prefer the dedicated Quote Requests table.
   if (table.name.toLowerCase() === "on hold") {
-    assignAirtableField(table, fields, ["Name"], `${submissionType}: ${body.name || "Unknown"}\n\n${summary}`)
+    assignAirtableField(table, fields, ["Name"], `${leadTitle}\n\n${summary}`)
   }
 
   const res = await fetch(tableUrl(table.name), {
