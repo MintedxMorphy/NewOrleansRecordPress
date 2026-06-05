@@ -439,6 +439,53 @@ function completedFieldsFromRecord(record: AirtableRecord, production: AirtableT
   return fields;
 }
 
+function formulaField(fieldName: string) {
+  return `{${fieldName.replace(/}/g, '\\}')}}`;
+}
+
+function formulaEquals(fieldName: string, value: string) {
+  return `${formulaField(fieldName)}='${escapeFormulaValue(value)}'`;
+}
+
+async function findMatchingCompletedRecord(record: AirtableRecord, completed: AirtableTableMeta) {
+  const matrix = field(record.fields, FIELD_ALIASES.matrix);
+  const jobId = field(record.fields, FIELD_ALIASES.job_id);
+  const orderNumber = field(record.fields, FIELD_ALIASES.order_number);
+  const customer = field(record.fields, FIELD_ALIASES.customer);
+
+  const matrixField = resolveAirtableField(completed, FIELD_ALIASES.matrix);
+  const jobIdField = resolveAirtableField(completed, FIELD_ALIASES.job_id);
+  const orderField = resolveAirtableField(completed, FIELD_ALIASES.order_number);
+  const customerField = resolveAirtableField(completed, FIELD_ALIASES.customer);
+
+  const formulas: string[] = [];
+  if (matrix && matrixField) formulas.push(formulaEquals(matrixField.name, matrix));
+  if (jobId && jobIdField && jobId !== matrix) formulas.push(formulaEquals(jobIdField.name, jobId));
+  if (orderNumber && customer && orderField && customerField) {
+    formulas.push(`AND(${formulaEquals(orderField.name, orderNumber)}, ${formulaEquals(customerField.name, customer)})`);
+  }
+
+  if (!formulas.length) return undefined;
+
+  const filterByFormula = formulas.length === 1 ? formulas[0] : `OR(${formulas.join(', ')})`;
+  const params = new URLSearchParams({
+    maxRecords: '1',
+    filterByFormula,
+  });
+
+  const res = await fetch(`${tableUrl('', completed.name)}?${params.toString()}`, {
+    headers: airtableHeaders(),
+    cache: 'no-store',
+  });
+  const data = await res.json() as AirtableListResponse;
+
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Airtable completed lookup failed (${res.status})`);
+  }
+
+  return data.records?.[0];
+}
+
 export async function completeAirtableJob(jobId: string) {
   const recordId = await findAirtableRecordId(jobId);
   if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
@@ -453,6 +500,58 @@ export async function completeAirtableJob(jobId: string) {
 
   if (!production) throw new Error(`Airtable table not found: ${airtableJobsTable()}`);
   if (!completed) throw new Error(`Airtable table not found: ${airtableCompletedTable()}`);
+
+  const matchingCompleted = await findMatchingCompletedRecord(record, completed);
+  if (matchingCompleted) {
+    const productionQuantityField = resolveAirtableField(production, FIELD_ALIASES.quantity);
+    const completedQuantityField = resolveAirtableField(completed, FIELD_ALIASES.quantity);
+    if (!productionQuantityField || !completedQuantityField) {
+      throw new Error('Airtable quantity field not found for completion merge');
+    }
+
+    const productionQuantity = parseQuantity(record.fields[productionQuantityField.name]);
+    const completedQuantity = parseQuantity(matchingCompleted.fields[completedQuantityField.name]);
+    if (!productionQuantity || productionQuantity <= 0) {
+      throw new Error('Remaining production quantity is not a number Airtable can merge');
+    }
+    if (completedQuantity === undefined || completedQuantity < 0) {
+      throw new Error('Existing completed quantity is not a number Airtable can merge');
+    }
+
+    const mergedQuantity = productionQuantity + completedQuantity;
+    const updateCompletedRes = await fetch(tableUrl(`/${encodeURIComponent(matchingCompleted.id)}`, completed.name), {
+      method: 'PATCH',
+      headers: airtableHeaders(),
+      body: JSON.stringify({
+        fields: {
+          [completedQuantityField.name]: airtableValueForField(completedQuantityField, mergedQuantity),
+        },
+        typecast: true,
+      }),
+    });
+    const updatedCompleted = await updateCompletedRes.json() as { error?: { message?: string } };
+
+    if (!updateCompletedRes.ok) {
+      throw new Error(updatedCompleted.error?.message || `Airtable completed quantity merge failed (${updateCompletedRes.status})`);
+    }
+
+    const deleteRes = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+      method: 'DELETE',
+      headers: airtableHeaders(),
+    });
+    const deleted = await deleteRes.json() as { deleted?: boolean; error?: { message?: string } };
+
+    if (!deleteRes.ok || !deleted.deleted) {
+      throw new Error(deleted.error?.message || `Airtable production record delete failed (${deleteRes.status})`);
+    }
+
+    return {
+      completedRecordId: matchingCompleted.id,
+      deletedRecordId: recordId,
+      mergedCompletedRecord: true,
+      completedQuantity: mergedQuantity,
+    };
+  }
 
   const fields = completedFieldsFromRecord(record, production, completed);
 
