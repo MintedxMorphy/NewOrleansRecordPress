@@ -267,6 +267,73 @@ function resolveAirtableStageValue(stage: string, tables: AirtableTableMeta[] = 
   return exactChoice?.name || fallback;
 }
 
+const COMPLETED_COPY_ALIAS_GROUPS = [
+  FIELD_ALIASES.job_id,
+  FIELD_ALIASES.customer,
+  FIELD_ALIASES.matrix,
+  FIELD_ALIASES.quantity,
+  FIELD_ALIASES.colors,
+  FIELD_ALIASES.weight,
+  FIELD_ALIASES.speed,
+  FIELD_ALIASES.ship_date,
+  FIELD_ALIASES.order_number,
+  FIELD_ALIASES.notes,
+  FIELD_ALIASES.dash_notes,
+  FIELD_ALIASES.due_note,
+  FIELD_ALIASES.stage,
+];
+
+function isEmptyAirtableValue(value: unknown) {
+  return value === null || value === undefined || value === '';
+}
+
+function isDateLike(value: unknown) {
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  return Boolean(trimmed) && !Number.isNaN(Date.parse(trimmed));
+}
+
+function isValueCompatibleWithField(field: AirtableFieldMeta, value: unknown) {
+  if (isEmptyAirtableValue(value)) return true;
+  if (Array.isArray(value)) {
+    return ['multipleAttachments', 'multipleCollaborators', 'multipleRecordLinks', 'multipleSelects'].includes(field.type);
+  }
+
+  if (['number', 'currency', 'percent', 'rating', 'duration'].includes(field.type)) {
+    return parseQuantity(value) !== undefined;
+  }
+
+  if (['date', 'dateTime'].includes(field.type)) {
+    return isDateLike(value);
+  }
+
+  if (field.type === 'checkbox') {
+    return typeof value === 'boolean' || ['yes', 'no', 'true', 'false', '1', '0'].includes(stringValue(value).trim().toLowerCase());
+  }
+
+  return true;
+}
+
+function matchingSourceFieldForCompletedTarget(
+  targetField: AirtableFieldMeta,
+  production: AirtableTableMeta,
+  record: AirtableRecord
+) {
+  const exact = production.fields.find(field => field.name.toLowerCase() === targetField.name.toLowerCase());
+  if (exact && isValueCompatibleWithField(targetField, record.fields[exact.name])) return exact;
+
+  for (const aliases of COMPLETED_COPY_ALIAS_GROUPS) {
+    const targetIsInAliasGroup = aliases.some(alias => alias.toLowerCase() === targetField.name.toLowerCase());
+    if (!targetIsInAliasGroup) continue;
+
+    const source = resolveAirtableField(production, aliases);
+    if (source && isValueCompatibleWithField(targetField, record.fields[source.name])) return source;
+  }
+
+  return undefined;
+}
+
 async function getAirtableTablesMetaOrEmpty() {
   try {
     return await getAirtableTablesMeta();
@@ -423,13 +490,10 @@ function resolveAirtableTable(tables: AirtableTableMeta[], configuredTable: stri
 function completedFieldsFromRecord(record: AirtableRecord, production: AirtableTableMeta, completed: AirtableTableMeta) {
   const fields: Record<string, unknown> = {};
 
-  for (let index = 0; index < completed.fields.length; index += 1) {
-    const targetField = completed.fields[index];
+  for (const targetField of completed.fields) {
     if (!isWritableField(targetField)) continue;
 
-    const sourceField =
-      production.fields.find(field => field.name === targetField.name) ||
-      production.fields[index];
+    const sourceField = matchingSourceFieldForCompletedTarget(targetField, production, record);
     const value = sourceField ? record.fields[sourceField.name] : undefined;
 
     if (value === undefined) continue;
