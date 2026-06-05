@@ -164,6 +164,24 @@ function searchableJobText(job: Job) {
   ].join(' ').toLowerCase();
 }
 
+function runLabelFromNotes(notes: string) {
+  const match = notes.match(/\[Run\s+(\d+)\s*\/\s*(\d+)\]/i);
+  return match ? `Run ${match[1]}/${match[2]}` : '';
+}
+
+function visibleDashNotes(notes: string) {
+  return notes
+    .replace(/\[Run\s+\d+\s*\/\s*\d+\]/gi, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function dashNotesWithRunMarker(originalNotes: string, visibleNotes: string) {
+  const match = originalNotes.match(/\[Run\s+\d+\s*\/\s*\d+\]/i);
+  return [match?.[0], visibleNotes.trim()].filter(Boolean).join(visibleNotes.trim() ? '\n' : '');
+}
+
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(false);
 
@@ -254,7 +272,9 @@ function JobCard({
   const speed = value(job, ['speed', 'SPEED', 'Speed', 'RPM']);
   const shipDate = value(job, ['ship_date', 'SHIP DATE', 'Ship Date']);
   const notes = value(job, ['notes', 'Notes', 'Project Notes', 'Production Notes']);
-  const dashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
+  const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
+  const dashNotes = visibleDashNotes(rawDashNotes);
+  const runLabel = runLabelFromNotes(rawDashNotes);
   const inferredReason = value(job, ['inferred_stage_reason']);
   const inferredAt = value(job, ['inferred_stage_at']);
   const duplicateCount = value(job, ['duplicate_count']);
@@ -298,6 +318,7 @@ function JobCard({
           {colors && <StatusPill color="#C9A84C">{colors}</StatusPill>}
           {weight && <StatusPill color="#9CCFFF">{weight.replace('1900-05-29T00:00:00.000Z', '180g')}</StatusPill>}
           {speed && <StatusPill color="#B781FF">{speed}</StatusPill>}
+          {runLabel && <StatusPill color={COLORS.green}>{runLabel}</StatusPill>}
           {artReady && <StatusPill color={COLORS.green}>Art</StatusPill>}
           {shipDate && <StatusPill color="#4DA3FF">{shipDate}</StatusPill>}
           {duplicateCount && Number(duplicateCount) > 1 && <StatusPill color="#FFB84D">{duplicateCount} merged</StatusPill>}
@@ -711,7 +732,9 @@ function JobDrawer({
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
   const meta = STATION_META[station];
-  const dashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
+  const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
+  const dashNotes = visibleDashNotes(rawDashNotes);
+  const runLabel = runLabelFromNotes(rawDashNotes);
   const [draftDashNotes, setDraftDashNotes] = useState(dashNotes);
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesError, setNotesError] = useState('');
@@ -727,6 +750,7 @@ function JobDrawer({
 
   const details = [
     ['Station', jobStage === 'completed' ? 'Completed' : meta.label],
+    ['Run', runLabel],
     ['Customer', value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title'])],
     ['Matrix', value(job, ['matrix', 'MATRIX', 'Matrix ID'])],
     ['Quantity', value(job, ['quantity', 'Quantity', 'Qty'])],
@@ -748,7 +772,7 @@ function JobDrawer({
     setSavingNotes(true);
     setNotesError('');
     try {
-      await onDashNotesSave(job, draftDashNotes);
+      await onDashNotesSave(job, dashNotesWithRunMarker(rawDashNotes, draftDashNotes));
     } catch (error) {
       setNotesError(error instanceof Error ? error.message : String(error));
     } finally {

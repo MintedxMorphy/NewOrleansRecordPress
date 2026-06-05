@@ -15,10 +15,10 @@ const STAGE_LABELS: Record<string, string> = {
 
 const FIELD_ALIASES: Record<string, string[]> = {
   job_id: ['Job ID', 'Job Id', 'JobID', 'ID', 'Matrix', 'MATRIX', 'Matrix ID', 'Order Number', 'ORDER NUMBER'],
-  customer: ['Customer', 'Customer Name', 'Client', 'Project', 'Project Name', 'Artist', 'Title', '1'],
-  matrix: ['Matrix', 'MATRIX', 'Matrix ID', 'Catalog Number', 'Catalog #'],
-  quantity: ['Quantity', 'Qty', 'Units', 'Run Size'],
-  colors: ['Colors', 'Color', 'Vinyl Color', 'Vinyl Colors'],
+  customer: ['Customer', 'Customer Name', 'Client', 'Project', 'Project Name', 'Artist', 'Title', '1', 'Name', 'Silent EM'],
+  matrix: ['Matrix', 'MATRIX', 'Matrix ID', 'Catalog Number', 'Catalog #', 'DSK-016'],
+  quantity: ['Quantity', 'Qty', 'Units', 'Run Size', '52'],
+  colors: ['Colors', 'Color', 'Vinyl Color', 'Vinyl Colors', 'black'],
   weight: ['Weight', 'weight', 'Weight (g)', 'Vinyl Weight'],
   speed: ['Speed', 'RPM'],
   lacquer: ['Lacquer', 'Lacquer Ordered', 'Lacquer Date'],
@@ -145,6 +145,23 @@ function parseQuantity(value: unknown) {
 function airtableValueForField(field: AirtableFieldMeta, value: number) {
   if (['number', 'currency', 'percent', 'rating', 'duration'].includes(field.type)) return value;
   return String(value);
+}
+
+function runMarker(run: number, total: number) {
+  return `[Run ${run}/${total}]`;
+}
+
+function stripRunMarkers(notes: unknown) {
+  return stringValue(notes)
+    .replace(/\[Run\s+\d+\s*\/\s*\d+\]/gi, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function withRunMarker(notes: unknown, run: number, total: number) {
+  const cleaned = stripRunMarkers(notes);
+  return [runMarker(run, total), cleaned].filter(Boolean).join(cleaned ? '\n' : '');
 }
 
 function field(fields: Record<string, unknown>, aliases: string[]) {
@@ -583,13 +600,19 @@ export async function completeAirtableJob(jobId: string) {
     }
 
     const mergedQuantity = productionQuantity + completedQuantity;
+    const completedFieldsToUpdate: Record<string, unknown> = {
+      [completedQuantityField.name]: airtableValueForField(completedQuantityField, mergedQuantity),
+    };
+    const completedDashNotesField = resolveAirtableField(completed, FIELD_ALIASES.dash_notes);
+    if (completedDashNotesField && isWritableField(completedDashNotesField)) {
+      completedFieldsToUpdate[completedDashNotesField.name] = stripRunMarkers(matchingCompleted.fields[completedDashNotesField.name]);
+    }
+
     const updateCompletedRes = await fetch(tableUrl(`/${encodeURIComponent(matchingCompleted.id)}`, completed.name), {
       method: 'PATCH',
       headers: airtableHeaders(),
       body: JSON.stringify({
-        fields: {
-          [completedQuantityField.name]: airtableValueForField(completedQuantityField, mergedQuantity),
-        },
+        fields: completedFieldsToUpdate,
         typecast: true,
       }),
     });
@@ -618,6 +641,10 @@ export async function completeAirtableJob(jobId: string) {
   }
 
   const fields = completedFieldsFromRecord(record, production, completed);
+  const completedDashNotesField = resolveAirtableField(completed, FIELD_ALIASES.dash_notes);
+  if (completedDashNotesField && fields[completedDashNotesField.name] !== undefined) {
+    fields[completedDashNotesField.name] = stripRunMarkers(fields[completedDashNotesField.name]);
+  }
 
   const createRes = await fetch(tableUrl('', completed.name), {
     method: 'POST',
@@ -703,6 +730,12 @@ export async function createAirtableJobSplit(
   if (completedQuantityField) {
     completedFields[completedQuantityField.name] = airtableValueForField(completedQuantityField, completedQuantity);
   }
+  const completedDashNotesField = resolveAirtableField(completed, FIELD_ALIASES.dash_notes);
+  const productionDashNotesField = resolveAirtableField(production, FIELD_ALIASES.dash_notes);
+  const sourceDashNotes = productionDashNotesField ? record.fields[productionDashNotesField.name] : field(record.fields, FIELD_ALIASES.dash_notes);
+  if (completedDashNotesField && isWritableField(completedDashNotesField)) {
+    completedFields[completedDashNotesField.name] = withRunMarker(sourceDashNotes, 1, 2);
+  }
 
   const createCompletedRes = await fetch(tableUrl('', completed.name), {
     method: 'POST',
@@ -722,6 +755,9 @@ export async function createAirtableJobSplit(
 
   const orderField = resolveAirtableField(production, [airtableOrderField(), 'Dashboard Order', 'Sort Order', 'Board Order']);
   if (orderField) productionFields[orderField.name] = typeof input.order === 'number' ? input.order : 999999;
+  if (productionDashNotesField && isWritableField(productionDashNotesField)) {
+    productionFields[productionDashNotesField.name] = withRunMarker(sourceDashNotes, 2, 2);
+  }
 
   const updateProductionRes = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`, production.name), {
     method: 'PATCH',
