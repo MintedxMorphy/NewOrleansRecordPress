@@ -116,6 +116,26 @@ function airtableHeaders() {
   };
 }
 
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function airtableFetch(input: string, init?: RequestInit) {
+  const delays = [450, 900, 1800, 3200];
+
+  for (let attempt = 0; attempt <= delays.length; attempt += 1) {
+    const res = await fetch(input, init);
+    if (res.status !== 429 && res.status < 500) return res;
+    if (attempt === delays.length) return res;
+
+    const retryAfter = Number(res.headers.get('retry-after'));
+    const retryDelay = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : delays[attempt];
+    await sleep(retryDelay);
+  }
+
+  return fetch(input, init);
+}
+
 function tableUrl(path = '', table = airtableJobsTable()) {
   const baseId = airtableBaseId();
   if (!baseId) throw new Error('Missing AIRTABLE_BASE_ID');
@@ -411,7 +431,7 @@ export async function getAirtableJobs(): Promise<(NORPJob & { airtable_record_id
     if (view) params.set('view', view);
     if (offset) params.set('offset', offset);
 
-    const res = await fetch(`${tableUrl()}?${params.toString()}`, {
+    const res = await airtableFetch(`${tableUrl()}?${params.toString()}`, {
       headers: airtableHeaders(),
       cache: 'no-store',
     });
@@ -441,7 +461,7 @@ async function findAirtableRecordId(jobId: string) {
     filterByFormula: `{${fieldName}}='${escapeFormulaValue(jobId)}'`,
   });
 
-  const res = await fetch(`${tableUrl()}?${params.toString()}`, {
+  const res = await airtableFetch(`${tableUrl()}?${params.toString()}`, {
     headers: airtableHeaders(),
     cache: 'no-store',
   });
@@ -455,7 +475,7 @@ async function findAirtableRecordId(jobId: string) {
 }
 
 async function getAirtableRecord(recordId: string) {
-  const res = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+  const res = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
     headers: airtableHeaders(),
     cache: 'no-store',
   });
@@ -469,7 +489,7 @@ async function getAirtableRecord(recordId: string) {
 }
 
 async function getAirtableTablesMeta() {
-  const res = await fetch(baseMetaUrl(), {
+  const res = await airtableFetch(baseMetaUrl(), {
     headers: airtableHeaders(),
     cache: 'no-store',
   });
@@ -554,7 +574,7 @@ async function findMatchingCompletedRecord(record: AirtableRecord, completed: Ai
     filterByFormula,
   });
 
-  const res = await fetch(`${tableUrl('', completed.name)}?${params.toString()}`, {
+  const res = await airtableFetch(`${tableUrl('', completed.name)}?${params.toString()}`, {
     headers: airtableHeaders(),
     cache: 'no-store',
   });
@@ -608,7 +628,7 @@ export async function completeAirtableJob(jobId: string) {
       completedFieldsToUpdate[completedDashNotesField.name] = stripRunMarkers(matchingCompleted.fields[completedDashNotesField.name]);
     }
 
-    const updateCompletedRes = await fetch(tableUrl(`/${encodeURIComponent(matchingCompleted.id)}`, completed.name), {
+    const updateCompletedRes = await airtableFetch(tableUrl(`/${encodeURIComponent(matchingCompleted.id)}`, completed.name), {
       method: 'PATCH',
       headers: airtableHeaders(),
       body: JSON.stringify({
@@ -622,7 +642,7 @@ export async function completeAirtableJob(jobId: string) {
       throw new Error(updatedCompleted.error?.message || `Airtable completed quantity merge failed (${updateCompletedRes.status})`);
     }
 
-    const deleteRes = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+    const deleteRes = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
       method: 'DELETE',
       headers: airtableHeaders(),
     });
@@ -646,7 +666,7 @@ export async function completeAirtableJob(jobId: string) {
     fields[completedDashNotesField.name] = stripRunMarkers(fields[completedDashNotesField.name]);
   }
 
-  const createRes = await fetch(tableUrl('', completed.name), {
+  const createRes = await airtableFetch(tableUrl('', completed.name), {
     method: 'POST',
     headers: airtableHeaders(),
     body: JSON.stringify({ fields, typecast: true }),
@@ -657,7 +677,7 @@ export async function completeAirtableJob(jobId: string) {
     throw new Error(created.error?.message || `Airtable completed record create failed (${createRes.status})`);
   }
 
-  const deleteRes = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+  const deleteRes = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
     method: 'DELETE',
     headers: airtableHeaders(),
   });
@@ -684,7 +704,7 @@ export async function updateAirtableJobPosition(jobId: string, stage: string, or
   };
   if (typeof order === 'number') fields[airtableOrderField()] = order;
 
-  const res = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+  const res = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
     method: 'PATCH',
     headers: airtableHeaders(),
     body: JSON.stringify({
@@ -737,7 +757,7 @@ export async function createAirtableJobSplit(
     completedFields[completedDashNotesField.name] = withRunMarker(sourceDashNotes, 1, 2);
   }
 
-  const createCompletedRes = await fetch(tableUrl('', completed.name), {
+  const createCompletedRes = await airtableFetch(tableUrl('', completed.name), {
     method: 'POST',
     headers: airtableHeaders(),
     body: JSON.stringify({ fields: completedFields, typecast: true }),
@@ -759,7 +779,7 @@ export async function createAirtableJobSplit(
     productionFields[productionDashNotesField.name] = withRunMarker(sourceDashNotes, 2, 2);
   }
 
-  const updateProductionRes = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`, production.name), {
+  const updateProductionRes = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`, production.name), {
     method: 'PATCH',
     headers: airtableHeaders(),
     body: JSON.stringify({ fields: productionFields, typecast: true }),
@@ -782,7 +802,7 @@ export async function updateAirtableJobDashNotes(jobId: string, dashNotes: strin
   const recordId = await findAirtableRecordId(jobId);
   if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
 
-  const res = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+  const res = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
     method: 'PATCH',
     headers: airtableHeaders(),
     body: JSON.stringify({

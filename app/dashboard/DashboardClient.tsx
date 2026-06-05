@@ -210,6 +210,24 @@ function persistReorder(updates: Job[]) {
   });
 }
 
+function persistJobPosition(job: Job, stage: Station, order: number) {
+  return fetch(`/api/jobs/${encodeURIComponent(jobKey(job))}/stage`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stage, order }),
+  });
+}
+
+function orderForInsertion(list: Job[], index: number) {
+  const previous = index > 0 ? dashboardOrder(list[index - 1]) : undefined;
+  const next = index < list.length - 1 ? dashboardOrder(list[index + 1]) : undefined;
+
+  if (previous !== undefined && next !== undefined) return (previous + next) / 2;
+  if (previous !== undefined) return previous + 1;
+  if (next !== undefined) return Math.max(0.5, next - 1);
+  return 1;
+}
+
 function StatusPill({ children, color }: { children: React.ReactNode; color: string }) {
   return (
     <span style={{
@@ -435,9 +453,8 @@ function Pipeline({
   const [confirmCompleteJob, setConfirmCompleteJob] = useState<Job | null>(null);
   useEffect(() => setMounted(true), []);
 
-  const saveStation = async (nextJobs: Job[], touchedStations: Station[]) => {
-    const touched = touchedStations.flatMap(station => stationJobs(nextJobs, station));
-    const response = await persistReorder(touched);
+  const saveMovedJob = async (job: Job, stage: Station, order: number) => {
+    const response = await persistJobPosition(job, stage, order);
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || `Airtable save failed (${response.status})`);
@@ -476,26 +493,22 @@ function Pipeline({
       destinationList.splice(result.destination.index, 0, movedNext);
     }
 
-    const touchedStations = fromStation === toStation ? [fromStation] : [fromStation, toStation];
+    const destinationAfterMove = fromStation === toStation ? sourceList : destinationList;
+    const movedOrder = orderForInsertion(destinationAfterMove, result.destination.index);
+    const movedPersisted = { ...movedNext, dashboard_order: String(movedOrder) };
     const rebuilt = activeJobs.map(job => {
       const key = jobKey(job);
-      const replacement = [...sourceList, ...destinationList].find(candidate => jobKey(candidate) === key);
+      const replacement = key === jobKey(moved) ? movedPersisted : undefined;
       return replacement ?? job;
     });
 
-    const orderedTouched = touchedStations.flatMap(station =>
-      stationJobs(rebuilt, station).map((job, index) => ({ ...job, dashboard_order: String(index + 1) }))
-    );
-    const nextJobs = [...rebuilt, ...hiddenJobs].map(job => {
-      const replacement = orderedTouched.find(candidate => jobKey(candidate) === jobKey(job));
-      return replacement ?? job;
-    });
+    const nextJobs = [...rebuilt, ...hiddenJobs];
 
     onJobsChange(nextJobs);
     onError('');
 
     try {
-      await saveStation(nextJobs, touchedStations);
+      await saveMovedJob(movedPersisted, toStation, movedOrder);
     } catch (error) {
       onJobsChange(jobs);
       onError(error instanceof Error ? error.message : String(error));
