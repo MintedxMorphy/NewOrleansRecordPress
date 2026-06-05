@@ -135,6 +135,18 @@ function stringValue(value: unknown): string {
   return String(value);
 }
 
+function parseQuantity(value: unknown) {
+  const cleaned = stringValue(value).replace(/,/g, '').trim();
+  if (!cleaned) return undefined;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function airtableValueForField(field: AirtableFieldMeta, value: number) {
+  if (['number', 'currency', 'percent', 'rating', 'duration'].includes(field.type)) return value;
+  return String(value);
+}
+
 function field(fields: Record<string, unknown>, aliases: string[]) {
   for (const alias of aliases) {
     const matchingKey = Object.keys(fields).find(key => key.toLowerCase() === alias.toLowerCase());
@@ -239,9 +251,9 @@ function resolveAirtableField(table: AirtableTableMeta, names: string[]) {
   );
 }
 
-function resolveAirtableStageValue(stage: string, tables: AirtableTableMeta[] = []) {
+function resolveAirtableStageValue(stage: string, tables: AirtableTableMeta[] = [], tableOverride?: AirtableTableMeta) {
   const fallback = stageForAirtable(stage);
-  const table = resolveAirtableTable(tables, airtableJobsTable());
+  const table = tableOverride || resolveAirtableTable(tables, airtableJobsTable());
   const stageField = table ? resolveAirtableField(table, [airtableStageField(), ...FIELD_ALIASES.stage]) : undefined;
   const choices = stageField?.options?.choices || [];
   const keys = new Set([
@@ -408,6 +420,25 @@ function resolveAirtableTable(tables: AirtableTableMeta[], configuredTable: stri
   return tables.find(table => table.id === configuredTable || table.name === configuredTable);
 }
 
+function completedFieldsFromRecord(record: AirtableRecord, production: AirtableTableMeta, completed: AirtableTableMeta) {
+  const fields: Record<string, unknown> = {};
+
+  for (let index = 0; index < completed.fields.length; index += 1) {
+    const targetField = completed.fields[index];
+    if (!isWritableField(targetField)) continue;
+
+    const sourceField =
+      production.fields.find(field => field.name === targetField.name) ||
+      production.fields[index];
+    const value = sourceField ? record.fields[sourceField.name] : undefined;
+
+    if (value === undefined) continue;
+    fields[targetField.name] = value;
+  }
+
+  return fields;
+}
+
 export async function completeAirtableJob(jobId: string) {
   const recordId = await findAirtableRecordId(jobId);
   if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
@@ -423,20 +454,7 @@ export async function completeAirtableJob(jobId: string) {
   if (!production) throw new Error(`Airtable table not found: ${airtableJobsTable()}`);
   if (!completed) throw new Error(`Airtable table not found: ${airtableCompletedTable()}`);
 
-  const fields: Record<string, unknown> = {};
-
-  for (let index = 0; index < completed.fields.length; index += 1) {
-    const targetField = completed.fields[index];
-    if (!isWritableField(targetField)) continue;
-
-    const sourceField =
-      production.fields.find(field => field.name === targetField.name) ||
-      production.fields[index];
-    const value = sourceField ? record.fields[sourceField.name] : undefined;
-
-    if (value === undefined) continue;
-    fields[targetField.name] = value;
-  }
+  const fields = completedFieldsFromRecord(record, production, completed);
 
   const createRes = await fetch(tableUrl('', completed.name), {
     method: 'POST',
@@ -492,7 +510,7 @@ export async function updateAirtableJobPosition(jobId: string, stage: string, or
 
 export async function createAirtableJobSplit(
   jobId: string,
-  input: { stage: string; quantity?: string; note?: string; order?: number }
+  input: { stage: string; quantity?: string; order?: number }
 ) {
   const recordId = await findAirtableRecordId(jobId);
   if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
@@ -502,52 +520,63 @@ export async function createAirtableJobSplit(
     getAirtableTablesMeta(),
   ]);
   const production = resolveAirtableTable(tables, airtableJobsTable());
+  const completed = resolveAirtableTable(tables, airtableCompletedTable());
   if (!production) throw new Error(`Airtable table not found: ${airtableJobsTable()}`);
-
-  const fields: Record<string, unknown> = {};
-  for (const field of production.fields) {
-    if (!isWritableField(field)) continue;
-    const value = record.fields[field.name];
-    if (value !== undefined) fields[field.name] = value;
-  }
-
-  const stageField = resolveAirtableField(production, [airtableStageField(), ...FIELD_ALIASES.stage]);
-  if (stageField) fields[stageField.name] = resolveAirtableStageValue(input.stage, tables);
-
-  const orderField = resolveAirtableField(production, [airtableOrderField(), 'Dashboard Order', 'Sort Order', 'Board Order']);
-  if (orderField) fields[orderField.name] = typeof input.order === 'number' ? input.order : 999999;
+  if (!completed) throw new Error(`Airtable table not found: ${airtableCompletedTable()}`);
 
   const quantityField = resolveAirtableField(production, FIELD_ALIASES.quantity);
-  if (quantityField && input.quantity?.trim()) {
-    const parsed = Number(input.quantity);
-    fields[quantityField.name] = Number.isFinite(parsed) ? parsed : input.quantity.trim();
+  if (!quantityField) throw new Error('Airtable quantity field not found');
+  const totalQuantity = parseQuantity(record.fields[quantityField.name]);
+  const remainingQuantity = parseQuantity(input.quantity);
+  if (!totalQuantity || totalQuantity <= 0) throw new Error('Current job quantity is not a number Airtable can split');
+  if (!remainingQuantity || remainingQuantity <= 0) throw new Error('Enter the remaining quantity as a number');
+  if (remainingQuantity >= totalQuantity) {
+    throw new Error(`Remaining quantity must be less than total quantity (${totalQuantity})`);
+  }
+  const completedQuantity = totalQuantity - remainingQuantity;
+
+  const completedFields = completedFieldsFromRecord(record, production, completed);
+  const completedQuantityField = resolveAirtableField(completed, FIELD_ALIASES.quantity);
+  if (completedQuantityField) {
+    completedFields[completedQuantityField.name] = airtableValueForField(completedQuantityField, completedQuantity);
   }
 
-  const dashNotesField = resolveAirtableField(production, [airtableDashNotesField(), ...FIELD_ALIASES.dash_notes]);
-  if (dashNotesField) {
-    const existingNotes = stringValue(record.fields[dashNotesField.name]);
-    const customer = field(record.fields, FIELD_ALIASES.customer);
-    const matrix = field(record.fields, FIELD_ALIASES.matrix);
-    const source = [customer, matrix].filter(Boolean).join(' / ') || jobId;
-    const note = input.note?.trim() || `Split from ${source}`;
-    fields[dashNotesField.name] = [
-      `[Split Batch] ${note}`,
-      existingNotes ? `Original dash notes:\n${existingNotes}` : '',
-    ].filter(Boolean).join('\n\n');
-  }
-
-  const res = await fetch(tableUrl('', production.name), {
+  const createCompletedRes = await fetch(tableUrl('', completed.name), {
     method: 'POST',
     headers: airtableHeaders(),
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({ fields: completedFields, typecast: true }),
   });
-  const created = await res.json() as (AirtableRecord & { error?: { message?: string } });
-
-  if (!res.ok) {
-    throw new Error(created.error?.message || `Airtable split record create failed (${res.status})`);
+  const completedRecord = await createCompletedRes.json() as (AirtableRecord & { error?: { message?: string } });
+  if (!createCompletedRes.ok) {
+    throw new Error(completedRecord.error?.message || `Airtable completed split create failed (${createCompletedRes.status})`);
   }
 
-  return mapRecordToJob(created);
+  const productionFields: Record<string, unknown> = {
+    [quantityField.name]: airtableValueForField(quantityField, remainingQuantity),
+  };
+  const stageField = resolveAirtableField(production, [airtableStageField(), ...FIELD_ALIASES.stage]);
+  if (stageField) productionFields[stageField.name] = resolveAirtableStageValue(input.stage, tables, production);
+
+  const orderField = resolveAirtableField(production, [airtableOrderField(), 'Dashboard Order', 'Sort Order', 'Board Order']);
+  if (orderField) productionFields[orderField.name] = typeof input.order === 'number' ? input.order : 999999;
+
+  const updateProductionRes = await fetch(tableUrl(`/${encodeURIComponent(recordId)}`, production.name), {
+    method: 'PATCH',
+    headers: airtableHeaders(),
+    body: JSON.stringify({ fields: productionFields, typecast: true }),
+  });
+  const updatedProduction = await updateProductionRes.json() as (AirtableRecord & { error?: { message?: string } });
+
+  if (!updateProductionRes.ok) {
+    throw new Error(updatedProduction.error?.message || `Airtable production split update failed (${updateProductionRes.status})`);
+  }
+
+  return {
+    job: mapRecordToJob(updatedProduction),
+    completedRecordId: completedRecord.id,
+    completedQuantity,
+    remainingQuantity,
+  };
 }
 
 export async function updateAirtableJobDashNotes(jobId: string, dashNotes: string) {

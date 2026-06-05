@@ -103,6 +103,8 @@ const COLORS = {
   green: '#00E86A',
 };
 
+const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2QqTZmnF/viwybIIrPi9Pd9Tyo?blocks=hide';
+
 function value(job: Job, keys: string[]) {
   for (const key of keys) {
     const found = job[key];
@@ -148,6 +150,18 @@ function stationJobs(jobs: Job[], station: Station) {
 
 function stationAnchor(station: Station) {
   return `station-${station}`;
+}
+
+function searchableJobText(job: Job) {
+  return [
+    value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']),
+    value(job, ['matrix', 'MATRIX', 'Matrix ID', 'job_id']),
+    value(job, ['order_number', 'ORDER NUMBER']),
+    value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']),
+    value(job, ['colors', 'Colors', 'color', 'Color', 'Vinyl Color']),
+    value(job, ['notes', 'Notes', 'Project Notes', 'Production Notes']),
+    value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']),
+  ].join(' ').toLowerCase();
 }
 
 function useMediaQuery(query: string) {
@@ -381,16 +395,20 @@ function JobCard({
 
 function Pipeline({
   jobs,
+  visibleJobs = jobs,
   onJobsChange,
   onJobOpen,
   onError,
   isMobile = false,
+  searchActive = false,
 }: {
   jobs: Job[];
+  visibleJobs?: Job[];
   onJobsChange: (jobs: Job[]) => void;
   onJobOpen: (job: Job) => void;
   onError: (message: string) => void;
   isMobile?: boolean;
+  searchActive?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   const [confirmCompleteJob, setConfirmCompleteJob] = useState<Job | null>(null);
@@ -414,6 +432,10 @@ function Pipeline({
 
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
+    if (searchActive) {
+      onError('Clear search before dragging jobs.');
+      return;
+    }
 
     const fromStation = result.source.droppableId as Station;
     const toStation = result.destination.droppableId as Station;
@@ -500,7 +522,7 @@ function Pipeline({
       }}>
         {STATIONS.map(station => {
           const meta = STATION_META[station];
-          const list = stationJobs(jobs, station);
+          const list = stationJobs(visibleJobs, station);
           const isNowPressing = station === 'now_pressing';
 
           return (
@@ -569,7 +591,7 @@ function Pipeline({
                   }}
                   >
                     {list.map((job, index) => (
-                      <Draggable key={jobKey(job)} draggableId={jobKey(job)} index={index}>
+                      <Draggable key={jobKey(job)} draggableId={jobKey(job)} index={index} isDragDisabled={searchActive}>
                         {(dragProvided, dragSnapshot) => (
                           <div
                             ref={dragProvided.innerRef}
@@ -684,7 +706,7 @@ function JobDrawer({
   job: Job;
   onClose: () => void;
   onDashNotesSave: (job: Job, dashNotes: string) => Promise<void>;
-  onSplitJob: (job: Job, payload: { stage: Station; quantity: string; note: string }) => Promise<void>;
+  onSplitJob: (job: Job, payload: { stage: Station; quantity: string }) => Promise<void>;
 }) {
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
@@ -695,7 +717,6 @@ function JobDrawer({
   const [notesError, setNotesError] = useState('');
   const [splitStage, setSplitStage] = useState<Station>('now_pressing');
   const [splitQuantity, setSplitQuantity] = useState('');
-  const [splitNote, setSplitNote] = useState('');
   const [splitting, setSplitting] = useState(false);
   const [splitError, setSplitError] = useState('');
 
@@ -742,7 +763,6 @@ function JobDrawer({
       await onSplitJob(job, {
         stage: splitStage,
         quantity: splitQuantity,
-        note: splitNote,
       });
     } catch (error) {
       setSplitError(error instanceof Error ? error.message : String(error));
@@ -886,11 +906,11 @@ function JobDrawer({
               </select>
             </label>
             <label style={{ color: COLORS.muted, display: 'grid', fontSize: '12px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              Quantity
+              Remaining Quantity
               <input
                 value={splitQuantity}
                 onChange={event => setSplitQuantity(event.target.value)}
-                placeholder="Remaining quantity"
+                placeholder="Example: 125"
                 style={{
                   background: COLORS.card,
                   border: `1px solid ${COLORS.border}`,
@@ -899,26 +919,6 @@ function JobDrawer({
                   font: 'inherit',
                   fontSize: '14px',
                   padding: '10px',
-                }}
-              />
-            </label>
-            <label style={{ color: COLORS.muted, display: 'grid', fontSize: '12px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              Split Note
-              <textarea
-                value={splitNote}
-                onChange={event => setSplitNote(event.target.value)}
-                placeholder="Example: remaining back half still on press"
-                style={{
-                  background: COLORS.card,
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: '8px',
-                  color: COLORS.text,
-                  font: 'inherit',
-                  fontSize: '14px',
-                  lineHeight: 1.4,
-                  minHeight: '82px',
-                  padding: '10px',
-                  resize: 'vertical',
                 }}
               />
             </label>
@@ -942,7 +942,7 @@ function JobDrawer({
                   padding: '9px 13px',
                 }}
               >
-                {splitting ? 'Creating...' : 'Create Split'}
+                {splitting ? 'Splitting...' : 'Split Job'}
               </button>
             </div>
           </div>
@@ -958,6 +958,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   const [source, setSource] = useState('');
   const [error, setError] = useState('');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const isMobile = useMediaQuery('(max-width: 760px)');
 
   useEffect(() => {
@@ -972,10 +973,17 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       .finally(() => setLoading(false));
   }, []);
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const visibleJobs = useMemo(() => (
+    normalizedSearch
+      ? jobs.filter(job => searchableJobText(job).includes(normalizedSearch))
+      : jobs
+  ), [jobs, normalizedSearch]);
   const activeJobs = jobs.filter(job => stationOf(job) !== 'completed');
+  const visibleActiveJobs = visibleJobs.filter(job => stationOf(job) !== 'completed');
   const counts = useMemo(() => Object.fromEntries(
-    STATIONS.map(station => [station, stationJobs(jobs, station).length])
-  ) as Record<Station, number>, [jobs]);
+    STATIONS.map(station => [station, stationJobs(visibleJobs, station).length])
+  ) as Record<Station, number>, [visibleJobs]);
 
   const jumpToStation = (station: Station) => {
     const element = document.getElementById(stationAnchor(station));
@@ -1004,7 +1012,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     setError('');
   };
 
-  const splitJob = async (job: Job, payload: { stage: Station; quantity: string; note: string }) => {
+  const splitJob = async (job: Job, payload: { stage: Station; quantity: string }) => {
     const key = jobKey(job);
     const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/split`, {
       method: 'POST',
@@ -1018,7 +1026,9 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     }
 
     if (body.job) {
-      setJobs(current => [...current, body.job]);
+      setJobs(current => current.map(candidate => (
+        jobKey(candidate) === key ? body.job : candidate
+      )));
     }
     setSelectedJob(null);
     setError('');
@@ -1054,6 +1064,77 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
           {source && <div style={{ marginTop: '4px' }}>Source: {source === 'airtable' ? 'Airtable' : 'Sheet fallback'}</div>}
         </div>
       </header>
+
+      <section style={{
+        alignItems: isMobile ? 'stretch' : 'center',
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        gap: '10px',
+        justifyContent: 'space-between',
+        margin: '0 auto 14px',
+        maxWidth: '1920px',
+      }}>
+        <label style={{
+          alignItems: 'center',
+          background: COLORS.panel,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: '8px',
+          display: 'flex',
+          gap: '9px',
+          minHeight: '44px',
+          minWidth: 0,
+          padding: '0 12px',
+          width: isMobile ? '100%' : 'min(520px, 34vw)',
+        }}>
+          <SearchCheck size={18} color={COLORS.muted} />
+          <input
+            value={searchQuery}
+            onChange={event => setSearchQuery(event.target.value)}
+            placeholder="Search jobs"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: COLORS.text,
+              font: 'inherit',
+              fontSize: '15px',
+              minWidth: 0,
+              outline: 'none',
+              width: '100%',
+            }}
+          />
+        </label>
+        <div style={{
+          alignItems: 'center',
+          display: 'flex',
+          gap: '10px',
+          justifyContent: isMobile ? 'space-between' : 'flex-end',
+          width: isMobile ? '100%' : undefined,
+        }}>
+          {normalizedSearch && (
+            <div style={{ color: COLORS.muted, fontSize: '13px' }}>
+              {visibleActiveJobs.length} shown
+            </div>
+          )}
+          <a
+            href={AIRTABLE_DATABASE_URL}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              background: COLORS.panel,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: '8px',
+              color: COLORS.text,
+              fontSize: '13px',
+              fontWeight: 850,
+              padding: '12px 14px',
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Airtable Database
+          </a>
+        </div>
+      </section>
 
       <section style={{
         display: 'grid',
@@ -1115,7 +1196,15 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       )}
 
       <div style={{ margin: '0 auto', maxWidth: '1920px' }}>
-        <Pipeline jobs={jobs} onJobsChange={setJobs} onJobOpen={setSelectedJob} onError={setError} isMobile={isMobile} />
+        <Pipeline
+          jobs={jobs}
+          visibleJobs={visibleJobs}
+          onJobsChange={setJobs}
+          onJobOpen={setSelectedJob}
+          onError={setError}
+          isMobile={isMobile}
+          searchActive={Boolean(normalizedSearch)}
+        />
       </div>
 
       {selectedJob && (
