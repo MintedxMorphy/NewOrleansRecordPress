@@ -199,7 +199,84 @@ function Checkbox({
   )
 }
 
+function optionLabel(options: { value: string; label: string }[], value: string) {
+  return options.find(option => option.value === value)?.label || value
+}
+
 export function QuoteCalculator() {
+  const masterFormatOptions = [
+    { value: "audioFiles", label: "I'm submitting audio files" },
+    { value: "haveLacquer", label: "I have a lacquer" },
+  ]
+  const projectTypeOptions = [
+    { value: "12-standard", label: '12" LP - Standard (150g)' },
+    { value: "12-heavy", label: '12" LP - Heavy (180g)' },
+    { value: "double-12-standard", label: '2x12" 2xLP - Standard (150g)' },
+    { value: "double-12-heavy", label: '2x12" 2xLP - Heavy (180g)' },
+    { value: "7-standard", label: '7" EP - Standard' },
+  ]
+  const vinylColorOptions = [
+    { value: "black", label: "Black (Standard)" },
+    { value: "random", label: "Random Color (Free!)" },
+    { value: "solid", label: "Solid Color (+$0.25/unit)" },
+    { value: "translucent", label: "Translucent (+$0.35/unit)" },
+    { value: "marble", label: "Marble (+$0.50/unit)" },
+    { value: "smoke", label: "Smoke (+$0.45/unit)" },
+    { value: "splatter", label: "Splatter (+$0.75/unit)" },
+  ]
+  const centerLabelOptions = [
+    { value: "printed", label: "Printed Labels" },
+    { value: "blank", label: "Blank Labels" },
+    { value: "customerSupplied", label: "Customer Supplied" },
+  ]
+  const innerSleeveOptions = [
+    { value: "none", label: "None" },
+    { value: "whitePaper", label: "White Paper" },
+    { value: "heavyWhitePaper", label: "Heavy Duty White Paper" },
+    { value: "blackPaper", label: "Black Paper" },
+    { value: "brownPaper", label: "Brown Paper" },
+    { value: "whitePoly", label: "White Poly-Lined" },
+    { value: "blackPoly", label: "Black Poly-Lined" },
+    { value: "printed1Color", label: "Printed - 1 Color" },
+    { value: "printedFullColor", label: "Printed - Full Color" },
+  ]
+  const insertOptions = [
+    { value: "none", label: "None" },
+    { value: "2panel", label: '12" x 12" - 2 Panel' },
+    { value: "4panel", label: '24" x 12" - 4 Panel' },
+  ]
+  const jacketOptions = [
+    { value: "none", label: "None" },
+    { value: "fullColorSingle", label: "Full Color - Single Pocket" },
+    { value: "1colorSingle", label: "1 Color - Single Pocket" },
+    { value: "fullColorWide", label: "Full Color - Wide Spine (2xLP)" },
+    { value: "1colorWide", label: "1 Color - Wide Spine (2xLP)" },
+    { value: "gatefold", label: "Full Color - Gatefold" },
+    { value: "screenPrinted1", label: "Screen-Printed - 1 Color" },
+    { value: "screenPrinted2", label: "Screen-Printed - 2 Color" },
+    { value: "screenPrinted3", label: "Screen-Printed - 3 Color" },
+    { value: "screenPrinted4", label: "Screen-Printed - 4 Color" },
+    { value: "blankWhite", label: "Blank - White" },
+    { value: "blankBlack", label: "Blank - Black" },
+    { value: "blankChipboard", label: "Blank - Chipboard" },
+  ]
+  const outerSleeveOptions = [
+    { value: "none", label: "None" },
+    { value: "standardNoFlap", label: "Standard - No Flap" },
+    { value: "standardWithFlap", label: "Standard - With Flap" },
+    { value: "crystalClear", label: "Crystal Clear - Resealable" },
+  ]
+  const upcBarcodeOptions = [
+    { value: "none", label: "None / Don't Need" },
+    { value: "providing", label: "I'm Providing Barcode" },
+    { value: "embedded", label: "Need Barcode - Embedded in Art" },
+    { value: "sticker", label: "Need Barcode - Sticker" },
+  ]
+  const assemblyOptions = [
+    { value: "standard", label: "NORP Assembles" },
+    { value: "none", label: "I'll Assemble Myself" },
+  ]
+
   // Form state
   const [masterFormat, setMasterFormat] = useState("audioFiles")
   const [projectType, setProjectType] = useState("12-standard")
@@ -225,6 +302,11 @@ export function QuoteCalculator() {
   const [downloadCards, setDownloadCards] = useState(false)
   const [marketingSticker2, setMarketingSticker2] = useState(false)
   const [marketingSticker25x3, setMarketingSticker25x3] = useState(false)
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [submittingAction, setSubmittingAction] = useState<"save_quote" | "start_order" | null>(null)
+  const [submitMessage, setSubmitMessage] = useState("")
 
   // Calculate totals
   const estimate = useMemo(() => {
@@ -312,6 +394,95 @@ export function QuoteCalculator() {
     }).format(amount)
   }
 
+  const submitQuote = async (action: "save_quote" | "start_order") => {
+    if (!name.trim() || !email.trim()) {
+      setSubmitMessage("Name and email are required.")
+      return
+    }
+
+    setSubmittingAction(action)
+    setSubmitMessage("")
+
+    const jacketUpgrades = {
+      uvGloss,
+      matte,
+      reverseBoard,
+      heavyJacket,
+    }
+    const jacketUpgradesLabel = [
+      uvGloss && "UV Gloss Coating",
+      matte && "Matte Coating",
+      reverseBoard && "Reverse Board",
+      heavyJacket && "24pt Heavy Jacket",
+    ].filter(Boolean).join(", ")
+    const extrasLabel = [
+      downloadCards && "Download Cards",
+      marketingSticker2 && 'Marketing Sticker - 2" Circle',
+      marketingSticker25x3 && 'Marketing Sticker - 2.5" x 3"',
+    ].filter(Boolean).join(", ")
+
+    try {
+      const response = await fetch("/api/quote/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          projectType,
+          projectTypeLabel: optionLabel(projectTypeOptions, projectType),
+          quantity: estimate.quantity,
+          vinylColor: colorStyle,
+          vinylColorLabel: optionLabel(vinylColorOptions, colorStyle),
+          testPressings,
+          masterFormat,
+          masterFormatLabel: optionLabel(masterFormatOptions, masterFormat),
+          centerLabels,
+          centerLabelsLabel: optionLabel(centerLabelOptions, centerLabels),
+          innerSleeves,
+          innerSleevesLabel: optionLabel(innerSleeveOptions, innerSleeves),
+          inserts,
+          insertsLabel: optionLabel(insertOptions, inserts),
+          jackets,
+          jacketsLabel: optionLabel(jacketOptions, jackets),
+          jacketUpgrades,
+          jacketUpgradesLabel: jacketUpgradesLabel || "None",
+          outerSleeves,
+          outerSleevesLabel: optionLabel(outerSleeveOptions, outerSleeves),
+          shrinkwrap,
+          upcBarcodes,
+          upcBarcodesLabel: optionLabel(upcBarcodeOptions, upcBarcodes),
+          assembly,
+          assemblyLabel: optionLabel(assemblyOptions, assembly),
+          extrasLabel: extrasLabel || "None",
+          estimate: {
+            ...estimate,
+            lacquerCost: estimate.fixedCosts.lacquer,
+            electroplatingCost: estimate.fixedCosts.electroplating,
+            setupCost: estimate.fixedCosts.setup,
+            testPressingCost: estimate.fixedCosts.testPressings,
+            pressingCost: estimate.pressingTotal,
+            labelCost: estimate.perUnit.labels * estimate.quantity,
+            innerCost: estimate.perUnit.innerSleeves * estimate.quantity,
+            insertCost: estimate.perUnit.inserts * estimate.quantity,
+            jacketCost: estimate.perUnit.jackets * estimate.quantity,
+            jacketUpgradeCost: 0,
+            outerCost: estimate.perUnit.outerSleeves * estimate.quantity,
+            assemblyCost: estimate.perUnit.assembly * estimate.quantity,
+          },
+        }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || "Quote submission failed")
+      setSubmitMessage(action === "start_order" ? "Order started. We got it." : "Quote saved and emailed.")
+    } catch (error) {
+      setSubmitMessage(error instanceof Error ? error.message : "Quote submission failed")
+    } finally {
+      setSubmittingAction(null)
+    }
+  }
+
   return (
     <section id="quote" className="py-24 md:py-32 bg-background">
       <div className="max-w-7xl mx-auto px-6">
@@ -342,10 +513,7 @@ export function QuoteCalculator() {
                 value={masterFormat}
                 onChange={setMasterFormat}
                 tooltip="If you have your own lacquer, we can skip cutting."
-                options={[
-                  { value: "audioFiles", label: "I'm submitting audio files" },
-                  { value: "haveLacquer", label: "I have a lacquer" },
-                ]}
+                options={masterFormatOptions}
               />
             </div>
 
@@ -360,13 +528,7 @@ export function QuoteCalculator() {
                   label="Project Type"
                   value={projectType}
                   onChange={setProjectType}
-                  options={[
-                    { value: "12-standard", label: '12" LP - Standard (150g)' },
-                    { value: "12-heavy", label: '12" LP - Heavy (180g)' },
-                    { value: "double-12-standard", label: '2x12" 2xLP - Standard (150g)' },
-                    { value: "double-12-heavy", label: '2x12" 2xLP - Heavy (180g)' },
-                    { value: "7-standard", label: '7" EP - Standard' },
-                  ]}
+                  options={projectTypeOptions}
                 />
                 <NumberInput
                   label="Quantity"
@@ -380,15 +542,7 @@ export function QuoteCalculator() {
                   label="Vinyl Color"
                   value={colorStyle}
                   onChange={setColorStyle}
-                  options={[
-                    { value: "black", label: "Black (Standard)" },
-                    { value: "random", label: "Random Color (Free!)" },
-                    { value: "solid", label: "Solid Color (+$0.25/unit)" },
-                    { value: "translucent", label: "Translucent (+$0.35/unit)" },
-                    { value: "marble", label: "Marble (+$0.50/unit)" },
-                    { value: "smoke", label: "Smoke (+$0.45/unit)" },
-                    { value: "splatter", label: "Splatter (+$0.75/unit)" },
-                  ]}
+                  options={vinylColorOptions}
                 />
                 <NumberInput
                   label="Test Pressings"
@@ -411,57 +565,25 @@ export function QuoteCalculator() {
                   label="Center Labels"
                   value={centerLabels}
                   onChange={setCenterLabels}
-                  options={[
-                    { value: "printed", label: "Printed Labels" },
-                    { value: "blank", label: "Blank Labels" },
-                    { value: "customerSupplied", label: "Customer Supplied" },
-                  ]}
+                  options={centerLabelOptions}
                 />
                 <Select
                   label="Inner Sleeves"
                   value={innerSleeves}
                   onChange={setInnerSleeves}
-                  options={[
-                    { value: "none", label: "None" },
-                    { value: "whitePaper", label: "White Paper" },
-                    { value: "heavyWhitePaper", label: "Heavy Duty White Paper" },
-                    { value: "blackPaper", label: "Black Paper" },
-                    { value: "brownPaper", label: "Brown Paper" },
-                    { value: "whitePoly", label: "White Poly-Lined" },
-                    { value: "blackPoly", label: "Black Poly-Lined" },
-                    { value: "printed1Color", label: "Printed - 1 Color" },
-                    { value: "printedFullColor", label: "Printed - Full Color" },
-                  ]}
+                  options={innerSleeveOptions}
                 />
                 <Select
                   label="Inserts"
                   value={inserts}
                   onChange={setInserts}
-                  options={[
-                    { value: "none", label: "None" },
-                    { value: "2panel", label: '12" x 12" - 2 Panel' },
-                    { value: "4panel", label: '24" x 12" - 4 Panel' },
-                  ]}
+                  options={insertOptions}
                 />
                 <Select
                   label="Jackets"
                   value={jackets}
                   onChange={setJackets}
-                  options={[
-                    { value: "none", label: "None" },
-                    { value: "fullColorSingle", label: "Full Color - Single Pocket" },
-                    { value: "1colorSingle", label: "1 Color - Single Pocket" },
-                    { value: "fullColorWide", label: "Full Color - Wide Spine (2xLP)" },
-                    { value: "1colorWide", label: "1 Color - Wide Spine (2xLP)" },
-                    { value: "gatefold", label: "Full Color - Gatefold" },
-                    { value: "screenPrinted1", label: "Screen-Printed - 1 Color" },
-                    { value: "screenPrinted2", label: "Screen-Printed - 2 Color" },
-                    { value: "screenPrinted3", label: "Screen-Printed - 3 Color" },
-                    { value: "screenPrinted4", label: "Screen-Printed - 4 Color" },
-                    { value: "blankWhite", label: "Blank - White" },
-                    { value: "blankBlack", label: "Blank - Black" },
-                    { value: "blankChipboard", label: "Blank - Chipboard" },
-                  ]}
+                  options={jacketOptions}
                 />
               </div>
               
@@ -482,12 +604,7 @@ export function QuoteCalculator() {
                   label="Outer Sleeves"
                   value={outerSleeves}
                   onChange={setOuterSleeves}
-                  options={[
-                    { value: "none", label: "None" },
-                    { value: "standardNoFlap", label: "Standard - No Flap" },
-                    { value: "standardWithFlap", label: "Standard - With Flap" },
-                    { value: "crystalClear", label: "Crystal Clear - Resealable" },
-                  ]}
+                  options={outerSleeveOptions}
                 />
                 <div className="space-y-4">
                   <Checkbox label="Shrinkwrap" checked={shrinkwrap} onChange={setShrinkwrap} />
@@ -506,21 +623,13 @@ export function QuoteCalculator() {
                   label="UPC Barcodes"
                   value={upcBarcodes}
                   onChange={setUpcBarcodes}
-                  options={[
-                    { value: "none", label: "None / Don't Need" },
-                    { value: "providing", label: "I'm Providing Barcode" },
-                    { value: "embedded", label: "Need Barcode - Embedded in Art" },
-                    { value: "sticker", label: "Need Barcode - Sticker" },
-                  ]}
+                  options={upcBarcodeOptions}
                 />
                 <Select
                   label="Assembly"
                   value={assembly}
                   onChange={setAssembly}
-                  options={[
-                    { value: "standard", label: "NORP Assembles" },
-                    { value: "none", label: "I'll Assemble Myself" },
-                  ]}
+                  options={assemblyOptions}
                 />
               </div>
               <div className="border-t border-border pt-6">
@@ -605,15 +714,50 @@ export function QuoteCalculator() {
                 Contact us for a detailed quote.
               </p>
 
+              <div className="space-y-3 mb-6">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Name"
+                  className="w-full bg-secondary text-foreground px-4 py-3 border border-border focus:border-primary focus:outline-none transition-colors"
+                />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="Email"
+                  className="w-full bg-secondary text-foreground px-4 py-3 border border-border focus:border-primary focus:outline-none transition-colors"
+                />
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="Phone"
+                  className="w-full bg-secondary text-foreground px-4 py-3 border border-border focus:border-primary focus:outline-none transition-colors"
+                />
+              </div>
+
               <div className="space-y-3">
-                <button className="w-full px-6 py-3 bg-primary text-primary-foreground font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2">
+                <button
+                  onClick={() => submitQuote("start_order")}
+                  disabled={submittingAction !== null}
+                  className="w-full px-6 py-3 bg-primary text-primary-foreground font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
                   <Send size={16} />
-                  Start Order
+                  {submittingAction === "start_order" ? "Starting..." : "Start Order"}
                 </button>
-                <button className="w-full px-6 py-3 border border-foreground text-foreground font-bold uppercase tracking-wider text-sm hover:bg-foreground hover:text-background transition-colors flex items-center justify-center gap-2">
+                <button
+                  onClick={() => submitQuote("save_quote")}
+                  disabled={submittingAction !== null}
+                  className="w-full px-6 py-3 border border-foreground text-foreground font-bold uppercase tracking-wider text-sm hover:bg-foreground hover:text-background transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
                   <Save size={16} />
-                  Save Quote
+                  {submittingAction === "save_quote" ? "Saving..." : "Save Quote"}
                 </button>
+                {submitMessage && (
+                  <p className="text-xs text-muted-foreground text-center">{submitMessage}</p>
+                )}
               </div>
             </div>
           </div>

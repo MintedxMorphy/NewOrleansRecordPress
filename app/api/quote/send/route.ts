@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import nodemailer from "nodemailer"
 
+const AIRTABLE_API_URL = "https://api.airtable.com/v0"
+const QUOTE_TABLE_FALLBACK = "Quote Requests"
+
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -9,12 +12,240 @@ const transporter = nodemailer.createTransport({
   },
 })
 
+type AirtableFieldMeta = {
+  id: string
+  name: string
+  type: string
+}
+
+type AirtableTableMeta = {
+  id: string
+  name: string
+  fields: AirtableFieldMeta[]
+}
+
 function fmt(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n)
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+function row(label: string, value: unknown) {
+  return `<tr><td style="padding:4px 8px;color:#666">${escapeHtml(label)}</td><td style="padding:4px 8px;text-align:right;font-family:monospace">${escapeHtml(value || "—")}</td></tr>`
+}
+
 function lineItem(label: string, amount: number) {
-  return `<tr><td style="padding:4px 8px;color:#666">${label}</td><td style="padding:4px 8px;text-align:right;font-family:monospace">${fmt(amount)}</td></tr>`
+  return row(label, fmt(amount))
+}
+
+function airtableToken() {
+  return process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN || process.env.AIRTABLE_PAT
+}
+
+function airtableBaseId() {
+  return process.env.AIRTABLE_BASE_ID
+}
+
+function airtableQuoteTable() {
+  return process.env.AIRTABLE_QUOTES_TABLE || process.env.AIRTABLE_QUOTE_TABLE || QUOTE_TABLE_FALLBACK
+}
+
+function airtableQuoteTableCandidates() {
+  return Array.from(new Set([
+    airtableQuoteTable(),
+    QUOTE_TABLE_FALLBACK,
+    "Quotes",
+    "On Hold",
+  ].filter(Boolean)))
+}
+
+function airtableHeaders() {
+  const token = airtableToken()
+  if (!token) throw new Error("Missing Airtable token")
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  }
+}
+
+function tableUrl(table: string) {
+  const baseId = airtableBaseId()
+  if (!baseId) throw new Error("Missing Airtable base id")
+  return `${AIRTABLE_API_URL}/${encodeURIComponent(baseId)}/${encodeURIComponent(table)}`
+}
+
+function baseMetaUrl() {
+  const baseId = airtableBaseId()
+  if (!baseId) throw new Error("Missing Airtable base id")
+  return `${AIRTABLE_API_URL}/meta/bases/${encodeURIComponent(baseId)}/tables`
+}
+
+async function getAirtableTablesMeta() {
+  const res = await fetch(baseMetaUrl(), {
+    headers: airtableHeaders(),
+    cache: "no-store",
+  })
+  const data = await res.json() as { tables?: AirtableTableMeta[]; error?: { message?: string } }
+  if (!res.ok) throw new Error(data.error?.message || `Airtable metadata lookup failed (${res.status})`)
+  return data.tables || []
+}
+
+function resolveAirtableTable(tables: AirtableTableMeta[], configuredTable: string) {
+  return tables.find(table => table.id === configuredTable || table.name.toLowerCase() === configuredTable.toLowerCase())
+}
+
+function resolveAirtableField(table: AirtableTableMeta, names: string[]) {
+  return table.fields.find(field =>
+    names.some(name => field.name.toLowerCase() === name.toLowerCase())
+  )
+}
+
+function isWritableField(field: AirtableFieldMeta) {
+  return ![
+    "aiText",
+    "autoNumber",
+    "button",
+    "count",
+    "createdBy",
+    "createdTime",
+    "externalSyncSource",
+    "formula",
+    "lastModifiedBy",
+    "lastModifiedTime",
+    "lookup",
+    "multipleLookupValues",
+    "rollup",
+  ].includes(field.type)
+}
+
+function airtableValueForField(field: AirtableFieldMeta, value: unknown) {
+  if (value === undefined || value === null || value === "") return undefined
+
+  if (["number", "currency", "percent", "rating", "duration"].includes(field.type)) {
+    const numeric = Number(String(value).replace(/,/g, ""))
+    return Number.isFinite(numeric) ? numeric : undefined
+  }
+
+  if (field.type === "checkbox") {
+    if (typeof value === "boolean") return value
+    return ["yes", "true", "1", "on"].includes(String(value).trim().toLowerCase())
+  }
+
+  if (["date", "dateTime"].includes(field.type)) {
+    const date = new Date(String(value))
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
+  }
+
+  if (field.type === "multipleSelects") {
+    return Array.isArray(value) ? value.map(String) : String(value).split(",").map(item => item.trim()).filter(Boolean)
+  }
+
+  return String(value)
+}
+
+function assignAirtableField(
+  table: AirtableTableMeta,
+  fields: Record<string, unknown>,
+  names: string[],
+  value: unknown
+) {
+  const field = resolveAirtableField(table, names)
+  if (!field || !isWritableField(field)) return
+
+  const airtableValue = airtableValueForField(field, value)
+  if (airtableValue !== undefined) fields[field.name] = airtableValue
+}
+
+function quoteSummary(body: Record<string, any>, submissionType: string) {
+  const estimate = body.estimate || {}
+  return [
+    `${submissionType} submitted from nolavinyl.com`,
+    `Name: ${body.name || ""}`,
+    `Email: ${body.email || ""}`,
+    `Phone: ${body.phone || ""}`,
+    `Project Type: ${body.projectTypeLabel || body.projectType || ""}`,
+    `Quantity: ${body.quantity || ""}`,
+    `Vinyl Color: ${body.vinylColorLabel || body.vinylColor || ""}`,
+    `Master Format: ${body.masterFormatLabel || body.masterFormat || ""}`,
+    `Test Pressings: ${body.testPressings ?? ""}`,
+    `Center Labels: ${body.centerLabelsLabel || body.centerLabels || ""}`,
+    `Inner Sleeves: ${body.innerSleevesLabel || body.innerSleeves || ""}`,
+    `Inserts: ${body.insertsLabel || body.inserts || ""}`,
+    `Jackets: ${body.jacketsLabel || body.jackets || ""}`,
+    `Jacket Upgrades: ${body.jacketUpgradesLabel || "None"}`,
+    `Outer Sleeves: ${body.outerSleevesLabel || body.outerSleeves || ""}`,
+    `Shrinkwrap: ${body.shrinkwrap ? "Yes" : "No"}`,
+    `UPC Barcodes: ${body.upcBarcodesLabel || body.upcBarcodes || ""}`,
+    `Assembly: ${body.assemblyLabel || body.assembly || ""}`,
+    `Extras: ${body.extrasLabel || "None"}`,
+    `Total Estimate: ${estimate.grandTotal ? fmt(Number(estimate.grandTotal)) : ""}`,
+    `Unit Price: ${estimate.unitPrice ? fmt(Number(estimate.unitPrice)) : ""}`,
+  ].join("\n")
+}
+
+async function saveQuoteToAirtable(body: Record<string, any>, submissionType: string) {
+  if (!airtableToken() || !airtableBaseId()) {
+    throw new Error("Airtable is not configured for quote submissions")
+  }
+
+  const tables = await getAirtableTablesMeta()
+  const table = airtableQuoteTableCandidates()
+    .map(candidate => resolveAirtableTable(tables, candidate))
+    .find((candidate): candidate is AirtableTableMeta => Boolean(candidate))
+  if (!table) {
+    throw new Error(`Airtable table not found: ${airtableQuoteTableCandidates().join(", ")}`)
+  }
+
+  const estimate = body.estimate || {}
+  const summary = quoteSummary(body, submissionType)
+  const fields: Record<string, unknown> = {}
+
+  assignAirtableField(table, fields, ["Name", "Customer", "Customer Name"], body.name)
+  assignAirtableField(table, fields, ["Email", "Customer Email"], body.email)
+  assignAirtableField(table, fields, ["Phone", "Customer Phone"], body.phone)
+  assignAirtableField(table, fields, ["Submission Type", "Type", "Action"], submissionType)
+  assignAirtableField(table, fields, ["Project Type", "Format"], body.projectTypeLabel || body.projectType)
+  assignAirtableField(table, fields, ["Quantity", "Qty"], body.quantity)
+  assignAirtableField(table, fields, ["Vinyl Color", "Color"], body.vinylColorLabel || body.vinylColor)
+  assignAirtableField(table, fields, ["Master Format", "Mastering"], body.masterFormatLabel || body.masterFormat)
+  assignAirtableField(table, fields, ["Test Pressings", "TPs"], body.testPressings)
+  assignAirtableField(table, fields, ["Center Labels", "Labels"], body.centerLabelsLabel || body.centerLabels)
+  assignAirtableField(table, fields, ["Inner Sleeves", "Sleeves"], body.innerSleevesLabel || body.innerSleeves)
+  assignAirtableField(table, fields, ["Inserts"], body.insertsLabel || body.inserts)
+  assignAirtableField(table, fields, ["Jackets"], body.jacketsLabel || body.jackets)
+  assignAirtableField(table, fields, ["Jacket Upgrades"], body.jacketUpgradesLabel || "None")
+  assignAirtableField(table, fields, ["Outer Sleeves"], body.outerSleevesLabel || body.outerSleeves)
+  assignAirtableField(table, fields, ["Shrinkwrap"], body.shrinkwrap)
+  assignAirtableField(table, fields, ["UPC Barcodes", "UPC"], body.upcBarcodesLabel || body.upcBarcodes)
+  assignAirtableField(table, fields, ["Assembly"], body.assemblyLabel || body.assembly)
+  assignAirtableField(table, fields, ["Extras"], body.extrasLabel || "None")
+  assignAirtableField(table, fields, ["Total Estimate", "Estimated Total", "Grand Total"], estimate.grandTotal)
+  assignAirtableField(table, fields, ["Unit Price"], estimate.unitPrice)
+  assignAirtableField(table, fields, ["Quote Summary", "Summary", "Notes"], summary)
+  assignAirtableField(table, fields, ["Payload", "Raw Payload"], JSON.stringify(body, null, 2))
+  assignAirtableField(table, fields, ["Submitted At", "Created At", "Date"], new Date().toISOString())
+
+  // Until the base has a dedicated Quote Requests table, save calculator leads
+  // into the existing On Hold table as a full summary so no quote data is lost.
+  if (table.name.toLowerCase() === "on hold") {
+    assignAirtableField(table, fields, ["Name"], `${submissionType}: ${body.name || "Unknown"}\n\n${summary}`)
+  }
+
+  const res = await fetch(tableUrl(table.name), {
+    method: "POST",
+    headers: airtableHeaders(),
+    body: JSON.stringify({ fields, typecast: true }),
+  })
+  const data = await res.json() as { id?: string; error?: { message?: string } }
+  if (!res.ok) throw new Error(data.error?.message || `Airtable quote save failed (${res.status})`)
+  return data.id
 }
 
 export async function POST(req: NextRequest) {
@@ -38,6 +269,21 @@ export async function POST(req: NextRequest) {
       jacketUpgrades,
       outerSleeves,
       assembly,
+      upcBarcodes,
+      shrinkwrap,
+      jacketUpgradesLabel,
+      extrasLabel,
+      projectTypeLabel,
+      vinylColorLabel,
+      masterFormatLabel,
+      centerLabelsLabel,
+      innerSleevesLabel,
+      insertsLabel,
+      jacketsLabel,
+      outerSleevesLabel,
+      upcBarcodesLabel,
+      assemblyLabel,
+      action,
       // Calculated estimate
       estimate,
     } = body
@@ -47,31 +293,36 @@ export async function POST(req: NextRequest) {
     }
 
     const upgradeList = jacketUpgrades ? Object.entries(jacketUpgrades).filter(([, v]) => v).map(([k]) => k).join(", ") || "None" : "None"
+    const submissionType = action === "start_order" ? "Start Order" : "Save Quote"
+    const airtableRecordId = await saveQuoteToAirtable(body, submissionType)
 
     const htmlBody = `
-      <h2 style="font-family:sans-serif">New Quote Request — New Orleans Record Press</h2>
+      <h2 style="font-family:sans-serif">${escapeHtml(submissionType)} — New Orleans Record Press</h2>
 
       <h3 style="font-family:sans-serif;margin-top:24px">Contact</h3>
       <table cellpadding="0" cellspacing="0" style="font-family:sans-serif;font-size:14px;border-collapse:collapse">
-        ${lineItem("Name", 0).replace(fmt(0), name)}
-        ${lineItem("Email", 0).replace(fmt(0), email)}
-        ${lineItem("Phone", 0).replace(fmt(0), phone || "Not provided")}
+        ${row("Name", name)}
+        ${row("Email", email)}
+        ${row("Phone", phone || "Not provided")}
       </table>
 
       <h3 style="font-family:sans-serif;margin-top:24px">Project Specs</h3>
       <table cellpadding="0" cellspacing="0" style="font-family:sans-serif;font-size:14px;border-collapse:collapse">
-        ${lineItem("Format", 0).replace(fmt(0), projectType || "—")}
-        ${lineItem("Quantity", 0).replace(fmt(0), String(quantity || "—"))}
-        ${lineItem("Vinyl Color", 0).replace(fmt(0), vinylColor || "—")}
-        ${lineItem("Master Format", 0).replace(fmt(0), masterFormat || "—")}
-        ${lineItem("Test Pressings", 0).replace(fmt(0), String(testPressings ?? "—"))}
-        ${lineItem("Center Labels", 0).replace(fmt(0), centerLabels || "—")}
-        ${lineItem("Inner Sleeves", 0).replace(fmt(0), innerSleeves || "—")}
-        ${lineItem("Inserts", 0).replace(fmt(0), inserts || "—")}
-        ${lineItem("Jackets", 0).replace(fmt(0), jackets || "—")}
-        ${lineItem("Jacket Upgrades", 0).replace(fmt(0), upgradeList)}
-        ${lineItem("Outer Sleeves", 0).replace(fmt(0), outerSleeves || "—")}
-        ${lineItem("Assembly", 0).replace(fmt(0), assembly || "—")}
+        ${row("Format", projectTypeLabel || projectType || "—")}
+        ${row("Quantity", String(quantity || "—"))}
+        ${row("Vinyl Color", vinylColorLabel || vinylColor || "—")}
+        ${row("Master Format", masterFormatLabel || masterFormat || "—")}
+        ${row("Test Pressings", String(testPressings ?? "—"))}
+        ${row("Center Labels", centerLabelsLabel || centerLabels || "—")}
+        ${row("Inner Sleeves", innerSleevesLabel || innerSleeves || "—")}
+        ${row("Inserts", insertsLabel || inserts || "—")}
+        ${row("Jackets", jacketsLabel || jackets || "—")}
+        ${row("Jacket Upgrades", jacketUpgradesLabel || upgradeList)}
+        ${row("Outer Sleeves", outerSleevesLabel || outerSleeves || "—")}
+        ${row("Shrinkwrap", shrinkwrap ? "Yes" : "No")}
+        ${row("UPC Barcodes", upcBarcodesLabel || upcBarcodes || "—")}
+        ${row("Assembly", assemblyLabel || assembly || "—")}
+        ${row("Extras", extrasLabel || "None")}
       </table>
 
       ${estimate ? `
@@ -109,13 +360,13 @@ export async function POST(req: NextRequest) {
       from: "neworleansrecordpress@gmail.com",
       to: "info@neworleansrecordpress.com",
       replyTo: email,
-      subject: `A Quote was created by ${name} — ${quantity} units`,
+      subject: action === "start_order" ? `New Order by ${name}` : `Quote Saved by ${name}`,
       html: htmlBody,
     })
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, airtableRecordId })
   } catch (err) {
     console.error("Quote send API error:", err)
-    return NextResponse.json({ error: "Failed to send quote request" }, { status: 500 })
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to send quote request" }, { status: 500 })
   }
 }
