@@ -5,7 +5,7 @@ const AIRTABLE_API_URL = 'https://api.airtable.com/v0';
 const STAGE_LABELS: Record<string, string> = {
   pre_production: 'Pre-Production',
   press_queue: 'Press Queue',
-  now_pressing: 'NOW PRESSING',
+  now_pressing: 'Now Pressing',
   quality_control: 'Quality Control',
   sleeving: 'Sleeving',
   assembly: 'Assembly',
@@ -52,6 +52,12 @@ type AirtableFieldMeta = {
   id: string;
   name: string;
   type: string;
+  options?: {
+    choices?: Array<{
+      id?: string;
+      name: string;
+    }>;
+  };
 };
 
 type AirtableTableMeta = {
@@ -221,6 +227,40 @@ function stageForAirtable(stage: string) {
   const mode = process.env.AIRTABLE_STAGE_WRITE_MODE || 'label';
   if (mode === 'key') return stage;
   return STAGE_LABELS[stage] || stage;
+}
+
+function choiceKey(value = '') {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function resolveAirtableField(table: AirtableTableMeta, names: string[]) {
+  return table.fields.find(field =>
+    names.some(name => field.name.toLowerCase() === name.toLowerCase())
+  );
+}
+
+function resolveAirtableStageValue(stage: string, tables: AirtableTableMeta[] = []) {
+  const fallback = stageForAirtable(stage);
+  const table = resolveAirtableTable(tables, airtableJobsTable());
+  const stageField = table ? resolveAirtableField(table, [airtableStageField(), ...FIELD_ALIASES.stage]) : undefined;
+  const choices = stageField?.options?.choices || [];
+  const keys = new Set([
+    choiceKey(stage),
+    choiceKey(fallback),
+    choiceKey(normalizeStage(stage)),
+  ]);
+  const exactChoice = choices.find(choice =>
+    keys.has(choiceKey(choice.name)) || normalizeStage(choice.name) === normalizeStage(stage)
+  );
+  return exactChoice?.name || fallback;
+}
+
+async function getAirtableTablesMetaOrEmpty() {
+  try {
+    return await getAirtableTablesMeta();
+  } catch {
+    return [];
+  }
 }
 
 function escapeFormulaValue(value: string) {
@@ -429,9 +469,10 @@ export async function updateAirtableJobStage(jobId: string, stage: string) {
 export async function updateAirtableJobPosition(jobId: string, stage: string, order?: number) {
   const recordId = await findAirtableRecordId(jobId);
   if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
+  const tables = await getAirtableTablesMetaOrEmpty();
 
   const fields: Record<string, string | number> = {
-    [airtableStageField()]: stageForAirtable(stage),
+    [airtableStageField()]: resolveAirtableStageValue(stage, tables),
   };
   if (typeof order === 'number') fields[airtableOrderField()] = order;
 
@@ -447,6 +488,66 @@ export async function updateAirtableJobPosition(jobId: string, stage: string, or
   if (!res.ok) {
     throw new Error(data.error?.message || `Airtable stage update failed (${res.status})`);
   }
+}
+
+export async function createAirtableJobSplit(
+  jobId: string,
+  input: { stage: string; quantity?: string; note?: string; order?: number }
+) {
+  const recordId = await findAirtableRecordId(jobId);
+  if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
+
+  const [record, tables] = await Promise.all([
+    getAirtableRecord(recordId),
+    getAirtableTablesMeta(),
+  ]);
+  const production = resolveAirtableTable(tables, airtableJobsTable());
+  if (!production) throw new Error(`Airtable table not found: ${airtableJobsTable()}`);
+
+  const fields: Record<string, unknown> = {};
+  for (const field of production.fields) {
+    if (!isWritableField(field)) continue;
+    const value = record.fields[field.name];
+    if (value !== undefined) fields[field.name] = value;
+  }
+
+  const stageField = resolveAirtableField(production, [airtableStageField(), ...FIELD_ALIASES.stage]);
+  if (stageField) fields[stageField.name] = resolveAirtableStageValue(input.stage, tables);
+
+  const orderField = resolveAirtableField(production, [airtableOrderField(), 'Dashboard Order', 'Sort Order', 'Board Order']);
+  if (orderField) fields[orderField.name] = typeof input.order === 'number' ? input.order : 999999;
+
+  const quantityField = resolveAirtableField(production, FIELD_ALIASES.quantity);
+  if (quantityField && input.quantity?.trim()) {
+    const parsed = Number(input.quantity);
+    fields[quantityField.name] = Number.isFinite(parsed) ? parsed : input.quantity.trim();
+  }
+
+  const dashNotesField = resolveAirtableField(production, [airtableDashNotesField(), ...FIELD_ALIASES.dash_notes]);
+  if (dashNotesField) {
+    const existingNotes = stringValue(record.fields[dashNotesField.name]);
+    const customer = field(record.fields, FIELD_ALIASES.customer);
+    const matrix = field(record.fields, FIELD_ALIASES.matrix);
+    const source = [customer, matrix].filter(Boolean).join(' / ') || jobId;
+    const note = input.note?.trim() || `Split from ${source}`;
+    fields[dashNotesField.name] = [
+      `[Split Batch] ${note}`,
+      existingNotes ? `Original dash notes:\n${existingNotes}` : '',
+    ].filter(Boolean).join('\n\n');
+  }
+
+  const res = await fetch(tableUrl('', production.name), {
+    method: 'POST',
+    headers: airtableHeaders(),
+    body: JSON.stringify({ fields }),
+  });
+  const created = await res.json() as (AirtableRecord & { error?: { message?: string } });
+
+  if (!res.ok) {
+    throw new Error(created.error?.message || `Airtable split record create failed (${res.status})`);
+  }
+
+  return mapRecordToJob(created);
 }
 
 export async function updateAirtableJobDashNotes(jobId: string, dashNotes: string) {

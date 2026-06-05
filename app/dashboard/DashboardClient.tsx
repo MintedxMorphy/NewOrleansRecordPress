@@ -679,10 +679,12 @@ function JobDrawer({
   job,
   onClose,
   onDashNotesSave,
+  onSplitJob,
 }: {
   job: Job;
   onClose: () => void;
   onDashNotesSave: (job: Job, dashNotes: string) => Promise<void>;
+  onSplitJob: (job: Job, payload: { stage: Station; quantity: string; note: string }) => Promise<void>;
 }) {
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
@@ -691,6 +693,11 @@ function JobDrawer({
   const [draftDashNotes, setDraftDashNotes] = useState(dashNotes);
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesError, setNotesError] = useState('');
+  const [splitStage, setSplitStage] = useState<Station>('now_pressing');
+  const [splitQuantity, setSplitQuantity] = useState('');
+  const [splitNote, setSplitNote] = useState('');
+  const [splitting, setSplitting] = useState(false);
+  const [splitError, setSplitError] = useState('');
 
   useEffect(() => {
     setDraftDashNotes(dashNotes);
@@ -728,6 +735,21 @@ function JobDrawer({
     }
   };
   const notesDirty = draftDashNotes !== dashNotes;
+  const createSplit = async () => {
+    setSplitting(true);
+    setSplitError('');
+    try {
+      await onSplitJob(job, {
+        stage: splitStage,
+        quantity: splitQuantity,
+        note: splitNote,
+      });
+    } catch (error) {
+      setSplitError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSplitting(false);
+    }
+  };
 
   return (
     <>
@@ -837,6 +859,94 @@ function JobDrawer({
             </button>
           </div>
         </div>
+
+        <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: '28px', paddingTop: '22px' }}>
+          <div style={{ color: COLORS.text, fontSize: '15px', fontWeight: 900, marginBottom: '12px' }}>
+            Split Job
+          </div>
+          <div style={{ display: 'grid', gap: '12px' }}>
+            <label style={{ color: COLORS.muted, display: 'grid', fontSize: '12px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              New Station
+              <select
+                value={splitStage}
+                onChange={event => setSplitStage(event.target.value as Station)}
+                style={{
+                  background: COLORS.card,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '8px',
+                  color: COLORS.text,
+                  font: 'inherit',
+                  fontSize: '14px',
+                  padding: '10px',
+                }}
+              >
+                {STATIONS.map(station => (
+                  <option key={station} value={station}>{STATION_META[station].label}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ color: COLORS.muted, display: 'grid', fontSize: '12px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Quantity
+              <input
+                value={splitQuantity}
+                onChange={event => setSplitQuantity(event.target.value)}
+                placeholder="Remaining quantity"
+                style={{
+                  background: COLORS.card,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '8px',
+                  color: COLORS.text,
+                  font: 'inherit',
+                  fontSize: '14px',
+                  padding: '10px',
+                }}
+              />
+            </label>
+            <label style={{ color: COLORS.muted, display: 'grid', fontSize: '12px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Split Note
+              <textarea
+                value={splitNote}
+                onChange={event => setSplitNote(event.target.value)}
+                placeholder="Example: remaining back half still on press"
+                style={{
+                  background: COLORS.card,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '8px',
+                  color: COLORS.text,
+                  font: 'inherit',
+                  fontSize: '14px',
+                  lineHeight: 1.4,
+                  minHeight: '82px',
+                  padding: '10px',
+                  resize: 'vertical',
+                }}
+              />
+            </label>
+            <div style={{ alignItems: 'center', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
+              <div style={{ color: splitError ? COLORS.red : COLORS.muted, fontSize: '12px', lineHeight: 1.35 }}>
+                {splitError || 'Ready'}
+              </div>
+              <button
+                type="button"
+                disabled={splitting}
+                onClick={createSplit}
+                style={{
+                  background: splitting ? COLORS.elevated : COLORS.green,
+                  border: `1px solid ${splitting ? COLORS.border : COLORS.green}`,
+                  borderRadius: '6px',
+                  color: splitting ? COLORS.muted : '#050505',
+                  cursor: splitting ? 'default' : 'pointer',
+                  flexShrink: 0,
+                  fontSize: '13px',
+                  fontWeight: 900,
+                  padding: '9px 13px',
+                }}
+              >
+                {splitting ? 'Creating...' : 'Create Split'}
+              </button>
+            </div>
+          </div>
+        </div>
       </aside>
     </>
   );
@@ -890,6 +1000,26 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       jobKey(candidate) === key ? { ...candidate, dash_notes: dashNotes, 'Dash Notes': dashNotes } : candidate
     );
     setJobs(current => current.map(updateJob));
+    setSelectedJob(null);
+    setError('');
+  };
+
+  const splitJob = async (job: Job, payload: { stage: Station; quantity: string; note: string }) => {
+    const key = jobKey(job);
+    const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/split`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.error || `Airtable split failed (${response.status})`);
+    }
+
+    if (body.job) {
+      setJobs(current => [...current, body.job]);
+    }
     setSelectedJob(null);
     setError('');
   };
@@ -993,6 +1123,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
           onDashNotesSave={saveDashNotes}
+          onSplitJob={splitJob}
         />
       )}
     </main>

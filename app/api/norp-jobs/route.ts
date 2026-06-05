@@ -36,7 +36,15 @@ function isRealMatrix(value = '') {
   return normalized.length >= 4 && !['tbc', 'tbd', 'na', 'none', 'unknown'].includes(normalized);
 }
 
+function isSplitBatch(job: any) {
+  return String(job.dash_notes || job['Dash Notes'] || '').toLowerCase().includes('[split batch]');
+}
+
 function dedupeKey(job: any) {
+  if (isSplitBatch(job)) {
+    return `split::${job.airtable_record_id || job.job_id || job.matrix}`;
+  }
+
   const customer = cleanKey(job.customer || '');
   const rawMatrix = job.matrix || job.job_id || '';
   const matrix = matrixKey(rawMatrix);
