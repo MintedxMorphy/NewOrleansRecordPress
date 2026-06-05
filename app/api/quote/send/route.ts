@@ -298,6 +298,10 @@ export async function POST(req: NextRequest) {
     const upgradeList = jacketUpgrades ? Object.entries(jacketUpgrades).filter(([, v]) => v).map(([k]) => k).join(", ") || "None" : "None"
     const submissionType = action === "start_order" ? "Start Order" : "Save Quote"
     const airtableRecordId = await saveQuoteToAirtable(body, submissionType)
+    const internalSubject = action === "start_order" ? `New Order by ${name}` : `Quote Saved by ${name}`
+    const customerSubject = action === "start_order"
+      ? "Your New Orleans Record Press order request"
+      : "Your New Orleans Record Press quote"
 
     const htmlBody = `
       <h2 style="font-family:sans-serif">${escapeHtml(submissionType)} — New Orleans Record Press</h2>
@@ -359,13 +363,22 @@ export async function POST(req: NextRequest) {
       </p>
     `
 
-    await transporter.sendMail({
-      from: "neworleansrecordpress@gmail.com",
-      to: "info@neworleansrecordpress.com",
-      replyTo: email,
-      subject: action === "start_order" ? `New Order by ${name}` : `Quote Saved by ${name}`,
-      html: htmlBody,
-    })
+    await Promise.all([
+      transporter.sendMail({
+        from: "neworleansrecordpress@gmail.com",
+        to: "info@neworleansrecordpress.com",
+        replyTo: email,
+        subject: internalSubject,
+        html: htmlBody,
+      }),
+      transporter.sendMail({
+        from: "neworleansrecordpress@gmail.com",
+        to: email,
+        replyTo: "info@neworleansrecordpress.com",
+        subject: customerSubject,
+        html: htmlBody,
+      }),
+    ])
 
     return NextResponse.json({ ok: true, airtableRecordId })
   } catch (err) {
