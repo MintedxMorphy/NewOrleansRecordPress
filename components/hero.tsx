@@ -15,7 +15,7 @@ export function Hero({ videoSrc }: HeroProps = {}) {
         {videoSrc ? (
           <>
             <video
-              className="h-full w-full object-cover brightness-[0.92] contrast-[1.08] saturate-[0.92] sepia-[0.1]"
+              className="h-full w-full -translate-x-[4%] scale-[1.08] object-cover brightness-[0.92] contrast-[1.08] saturate-[0.92] sepia-[0.1]"
               autoPlay
               muted
               loop

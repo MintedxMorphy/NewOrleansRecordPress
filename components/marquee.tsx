@@ -16,17 +16,26 @@ export function Marquee() {
     "New Orleans",
   ]
 
+  const renderItems = (keyPrefix: string) => (
+    <div className="flex shrink-0 whitespace-nowrap">
+      {items.map((item) => (
+        <span
+          key={`${keyPrefix}-${item}`}
+          className="mx-8 text-sm font-bold uppercase tracking-widest text-primary"
+        >
+          {item} <span className="mx-4 opacity-50">•</span>
+        </span>
+      ))}
+    </div>
+  )
+
   return (
     <div className="fixed top-[52px] left-0 right-0 z-40 py-3 bg-[#141414] border-y border-[#2a2a2a] overflow-hidden">
-      <div className="flex animate-marquee whitespace-nowrap">
-        {[...items, ...items, ...items].map((item, index) => (
-          <span
-            key={index}
-            className="mx-8 text-sm font-bold uppercase tracking-widest text-primary"
-          >
-            {item} <span className="mx-4 opacity-50">•</span>
-          </span>
-        ))}
+      <div className="flex w-max animate-marquee whitespace-nowrap">
+        {renderItems("primary")}
+        <div aria-hidden="true" className="flex shrink-0">
+          {renderItems("duplicate")}
+        </div>
       </div>
     </div>
   )
