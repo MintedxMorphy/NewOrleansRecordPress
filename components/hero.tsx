@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { ArrowDown } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
@@ -11,6 +12,7 @@ type HeroProps = {
 
 export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
   const isPsychedelic = videoMood === "psychedelic"
+  const [loopFade, setLoopFade] = useState(0)
 
   return (
     <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
@@ -29,6 +31,22 @@ export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
               playsInline
               preload="metadata"
               aria-label="Record pressing room video loop"
+              onTimeUpdate={(event) => {
+                const video = event.currentTarget
+                const duration = video.duration
+
+                if (!Number.isFinite(duration) || duration <= 0) {
+                  return
+                }
+
+                const fadeWindow = 0.9
+                const remaining = duration - video.currentTime
+                const fadeAtStart = Math.max(0, (fadeWindow - video.currentTime) / fadeWindow)
+                const fadeAtEnd = Math.max(0, (fadeWindow - remaining) / fadeWindow)
+                const nextFade = Math.max(fadeAtStart, fadeAtEnd) * (isPsychedelic ? 0.34 : 0.24)
+
+                setLoopFade((currentFade) => (Math.abs(currentFade - nextFade) > 0.03 ? nextFade : currentFade))
+              }}
             >
               <source src={videoSrc} type="video/mp4" />
             </video>
@@ -57,6 +75,7 @@ export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
                 />
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_59%_50%,rgba(232,174,68,0.32),rgba(172,111,35,0.18)_16%,transparent_34%)] mix-blend-color" />
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_59%_50%,rgba(255,210,116,0.18),transparent_30%)] mix-blend-screen" />
+                <div className="absolute left-[54.7%] top-[70.2%] hidden h-[6.5%] w-[10.4%] -rotate-[1deg] rounded-sm bg-[radial-gradient(ellipse_at_center,rgba(6,6,5,0.86),rgba(10,9,7,0.72)_58%,rgba(0,0,0,0)_78%)] blur-[1px] mix-blend-multiply md:block" />
               </>
             )}
             <div
@@ -72,6 +91,10 @@ export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
               }}
             />
             <div className={isPsychedelic ? "absolute inset-0 bg-black/18" : "absolute inset-0 bg-black/12"} />
+            <div
+              className="absolute inset-0 bg-black transition-opacity duration-300"
+              style={{ opacity: loopFade }}
+            />
           </>
         ) : (
           <>
