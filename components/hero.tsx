@@ -15,7 +15,7 @@ export function Hero({ videoSrc }: HeroProps = {}) {
         {videoSrc ? (
           <>
             <video
-              className="h-full w-full object-cover brightness-[0.72] contrast-[1.18] saturate-[0.78] sepia-[0.18]"
+              className="h-full w-full object-cover brightness-[0.92] contrast-[1.08] saturate-[0.92] sepia-[0.1]"
               autoPlay
               muted
               loop
@@ -25,17 +25,17 @@ export function Hero({ videoSrc }: HeroProps = {}) {
             >
               <source src={videoSrc} type="video/mp4" />
             </video>
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(255,244,208,0.12),rgba(0,0,0,0.12)_38%,rgba(0,0,0,0.72)_100%)]" />
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(12,35,24,0.42),rgba(70,54,28,0.2),rgba(0,0,0,0.46))] mix-blend-multiply" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(255,244,208,0.18),rgba(0,0,0,0.04)_42%,rgba(0,0,0,0.38)_100%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(62,46,22,0.18),rgba(123,83,34,0.12),rgba(12,20,14,0.22))] mix-blend-multiply" />
             <div
-              className="absolute inset-0 opacity-[0.16] mix-blend-overlay"
+              className="absolute inset-0 opacity-[0.1] mix-blend-overlay"
               style={{
                 backgroundImage:
                   "radial-gradient(circle at 12% 18%, rgba(255,255,255,0.45) 0 1px, transparent 1px), radial-gradient(circle at 72% 64%, rgba(255,255,255,0.35) 0 1px, transparent 1px)",
                 backgroundSize: "13px 17px, 19px 23px",
               }}
             />
-            <div className="absolute inset-0 bg-black/28" />
+            <div className="absolute inset-0 bg-black/12" />
           </>
         ) : (
           <>
