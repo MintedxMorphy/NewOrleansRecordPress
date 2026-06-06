@@ -47,13 +47,17 @@ export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
               }
             />
             {isPsychedelic && (
-              <div
-                className="absolute inset-0 animate-analog-color-drift opacity-[0.18] mix-blend-soft-light"
-                style={{
-                  backgroundImage:
-                    "radial-gradient(circle at 57% 42%, rgba(246, 172, 74, 0.72), transparent 28%), radial-gradient(circle at 72% 58%, rgba(64, 178, 126, 0.5), transparent 25%), radial-gradient(circle at 40% 32%, rgba(146, 74, 176, 0.46), transparent 31%)",
-                }}
-              />
+              <>
+                <div
+                  className="absolute inset-0 animate-analog-color-drift opacity-[0.23] mix-blend-soft-light"
+                  style={{
+                    backgroundImage:
+                      "radial-gradient(circle at 58% 43%, rgba(255, 188, 78, 0.78), transparent 27%), radial-gradient(circle at 73% 58%, rgba(55, 190, 142, 0.58), transparent 25%), radial-gradient(circle at 39% 31%, rgba(170, 78, 198, 0.54), transparent 31%)",
+                  }}
+                />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_59%_50%,rgba(232,174,68,0.32),rgba(172,111,35,0.18)_16%,transparent_34%)] mix-blend-color" />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_59%_50%,rgba(255,210,116,0.18),transparent_30%)] mix-blend-screen" />
+              </>
             )}
             <div
               className={

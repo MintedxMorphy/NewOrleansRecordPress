@@ -157,11 +157,11 @@
 
 @keyframes analog-color-drift {
   0%, 100% {
-    opacity: 0.13;
+    opacity: 0.16;
     transform: translate3d(-1.2%, -0.6%, 0) scale(1.02);
   }
   50% {
-    opacity: 0.22;
+    opacity: 0.27;
     transform: translate3d(1%, 0.8%, 0) scale(1.06);
   }
 }
