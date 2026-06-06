@@ -23,7 +23,7 @@ export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
             <video
               className={
                 isRaw
-                  ? "h-full w-full translate-x-[5%] translate-y-[3%] scale-[1.1] object-cover"
+                  ? "h-full w-full translate-x-[35%] translate-y-[3%] scale-[1.75] object-cover"
                   : isPsychedelic
                   ? "h-full w-full -translate-x-[7%] translate-y-[3%] scale-[1.12] object-cover brightness-[0.82] contrast-[1.16] saturate-[1.06] sepia-[0.18]"
                   : "h-full w-full -translate-x-[7%] translate-y-[3%] scale-[1.12] object-cover brightness-[0.92] contrast-[1.08] saturate-[0.92] sepia-[0.1]"
@@ -141,8 +141,8 @@ export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
         />
       </div>
 
-      <div className="relative z-10 w-full px-6 pt-28 pb-20">
-        <div className="flex -translate-y-6 flex-col items-start gap-6 max-w-3xl mx-auto lg:mx-0 lg:ml-[8%] lg:-translate-y-10">
+      <div className="relative z-10 w-full px-6 pt-28 pb-20 lg:px-0">
+        <div className="flex -translate-y-6 flex-col items-start gap-6 max-w-3xl mx-auto lg:mx-0 lg:ml-10 lg:-translate-y-10">
           {/* Logo - smaller */}
           <div className="relative mt-4 lg:mt-6">
             <Image
