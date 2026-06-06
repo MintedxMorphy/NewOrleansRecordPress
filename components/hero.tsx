@@ -61,18 +61,18 @@ export function Hero({ videoSrc }: HeroProps = {}) {
       </div>
 
       {/* 10-Year Anniversary Badge — top-right, black bg blends via screen mode */}
-      <div className="absolute top-44 right-24 z-20 hidden lg:block opacity-60 hover:opacity-80 transition-opacity duration-300">
+      <div className="absolute top-32 right-10 z-20 hidden lg:block overflow-hidden rounded-2xl opacity-60 hover:opacity-80 transition-opacity duration-300">
         <Image
           src="/images/10-year-badge.png"
           alt="Celebrating 10 Years in the Art of Pressing Vinyl"
           width={438}
           height={351}
-          className="w-[350px] xl:w-[425px] h-auto block [mix-blend-mode:screen]"
+          className="w-[350px] xl:w-[425px] h-auto block rounded-2xl [mix-blend-mode:screen]"
         />
       </div>
 
       <div className="relative z-10 w-full px-6 pt-28 pb-20">
-        <div className="flex flex-col items-start gap-6 max-w-3xl mx-auto lg:mx-0 lg:ml-[8%]">
+        <div className="flex -translate-y-6 flex-col items-start gap-6 max-w-3xl mx-auto lg:mx-0 lg:ml-[8%] lg:-translate-y-10">
           {/* Logo - smaller */}
           <div className="relative">
             <Image
