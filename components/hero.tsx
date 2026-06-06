@@ -15,7 +15,7 @@ export function Hero({ videoSrc }: HeroProps = {}) {
         {videoSrc ? (
           <>
             <video
-              className="h-full w-full -translate-x-[4%] scale-[1.08] object-cover brightness-[0.92] contrast-[1.08] saturate-[0.92] sepia-[0.1]"
+              className="h-full w-full -translate-x-[7%] translate-y-[3%] scale-[1.12] object-cover brightness-[0.92] contrast-[1.08] saturate-[0.92] sepia-[0.1]"
               autoPlay
               muted
               loop
@@ -67,14 +67,14 @@ export function Hero({ videoSrc }: HeroProps = {}) {
           alt="Celebrating 10 Years in the Art of Pressing Vinyl"
           width={438}
           height={351}
-          className="w-[350px] xl:w-[425px] h-auto block rounded-2xl [mix-blend-mode:screen]"
+          className="w-[280px] xl:w-[340px] h-auto block rounded-2xl [mix-blend-mode:screen]"
         />
       </div>
 
       <div className="relative z-10 w-full px-6 pt-28 pb-20">
         <div className="flex -translate-y-6 flex-col items-start gap-6 max-w-3xl mx-auto lg:mx-0 lg:ml-[8%] lg:-translate-y-10">
           {/* Logo - smaller */}
-          <div className="relative">
+          <div className="relative mt-4 lg:mt-6">
             <Image
               src="/images/norp-logo.png"
               alt="New Orleans Record Press"
