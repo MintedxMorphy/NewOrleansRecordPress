@@ -14,7 +14,7 @@ export default function HomeVideoPreviewOption2() {
       <Header />
       <Marquee />
       <main>
-        <Hero videoSrc="/videos/press-hero-preview-option2.mp4" />
+        <Hero videoSrc="/videos/press-hero-preview-option2.mp4" videoMood="psychedelic" />
         <Services />
         <RecentWorkStatic />
         <VinylColors />

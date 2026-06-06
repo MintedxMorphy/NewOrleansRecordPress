@@ -155,6 +155,21 @@
   animation: marquee 55s linear infinite;
 }
 
+@keyframes analog-color-drift {
+  0%, 100% {
+    opacity: 0.13;
+    transform: translate3d(-1.2%, -0.6%, 0) scale(1.02);
+  }
+  50% {
+    opacity: 0.22;
+    transform: translate3d(1%, 0.8%, 0) scale(1.06);
+  }
+}
+
+.animate-analog-color-drift {
+  animation: analog-color-drift 18s ease-in-out infinite;
+}
+
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;

@@ -6,16 +6,23 @@ import Image from "next/image"
 
 type HeroProps = {
   videoSrc?: string
+  videoMood?: "warm" | "psychedelic"
 }
 
-export function Hero({ videoSrc }: HeroProps = {}) {
+export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
+  const isPsychedelic = videoMood === "psychedelic"
+
   return (
     <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
       <div className="absolute inset-0">
         {videoSrc ? (
           <>
             <video
-              className="h-full w-full -translate-x-[7%] translate-y-[3%] scale-[1.12] object-cover brightness-[0.92] contrast-[1.08] saturate-[0.92] sepia-[0.1]"
+              className={
+                isPsychedelic
+                  ? "h-full w-full -translate-x-[7%] translate-y-[3%] scale-[1.12] object-cover brightness-[0.82] contrast-[1.16] saturate-[1.06] sepia-[0.18]"
+                  : "h-full w-full -translate-x-[7%] translate-y-[3%] scale-[1.12] object-cover brightness-[0.92] contrast-[1.08] saturate-[0.92] sepia-[0.1]"
+              }
               autoPlay
               muted
               loop
@@ -25,17 +32,42 @@ export function Hero({ videoSrc }: HeroProps = {}) {
             >
               <source src={videoSrc} type="video/mp4" />
             </video>
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(255,244,208,0.18),rgba(0,0,0,0.04)_42%,rgba(0,0,0,0.38)_100%)]" />
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(62,46,22,0.18),rgba(123,83,34,0.12),rgba(12,20,14,0.22))] mix-blend-multiply" />
             <div
-              className="absolute inset-0 opacity-[0.1] mix-blend-overlay"
+              className={
+                isPsychedelic
+                  ? "absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(255,226,174,0.16),rgba(0,0,0,0.08)_40%,rgba(0,0,0,0.52)_100%)]"
+                  : "absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(255,244,208,0.18),rgba(0,0,0,0.04)_42%,rgba(0,0,0,0.38)_100%)]"
+              }
+            />
+            <div
+              className={
+                isPsychedelic
+                  ? "absolute inset-0 bg-[linear-gradient(90deg,rgba(70,44,20,0.26),rgba(34,69,45,0.14),rgba(22,12,28,0.28))] mix-blend-multiply"
+                  : "absolute inset-0 bg-[linear-gradient(90deg,rgba(62,46,22,0.18),rgba(123,83,34,0.12),rgba(12,20,14,0.22))] mix-blend-multiply"
+              }
+            />
+            {isPsychedelic && (
+              <div
+                className="absolute inset-0 animate-analog-color-drift opacity-[0.18] mix-blend-soft-light"
+                style={{
+                  backgroundImage:
+                    "radial-gradient(circle at 57% 42%, rgba(246, 172, 74, 0.72), transparent 28%), radial-gradient(circle at 72% 58%, rgba(64, 178, 126, 0.5), transparent 25%), radial-gradient(circle at 40% 32%, rgba(146, 74, 176, 0.46), transparent 31%)",
+                }}
+              />
+            )}
+            <div
+              className={
+                isPsychedelic
+                  ? "absolute inset-0 opacity-[0.18] mix-blend-overlay"
+                  : "absolute inset-0 opacity-[0.1] mix-blend-overlay"
+              }
               style={{
                 backgroundImage:
                   "radial-gradient(circle at 12% 18%, rgba(255,255,255,0.45) 0 1px, transparent 1px), radial-gradient(circle at 72% 64%, rgba(255,255,255,0.35) 0 1px, transparent 1px)",
                 backgroundSize: "13px 17px, 19px 23px",
               }}
             />
-            <div className="absolute inset-0 bg-black/12" />
+            <div className={isPsychedelic ? "absolute inset-0 bg-black/18" : "absolute inset-0 bg-black/12"} />
           </>
         ) : (
           <>
