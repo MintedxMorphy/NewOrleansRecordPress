@@ -14,7 +14,7 @@ export default function HomeVideoPreview() {
       <Header />
       <Marquee />
       <main>
-        <Hero videoSrc="/videos/press-hero-preview.mp4" />
+        <Hero videoSrc="/videos/press-hero-preview.mp4" videoMood="raw" />
         <Services />
         <RecentWorkStatic />
         <VinylColors />
