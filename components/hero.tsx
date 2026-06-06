@@ -67,15 +67,15 @@ export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
             {isPsychedelic && (
               <>
                 <div
-                  className="absolute inset-0 animate-analog-color-drift opacity-[0.23] mix-blend-soft-light"
+                  className="absolute inset-0 animate-analog-color-drift opacity-[0.2] mix-blend-soft-light"
                   style={{
                     backgroundImage:
-                      "radial-gradient(circle at 58% 43%, rgba(255, 188, 78, 0.78), transparent 27%), radial-gradient(circle at 73% 58%, rgba(55, 190, 142, 0.58), transparent 25%), radial-gradient(circle at 39% 31%, rgba(170, 78, 198, 0.54), transparent 31%)",
+                      "radial-gradient(circle at 58% 43%, rgba(214, 142, 52, 0.48), transparent 27%), radial-gradient(circle at 73% 58%, rgba(55, 190, 142, 0.54), transparent 25%), radial-gradient(circle at 39% 31%, rgba(170, 78, 198, 0.5), transparent 31%)",
                   }}
                 />
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_59%_50%,rgba(232,174,68,0.32),rgba(172,111,35,0.18)_16%,transparent_34%)] mix-blend-color" />
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_59%_50%,rgba(255,210,116,0.18),transparent_30%)] mix-blend-screen" />
-                <div className="absolute left-[54.7%] top-[70.2%] hidden h-[6.5%] w-[10.4%] -rotate-[1deg] rounded-sm bg-[radial-gradient(ellipse_at_center,rgba(6,6,5,0.86),rgba(10,9,7,0.72)_58%,rgba(0,0,0,0)_78%)] blur-[1px] mix-blend-multiply md:block" />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_59%_51%,rgba(0,0,0,0.42),rgba(0,0,0,0.24)_18%,transparent_38%)] mix-blend-multiply" />
+                <div className="absolute left-[52.8%] top-[68.3%] hidden h-[14%] w-[16.8%] -rotate-[1deg] rounded-md bg-black/55 blur-md md:block" />
+                <div className="absolute left-[55.2%] top-[71.8%] hidden h-[7.8%] w-[12.8%] -rotate-[1deg] rounded-[3px] bg-black/95 shadow-[0_0_18px_rgba(0,0,0,0.9)] md:block" />
               </>
             )}
             <div
