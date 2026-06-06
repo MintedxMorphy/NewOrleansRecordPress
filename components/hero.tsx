@@ -4,19 +4,51 @@ import { ArrowDown } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 
-export function Hero() {
+type HeroProps = {
+  videoSrc?: string
+}
+
+export function Hero({ videoSrc }: HeroProps = {}) {
   return (
     <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
-      {/* Background Image */}
       <div className="absolute inset-0">
-        <Image
-          src="/images/vinyl-press-hero.jpg"
-          alt="Vinyl record pressing machine"
-          fill
-          className="object-cover"
-          priority
-        />
-        <div className="absolute inset-0 bg-black/60" />
+        {videoSrc ? (
+          <>
+            <video
+              className="h-full w-full object-cover brightness-[0.72] contrast-[1.18] saturate-[0.78] sepia-[0.18]"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              aria-label="Record pressing room video loop"
+            >
+              <source src={videoSrc} type="video/mp4" />
+            </video>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(255,244,208,0.12),rgba(0,0,0,0.12)_38%,rgba(0,0,0,0.72)_100%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(12,35,24,0.42),rgba(70,54,28,0.2),rgba(0,0,0,0.46))] mix-blend-multiply" />
+            <div
+              className="absolute inset-0 opacity-[0.16] mix-blend-overlay"
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle at 12% 18%, rgba(255,255,255,0.45) 0 1px, transparent 1px), radial-gradient(circle at 72% 64%, rgba(255,255,255,0.35) 0 1px, transparent 1px)",
+                backgroundSize: "13px 17px, 19px 23px",
+              }}
+            />
+            <div className="absolute inset-0 bg-black/28" />
+          </>
+        ) : (
+          <>
+            <Image
+              src="/images/vinyl-press-hero.jpg"
+              alt="Vinyl record pressing machine"
+              fill
+              className="object-cover"
+              priority
+            />
+            <div className="absolute inset-0 bg-black/60" />
+          </>
+        )}
       </div>
 
       {/* Spinning Record Animation */}
