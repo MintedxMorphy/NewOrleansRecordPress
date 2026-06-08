@@ -136,6 +136,11 @@ function dashboardOrder(job: Job) {
   return Number.isFinite(parsed) ? parsed : 999999;
 }
 
+function numericValue(raw: string) {
+  const parsed = Number(raw.replace(/,/g, '').trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function sortJobs(jobs: Job[]) {
   return [...jobs].sort((a, b) => {
     const orderDiff = dashboardOrder(a) - dashboardOrder(b);
@@ -285,6 +290,11 @@ function JobCard({
   const customer = value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']) || 'Untitled job';
   const matrix = value(job, ['matrix', 'MATRIX', 'Matrix ID', 'job_id']);
   const quantity = value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']);
+  const quantityTotal = numericValue(quantity);
+  const pressedTotal = numericValue(value(job, ['records_pressed_total']));
+  const pressLogCount = numericValue(value(job, ['press_log_count']));
+  const showPressProgress = station === 'now_pressing' && quantityTotal > 0;
+  const progressPct = showPressProgress ? Math.min(100, Math.max(0, (pressedTotal / quantityTotal) * 100)) : 0;
   const colors = value(job, ['colors', 'Colors', 'color', 'Color', 'Vinyl Color']);
   const weight = value(job, ['weight', 'Weight', 'Weight (g)']);
   const speed = value(job, ['speed', 'SPEED', 'Speed', 'RPM']);
@@ -354,6 +364,54 @@ function JobCard({
             WebkitLineClamp: 2,
           }}>
             {notes}
+          </div>
+        )}
+
+        {showPressProgress && (
+          <div style={{
+            background: '#0E1711',
+            border: `1px solid ${meta.color}44`,
+            borderRadius: '7px',
+            marginTop: '10px',
+            padding: compact ? '10px' : '8px',
+          }}>
+            <div style={{
+              alignItems: 'baseline',
+              color: COLORS.text,
+              display: 'flex',
+              fontSize: compact ? '15px' : '14px',
+              fontWeight: 850,
+              justifyContent: 'space-between',
+              lineHeight: 1.2,
+            }}>
+              <span>Pressed</span>
+              <span>
+                {pressedTotal.toLocaleString()} / {quantityTotal.toLocaleString()}
+              </span>
+            </div>
+            <div style={{
+              background: '#050805',
+              borderRadius: '999px',
+              height: compact ? '9px' : '8px',
+              marginTop: '7px',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                background: `linear-gradient(90deg, ${meta.color}, #C9FFE0)`,
+                borderRadius: '999px',
+                boxShadow: `0 0 14px ${meta.color}66`,
+                height: '100%',
+                width: `${progressPct}%`,
+              }} />
+            </div>
+            <div style={{
+              color: COLORS.muted,
+              fontSize: compact ? '13px' : '12px',
+              fontWeight: 750,
+              marginTop: '6px',
+            }}>
+              {Math.round(progressPct)}% complete{pressLogCount ? ` · ${pressLogCount} press log${pressLogCount === 1 ? '' : 's'}` : ''}
+            </div>
           </div>
         )}
 

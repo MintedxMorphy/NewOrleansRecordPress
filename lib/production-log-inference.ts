@@ -51,6 +51,12 @@ function matchesJob(job: NORPJob, jobRef?: string | null) {
   });
 }
 
+function numericValue(value: unknown) {
+  if (value === null || value === undefined) return 0;
+  const parsed = Number(String(value).replace(/,/g, '').trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function stageFromQc(entry: QcLogEntry): Stage {
   const tasks = (entry.task_types || []).join(' ').toLowerCase();
   const notes = (entry.notes || '').toLowerCase();
@@ -83,7 +89,7 @@ export async function applyProductionLogInferences<T extends NORPJob>(jobs: T[])
       .select('created_at, job_ref, press_id, records_pressed, issues, notes')
       .not('job_ref', 'is', null)
       .order('created_at', { ascending: false })
-      .limit(200),
+      .limit(5000),
     supabase
       .from('qc_log')
       .select('created_at, job_ref, task_types, quantity, notes')
@@ -100,14 +106,29 @@ export async function applyProductionLogInferences<T extends NORPJob>(jobs: T[])
   const qcEntries = (qcResult.data || []) as QcLogEntry[];
 
   return jobs.map(job => {
+    const matchingPressEntries = pressEntries.filter(entry => matchesJob(job, entry.job_ref));
+    const recordsPressedTotal = matchingPressEntries.reduce((total, entry) => (
+      total + numericValue(entry.records_pressed)
+    ), 0);
+    const latestPressEntry = matchingPressEntries[0];
+    const pressProgressFields = recordsPressedTotal > 0 ? {
+      records_pressed_total: String(recordsPressedTotal),
+      press_log_count: String(matchingPressEntries.length),
+      latest_press_log_at: latestPressEntry?.created_at ?? '',
+    } : {};
+
     // Staff-set board positions are the source of truth. Logs only fill in
     // gaps for jobs that have not yet been manually placed on the dashboard.
-    if (job.stage_source === 'airtable_dashboard_stage') return job;
+    if (job.stage_source === 'airtable_dashboard_stage') {
+      return {
+        ...job,
+        ...pressProgressFields,
+      };
+    }
 
     let inferred: Inference | undefined;
 
-    for (const entry of pressEntries) {
-      if (!matchesJob(job, entry.job_ref)) continue;
+    for (const entry of matchingPressEntries) {
       inferred = newer(inferred, {
         stage: 'now_pressing',
         created_at: entry.created_at,
@@ -131,6 +152,7 @@ export async function applyProductionLogInferences<T extends NORPJob>(jobs: T[])
 
     return {
       ...job,
+      ...pressProgressFields,
       stage: inferred.stage,
       stage_source: 'production_logs',
       inferred_stage_reason: inferred.reason,
