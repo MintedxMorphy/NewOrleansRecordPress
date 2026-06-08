@@ -104,6 +104,7 @@ const COLORS = {
 };
 
 const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2QqTZmnF/viwybIIrPi9Pd9Tyo?blocks=hide';
+const RUSH_MARKER = '[Rush Order]';
 
 function value(job: Job, keys: string[]) {
   for (const key of keys) {
@@ -174,17 +175,23 @@ function runLabelFromNotes(notes: string) {
   return match ? `Run ${match[1]}/${match[2]}` : '';
 }
 
+function isRushOrder(notes: string) {
+  return /\[Rush\s+Order\]/i.test(notes);
+}
+
 function visibleDashNotes(notes: string) {
   return notes
     .replace(/\[Run\s+\d+\s*\/\s*\d+\]/gi, '')
+    .replace(/\[Rush\s+Order\]/gi, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
-function dashNotesWithRunMarker(originalNotes: string, visibleNotes: string) {
+function dashNotesWithDashboardMarkers(originalNotes: string, visibleNotes: string, rushOverride?: boolean) {
   const match = originalNotes.match(/\[Run\s+\d+\s*\/\s*\d+\]/i);
-  return [match?.[0], visibleNotes.trim()].filter(Boolean).join(visibleNotes.trim() ? '\n' : '');
+  const rushed = rushOverride ?? isRushOrder(originalNotes);
+  return [match?.[0], rushed ? RUSH_MARKER : '', visibleNotes.trim()].filter(Boolean).join('\n');
 }
 
 function useMediaQuery(query: string) {
@@ -303,6 +310,7 @@ function JobCard({
   const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
   const dashNotes = visibleDashNotes(rawDashNotes);
   const runLabel = runLabelFromNotes(rawDashNotes);
+  const rushed = isRushOrder(rawDashNotes);
   const inferredReason = value(job, ['inferred_stage_reason']);
   const inferredAt = value(job, ['inferred_stage_at']);
   const duplicateCount = value(job, ['duplicate_count']);
@@ -314,19 +322,23 @@ function JobCard({
     <div
       onClick={onOpen}
       style={{
-        background: COLORS.card,
-        border: `1px solid ${COLORS.border}`,
-        borderLeft: `4px solid ${meta.color}`,
+        background: rushed
+          ? `linear-gradient(135deg, ${COLORS.red}24 0%, ${COLORS.card} 52%, ${COLORS.red}14 100%)`
+          : COLORS.card,
+        border: `1px solid ${rushed ? `${COLORS.red}88` : COLORS.border}`,
+        borderLeft: `4px solid ${rushed ? COLORS.red : meta.color}`,
         borderRadius: '8px',
-        boxShadow: station === 'now_pressing' ? `0 0 0 1px ${meta.color}44, 0 12px 30px #00000055` : '0 8px 18px #00000035',
+        boxShadow: rushed
+          ? `0 0 0 1px ${COLORS.red}33, 0 12px 30px #00000055`
+          : station === 'now_pressing' ? `0 0 0 1px ${meta.color}44, 0 12px 30px #00000055` : '0 8px 18px #00000035',
         cursor: 'pointer',
         marginBottom: '8px',
         padding: compact ? '13px' : '10px',
       }}
-      onMouseEnter={e => (e.currentTarget.style.borderColor = meta.color)}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = rushed ? COLORS.red : meta.color)}
       onMouseLeave={e => {
-        e.currentTarget.style.borderColor = COLORS.border;
-        e.currentTarget.style.borderLeftColor = meta.color;
+        e.currentTarget.style.borderColor = rushed ? `${COLORS.red}88` : COLORS.border;
+        e.currentTarget.style.borderLeftColor = rushed ? COLORS.red : meta.color;
       }}
     >
       <div {...dragHandleProps}>
@@ -342,6 +354,7 @@ function JobCard({
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '9px' }}>
+          {rushed && <StatusPill color={COLORS.red}>Rush</StatusPill>}
           {quantity && <StatusPill color={meta.color}>{quantity}</StatusPill>}
           {colors && <StatusPill color="#C9A84C">{colors}</StatusPill>}
           {weight && <StatusPill color="#9CCFFF">{weight.replace('1900-05-29T00:00:00.000Z', '180g')}</StatusPill>}
@@ -497,7 +510,6 @@ function Pipeline({
   onJobOpen,
   onError,
   isMobile = false,
-  searchActive = false,
 }: {
   jobs: Job[];
   visibleJobs?: Job[];
@@ -505,7 +517,6 @@ function Pipeline({
   onJobOpen: (job: Job) => void;
   onError: (message: string) => void;
   isMobile?: boolean;
-  searchActive?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   const [confirmCompleteJob, setConfirmCompleteJob] = useState<Job | null>(null);
@@ -528,17 +539,14 @@ function Pipeline({
 
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
-    if (searchActive) {
-      onError('Clear search before dragging jobs.');
-      return;
-    }
 
     const fromStation = result.source.droppableId as Station;
     const toStation = result.destination.droppableId as Station;
     const activeJobs = jobs.filter(job => stationOf(job) !== 'completed');
+    const visibleActiveJobs = visibleJobs.filter(job => stationOf(job) !== 'completed');
     const hiddenJobs = jobs.filter(job => stationOf(job) === 'completed');
-    const sourceList = stationJobs(activeJobs, fromStation);
-    const destinationList = fromStation === toStation ? sourceList : stationJobs(activeJobs, toStation);
+    const sourceList = stationJobs(visibleActiveJobs, fromStation);
+    const destinationList = fromStation === toStation ? sourceList : stationJobs(visibleActiveJobs, toStation);
     const [moved] = sourceList.splice(result.source.index, 1);
 
     if (!moved) return;
@@ -683,7 +691,7 @@ function Pipeline({
                   }}
                   >
                     {list.map((job, index) => (
-                      <Draggable key={jobKey(job)} draggableId={jobKey(job)} index={index} isDragDisabled={searchActive}>
+                      <Draggable key={jobKey(job)} draggableId={jobKey(job)} index={index}>
                         {(dragProvided, dragSnapshot) => (
                           <div
                             ref={dragProvided.innerRef}
@@ -793,11 +801,13 @@ function JobDrawer({
   job,
   onClose,
   onDashNotesSave,
+  onRushToggle,
   onSplitJob,
 }: {
   job: Job;
   onClose: () => void;
   onDashNotesSave: (job: Job, dashNotes: string) => Promise<void>;
+  onRushToggle: (job: Job, rushed: boolean) => Promise<void>;
   onSplitJob: (job: Job, payload: { stage: Station; quantity: string }) => Promise<void>;
 }) {
   const jobStage = stationOf(job);
@@ -806,8 +816,10 @@ function JobDrawer({
   const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
   const dashNotes = visibleDashNotes(rawDashNotes);
   const runLabel = runLabelFromNotes(rawDashNotes);
+  const rushed = isRushOrder(rawDashNotes);
   const [draftDashNotes, setDraftDashNotes] = useState(dashNotes);
   const [savingNotes, setSavingNotes] = useState(false);
+  const [savingRush, setSavingRush] = useState(false);
   const [notesError, setNotesError] = useState('');
   const [splitStage, setSplitStage] = useState<Station>('now_pressing');
   const [splitQuantity, setSplitQuantity] = useState('');
@@ -843,7 +855,7 @@ function JobDrawer({
     setSavingNotes(true);
     setNotesError('');
     try {
-      await onDashNotesSave(job, dashNotesWithRunMarker(rawDashNotes, draftDashNotes));
+      await onDashNotesSave(job, dashNotesWithDashboardMarkers(rawDashNotes, draftDashNotes));
     } catch (error) {
       setNotesError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -851,6 +863,17 @@ function JobDrawer({
     }
   };
   const notesDirty = draftDashNotes !== dashNotes;
+  const toggleRush = async () => {
+    setSavingRush(true);
+    setNotesError('');
+    try {
+      await onRushToggle(job, !rushed);
+    } catch (error) {
+      setNotesError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingRush(false);
+    }
+  };
   const createSplit = async () => {
     setSplitting(true);
     setSplitError('');
@@ -901,6 +924,29 @@ function JobDrawer({
             x
           </button>
         </div>
+
+        <button
+          type="button"
+          disabled={savingRush}
+          onClick={toggleRush}
+          style={{
+            alignItems: 'center',
+            background: rushed ? `${COLORS.red}2E` : COLORS.card,
+            border: `1px solid ${rushed ? COLORS.red : `${COLORS.red}77`}`,
+            borderRadius: '8px',
+            color: rushed ? '#FFFFFF' : COLORS.red,
+            cursor: savingRush ? 'default' : 'pointer',
+            display: 'flex',
+            fontSize: '14px',
+            fontWeight: 900,
+            justifyContent: 'center',
+            marginBottom: '22px',
+            padding: '11px 14px',
+            width: '100%',
+          }}
+        >
+          {savingRush ? 'Saving Rush...' : rushed ? 'Rush Order On' : 'Rush Order'}
+        </button>
 
         <div style={{ display: 'grid', gap: '14px 18px', gridTemplateColumns: '1fr 1fr' }}>
           {details.map(([label, detail]) => (
@@ -1107,6 +1153,29 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     setError('');
   };
 
+  const toggleRushOrder = async (job: Job, rushed: boolean) => {
+    const key = jobKey(job);
+    const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
+    const nextDashNotes = dashNotesWithDashboardMarkers(rawDashNotes, visibleDashNotes(rawDashNotes), rushed);
+    const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/dash-notes`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dash_notes: nextDashNotes }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || `Airtable rush save failed (${response.status})`);
+    }
+
+    const updateJob = (candidate: Job) => (
+      jobKey(candidate) === key ? { ...candidate, dash_notes: nextDashNotes, 'Dash Notes': nextDashNotes } : candidate
+    );
+    setJobs(current => current.map(updateJob));
+    setSelectedJob(current => current && jobKey(current) === key ? updateJob(current) : current);
+    setError('');
+  };
+
   const splitJob = async (job: Job, payload: { stage: Station; quantity: string }) => {
     const key = jobKey(job);
     const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/split`, {
@@ -1298,7 +1367,6 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
           onJobOpen={setSelectedJob}
           onError={setError}
           isMobile={isMobile}
-          searchActive={Boolean(normalizedSearch)}
         />
       </div>
 
@@ -1307,6 +1375,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
           onDashNotesSave={saveDashNotes}
+          onRushToggle={toggleRushOrder}
           onSplitJob={splitJob}
         />
       )}
