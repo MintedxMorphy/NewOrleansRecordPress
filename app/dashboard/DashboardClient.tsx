@@ -284,12 +284,14 @@ function JobCard({
   onComplete,
   dragHandleProps,
   compact = false,
+  queueRank,
 }: {
   job: Job;
   onOpen: () => void;
   onComplete: () => void;
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
   compact?: boolean;
+  queueRank?: number;
 }) {
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
@@ -321,6 +323,7 @@ function JobCard({
   return (
     <div
       onClick={onOpen}
+      {...dragHandleProps}
       style={{
         background: rushed
           ? `linear-gradient(135deg, ${COLORS.red}24 0%, ${COLORS.card} 52%, ${COLORS.red}14 100%)`
@@ -334,6 +337,8 @@ function JobCard({
         cursor: 'pointer',
         marginBottom: '8px',
         padding: compact ? '13px' : '10px',
+        position: 'relative',
+        userSelect: 'none',
       }}
       onMouseEnter={e => (e.currentTarget.style.borderColor = rushed ? COLORS.red : meta.color)}
       onMouseLeave={e => {
@@ -341,7 +346,32 @@ function JobCard({
         e.currentTarget.style.borderLeftColor = rushed ? COLORS.red : meta.color;
       }}
     >
-      <div {...dragHandleProps}>
+      {queueRank && (
+        <div style={{
+          alignItems: 'center',
+          background: '#071823',
+          border: `1px solid ${STATION_META.press_queue.color}AA`,
+          borderRadius: '999px',
+          boxShadow: `0 0 18px ${STATION_META.press_queue.color}26`,
+          color: STATION_META.press_queue.color,
+          display: 'flex',
+          fontFamily: 'monospace',
+          fontSize: compact ? '14px' : '13px',
+          fontWeight: 950,
+          height: compact ? '34px' : '30px',
+          justifyContent: 'center',
+          lineHeight: 1,
+          minWidth: compact ? '34px' : '30px',
+          padding: '0 8px',
+          position: 'absolute',
+          right: '8px',
+          top: '8px',
+        }}>
+          #{queueRank}
+        </div>
+      )}
+
+      <div style={{ paddingRight: queueRank ? '34px' : undefined }}>
         <div>
           <div style={{ color: COLORS.text, fontSize: compact ? '20px' : '18px', fontWeight: 850, lineHeight: 1.18 }}>
             {customer.length > (compact ? 96 : 72) ? `${customer.slice(0, compact ? 96 : 72)}...` : customer}
@@ -472,12 +502,6 @@ function JobCard({
             event.stopPropagation();
             onComplete();
           }}
-          onMouseDownCapture={event => event.stopPropagation()}
-          onPointerDownCapture={event => event.stopPropagation()}
-          onTouchStartCapture={event => event.stopPropagation()}
-          onMouseDown={event => event.stopPropagation()}
-          onPointerDown={event => event.stopPropagation()}
-          onTouchStart={event => event.stopPropagation()}
           style={{
             alignItems: 'center',
             background: `${completeColor}22`,
@@ -686,9 +710,9 @@ function Pipeline({
                     style={{
                       background: snapshot.isDraggingOver ? `${meta.color}14` : 'transparent',
                       borderRadius: '8px',
-                    minHeight: isMobile ? '72px' : '540px',
-                    transition: 'background 0.15s',
-                  }}
+                      minHeight: isMobile ? '72px' : '540px',
+                      transition: 'background 0.15s',
+                    }}
                   >
                     {list.map((job, index) => (
                       <Draggable key={jobKey(job)} draggableId={jobKey(job)} index={index}>
@@ -700,6 +724,7 @@ function Pipeline({
                               ...dragProvided.draggableProps.style,
                               opacity: dragSnapshot.isDragging ? 0.88 : 1,
                             }}
+                            data-job-key={jobKey(job)}
                           >
                             <JobCard
                               job={job}
@@ -707,6 +732,7 @@ function Pipeline({
                               onComplete={() => setConfirmCompleteJob(job)}
                               dragHandleProps={dragProvided.dragHandleProps}
                               compact={isMobile}
+                              queueRank={station === 'press_queue' ? index + 1 : undefined}
                             />
                           </div>
                         )}

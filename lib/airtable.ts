@@ -48,6 +48,29 @@ type AirtableListResponse = {
   error?: { type?: string; message?: string };
 };
 
+export type AirtableInventoryItem = {
+  id: string;
+  tableId: string;
+  tableName: string;
+  category: 'pvc' | 'sleeves' | 'packaging' | 'warehouse';
+  item: string;
+  quantity: number;
+  unit: string;
+  location: string;
+  status: string;
+  reorderPoint?: number;
+  max?: number;
+  notes: string;
+  updatedAt: string;
+};
+
+export type AirtableInventoryDashboard = {
+  source: 'airtable';
+  pvcCapacityLbs: number;
+  tables: Array<{ id: string; name: string; count: number }>;
+  items: AirtableInventoryItem[];
+};
+
 type AirtableFieldMeta = {
   id: string;
   name: string;
@@ -101,6 +124,27 @@ function airtableJobIdField() {
 
 function airtableDashNotesField() {
   return process.env.AIRTABLE_DASH_NOTES_FIELD || 'Dash Notes';
+}
+
+function airtableInventoryTables() {
+  const configured = [
+    process.env.AIRTABLE_INVENTORY_TABLES,
+    process.env.AIRTABLE_PVC_INVENTORY_TABLE,
+    process.env.AIRTABLE_SUPPLIES_INVENTORY_TABLE,
+    process.env.AIRTABLE_WAREHOUSE_INVENTORY_TABLE,
+  ]
+    .filter(Boolean)
+    .join(',');
+
+  return configured
+    .split(',')
+    .map(table => table.trim())
+    .filter(Boolean);
+}
+
+function airtablePvcCapacityLbs() {
+  const parsed = Number(process.env.AIRTABLE_PVC_CAPACITY_LBS || '10000');
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 10000;
 }
 
 export function isAirtableConfigured() {
@@ -191,6 +235,15 @@ function field(fields: Record<string, unknown>, aliases: string[]) {
     if (value !== null && value !== undefined && value !== '') return stringValue(value);
   }
   return '';
+}
+
+function rawField(fields: Record<string, unknown>, aliases: string[]) {
+  for (const alias of aliases) {
+    const matchingKey = Object.keys(fields).find(key => key.toLowerCase() === alias.toLowerCase());
+    const value = matchingKey ? fields[matchingKey] : undefined;
+    if (value !== null && value !== undefined && value !== '') return value;
+  }
+  return undefined;
 }
 
 function hasValue(fields: Record<string, unknown>, aliases: string[]) {
@@ -816,4 +869,144 @@ export async function updateAirtableJobDashNotes(jobId: string, dashNotes: strin
   if (!res.ok) {
     throw new Error(data.error?.message || `Airtable dash notes update failed (${res.status})`);
   }
+}
+
+const INVENTORY_FIELD_ALIASES = {
+  item: ['Item', 'Material', 'Product', 'Product Name', 'Name', 'Description', 'SKU', 'Color', 'Type'],
+  quantity: ['Quantity', 'Qty', 'On Hand', 'On Hand Qty', 'On Hand Quantity', 'Stock', 'Count', 'Units', 'Lbs', 'Pounds', 'Weight'],
+  unit: ['Unit', 'Units', 'UOM', 'Measure'],
+  location: ['Location', 'Warehouse Location', 'Warehouse', 'Bin', 'Rack', 'Shelf', 'Zone', 'Aisle'],
+  status: ['Status', 'Inventory Status', 'On Order', 'Order Status'],
+  reorderPoint: ['Reorder Point', 'Reorder', 'Min', 'Minimum', 'Par', 'Low Stock'],
+  max: ['Max', 'Maximum', 'Capacity', 'Target Stock'],
+  notes: ['Notes', 'Note', 'Details', 'Comments'],
+  updatedAt: ['Updated', 'Last Updated', 'Modified', 'Last Modified'],
+  category: ['Category', 'Item Type', 'Material Type', 'Inventory Type'],
+};
+
+function inventoryNumber(value: unknown) {
+  const cleaned = stringValue(value).replace(/,/g, '').replace(/lbs?/gi, '').trim();
+  if (!cleaned) return 0;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeInventoryUnit(value: unknown, tableName: string, item: string) {
+  const explicit = stringValue(value).trim();
+  if (explicit) return explicit;
+  const text = `${tableName} ${item}`.toLowerCase();
+  if (text.includes('pvc') || text.includes('compound')) return 'lbs';
+  return 'units';
+}
+
+function inventoryCategory(tableName: string, fields: Record<string, unknown>, item: string): AirtableInventoryItem['category'] {
+  const explicit = field(fields, INVENTORY_FIELD_ALIASES.category).toLowerCase();
+  const text = `${tableName} ${explicit} ${item}`.toLowerCase();
+  if (text.includes('pvc') || text.includes('compound')) return 'pvc';
+  if (text.includes('sleeve')) return 'sleeves';
+  if (
+    text.includes('box') ||
+    text.includes('carton') ||
+    text.includes('jacket') ||
+    text.includes('label') ||
+    text.includes('insert') ||
+    text.includes('packaging')
+  ) {
+    return 'packaging';
+  }
+  return 'warehouse';
+}
+
+function isInventoryLikeTable(table: AirtableTableMeta) {
+  const name = table.name.toLowerCase();
+  if (name.includes('production') || name.includes('completed') || name.includes('quote')) return false;
+  return [
+    'inventory',
+    'stock',
+    'warehouse',
+    'pvc',
+    'compound',
+    'sleeve',
+    'packaging',
+    'supplies',
+    'boxes',
+    'jackets',
+    'labels',
+  ].some(term => name.includes(term));
+}
+
+async function getAirtableRecordsForTable(table: AirtableTableMeta) {
+  const records: AirtableRecord[] = [];
+  let offset: string | undefined;
+
+  do {
+    const params = new URLSearchParams({ pageSize: '100' });
+    if (offset) params.set('offset', offset);
+
+    const res = await airtableFetch(`${tableUrl('', table.id)}?${params.toString()}`, {
+      headers: airtableHeaders(),
+      cache: 'no-store',
+    });
+    const data = await res.json() as AirtableListResponse;
+
+    if (!res.ok) {
+      throw new Error(data.error?.message || `Airtable inventory request failed for ${table.name} (${res.status})`);
+    }
+
+    records.push(...(data.records || []));
+    offset = data.offset;
+  } while (offset);
+
+  return records;
+}
+
+export async function getAirtableInventoryDashboard(): Promise<AirtableInventoryDashboard> {
+  const tables = await getAirtableTablesMeta();
+  const configuredTables = airtableInventoryTables();
+  const selectedTables = configuredTables.length
+    ? configuredTables.map(nameOrId => resolveAirtableTable(tables, nameOrId)).filter(Boolean) as AirtableTableMeta[]
+    : tables.filter(isInventoryLikeTable).slice(0, 3);
+
+  if (!selectedTables.length) {
+    throw new Error('No Airtable inventory tables found. Set AIRTABLE_INVENTORY_TABLES to the three inventory table names or IDs.');
+  }
+
+  // Airtable is the source of truth at page-load time. If warehouse staff still
+  // update upstream Sheets and manually sync them into Airtable, this read layer
+  // intentionally shows whatever Airtable currently contains.
+  const recordGroups = await Promise.all(selectedTables.map(async table => ({
+    table,
+    records: await getAirtableRecordsForTable(table),
+  })));
+
+  const items = recordGroups.flatMap(({ table, records }) => records.map(record => {
+    const item =
+      field(record.fields, INVENTORY_FIELD_ALIASES.item) ||
+      field(record.fields, ['Name']) ||
+      record.id;
+    const unit = normalizeInventoryUnit(rawField(record.fields, INVENTORY_FIELD_ALIASES.unit), table.name, item);
+
+    return {
+      id: record.id,
+      tableId: table.id,
+      tableName: table.name,
+      category: inventoryCategory(table.name, record.fields, item),
+      item,
+      quantity: inventoryNumber(rawField(record.fields, INVENTORY_FIELD_ALIASES.quantity)),
+      unit,
+      location: field(record.fields, INVENTORY_FIELD_ALIASES.location) || 'Unassigned',
+      status: field(record.fields, INVENTORY_FIELD_ALIASES.status),
+      reorderPoint: parseQuantity(rawField(record.fields, INVENTORY_FIELD_ALIASES.reorderPoint)),
+      max: parseQuantity(rawField(record.fields, INVENTORY_FIELD_ALIASES.max)),
+      notes: field(record.fields, INVENTORY_FIELD_ALIASES.notes),
+      updatedAt: field(record.fields, INVENTORY_FIELD_ALIASES.updatedAt),
+    };
+  })).filter(item => item.item || item.quantity || item.location !== 'Unassigned');
+
+  return {
+    source: 'airtable',
+    pvcCapacityLbs: airtablePvcCapacityLbs(),
+    tables: recordGroups.map(({ table, records }) => ({ id: table.id, name: table.name, count: records.length })),
+    items,
+  };
 }

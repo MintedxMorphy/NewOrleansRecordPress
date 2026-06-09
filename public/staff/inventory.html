@@ -5,58 +5,62 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NORP Inventory Dashboard</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-height:100vh;padding:0;font-size:17px}
+:root{--bg:#090909;--panel:#121212;--card:#181818;--elevated:#202020;--text:#f2f2f2;--muted:#a0a0a0;--faint:#707070;--border:#2a2a2a;--green:#00e86a;--blue:#4da3ff;--gold:#c9a84c;--purple:#b781ff;--red:#ff4d4d}
+body{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at 18% 0%,rgba(0,232,106,.12),transparent 28%),radial-gradient(circle at 78% 8%,rgba(77,163,255,.12),transparent 24%),var(--bg);color:var(--text);min-height:100vh;font-size:16px}
 .nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:16px 28px;display:flex;gap:14px;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;flex-wrap:wrap;box-shadow:0 10px 30px rgba(0,0,0,.25)}
 .nav a{color:#d2d0c3;text-decoration:none;font-size:24px;font-weight:800;padding:13px 18px;border-radius:10px;border:1px solid #2a2c33;background:#14161b;transition:all .2s;white-space:nowrap;line-height:1}
 .nav a:hover{color:#f5f3e8;background:#1c2028;border-color:#4a4c53;transform:translateY(-1px)}
-.nav a.active{color:#5DCAA5;background:#0a1a15;border:1px solid #1f7d5b;box-shadow:0 0 0 1px rgba(93,202,165,.18),0 8px 18px rgba(0,0,0,.18)}
-.content{padding:32px;max-width:1100px;margin:0 auto}
-h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:#f5f3e8}
-.subtitle{font-size:18px;color:#8a8878;margin-bottom:32px;font-family:'Space Mono',monospace}
-.section{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;margin-bottom:24px;position:relative;overflow:hidden}
-.section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
-.section.pvc::before{background:linear-gradient(90deg,#333,#FFD700,#DC143C)}
-.section.inner::before{background:linear-gradient(90deg,#5DCAA5,#3B8BD4)}
-.section.outer::before{background:linear-gradient(90deg,#7F77DD,#ED93B1)}
-.section-title{font-size:20px;font-weight:700;margin-bottom:20px;color:#f5f3e8}
-.read-only-badge{display:inline-block;font-size:11px;font-weight:600;color:#6a6858;background:#1a1d24;border:1px solid #2a2c33;border-radius:4px;padding:2px 8px;font-family:'Space Mono',monospace;vertical-align:middle;margin-left:10px}
-
-/* PVC */
-.total-bar-wrap{margin-bottom:24px}
-.total-bar-label{display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px;color:#8a8878}
-.total-bar-label span:last-child{font-family:'Space Mono',monospace;color:#e4e2d8}
-.total-bar{background:#1a1d24;border-radius:8px;height:16px;overflow:hidden;display:flex}
-.total-bar-seg{height:100%;transition:width .4s ease}
-
-.pvc-rows{display:flex;flex-direction:column;gap:16px}
-.pvc-row{display:grid;grid-template-columns:110px 120px 1fr 140px;gap:12px;align-items:center}
-.pvc-label{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
-.pvc-swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0;border:1px solid #444}
-.pvc-lbs{font-size:13px;font-family:'Space Mono',monospace;color:#e4e2d8}
-.pvc-status{font-size:12px;color:#F2A623;font-family:'Space Mono',monospace}
-.pvc-bar-wrap{background:#1a1d24;border-radius:6px;height:12px;overflow:hidden}
-.pvc-bar-fill{height:100%;border-radius:6px;transition:width .4s ease}
-
-/* Sleeves */
-.sleeve-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
-.sleeve-card{background:#1a1d24;border:1px solid #2a2c33;border-radius:8px;padding:16px}
-.sleeve-label{font-size:11px;font-weight:600;color:#6a6858;text-transform:uppercase;letter-spacing:.5px;font-family:'Space Mono',monospace;margin-bottom:6px}
-.sleeve-count{font-size:28px;font-weight:700;font-family:'Space Mono',monospace;color:#e4e2d8}
-.sleeve-unit{font-size:12px;color:#6a6858;margin-top:2px}
-
-/* Footer note */
-.edit-note{margin-top:32px;padding:16px 20px;background:#0a1a15;border:1px solid #1a3a2a;border-radius:8px;color:#5DCAA5;font-size:14px}
-.edit-note a{color:#5DCAA5;font-weight:700}
-
-.loading{color:#6a6858;font-family:'Space Mono',monospace;padding:40px 0;text-align:center}
-.error{color:#ff6b6b;font-family:'Space Mono',monospace;padding:40px 0;text-align:center}
-
-@media(max-width:700px){
-  .pvc-row{grid-template-columns:90px 1fr;grid-template-rows:auto auto}
-  .pvc-bar-wrap,.pvc-status{grid-column:span 2}
-}
+.nav a.active{color:#5dcaa5;background:#0a1a15;border:1px solid #1f7d5b;box-shadow:0 0 0 1px rgba(93,202,165,.18),0 8px 18px rgba(0,0,0,.18)}
+.content{padding:24px;max-width:1920px;margin:0 auto}
+.header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:18px}
+.eyebrow{color:var(--green);font-size:12px;font-weight:950;letter-spacing:.12em;text-transform:uppercase;margin-bottom:7px}
+h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
+.source{color:var(--muted);font-size:13px;text-align:right;line-height:1.5}
+.grid{display:grid;gap:12px}
+.top-grid{grid-template-columns:1.25fr .75fr .75fr .75fr;margin-bottom:14px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;min-width:0;box-shadow:0 10px 24px rgba(0,0,0,.22)}
+.metric-label{color:var(--muted);font-size:12px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}
+.metric-value{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:36px;font-weight:950;line-height:1;margin-top:8px}
+.metric-sub{color:var(--faint);font-size:13px;margin-top:8px;line-height:1.35}
+.pvc-wrap{display:grid;grid-template-columns:170px 1fr;gap:18px;align-items:center}
+.dial{aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--green) calc(var(--pct)*1%),#1a1d24 0);position:relative;border:1px solid rgba(0,232,106,.35)}
+.dial::after{content:"";position:absolute;inset:15px;border-radius:50%;background:var(--panel);border:1px solid var(--border)}
+.dial-inner{position:relative;z-index:1;text-align:center}
+.dial-num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:30px;font-weight:950}
+.dial-unit{color:var(--muted);font-size:12px;font-weight:850;margin-top:3px;text-transform:uppercase}
+.bar{height:12px;border-radius:999px;background:#1a1d24;overflow:hidden}
+.bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--green),#c9ffe0)}
+.section-title{align-items:center;display:flex;justify-content:space-between;gap:12px;margin:22px 0 12px}
+.section-title h2{font-size:18px;letter-spacing:.06em;text-transform:uppercase}
+.count-pill{border:1px solid var(--border);border-radius:999px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;padding:4px 9px}
+.warehouse{grid-template-columns:repeat(6,minmax(0,1fr));margin-bottom:20px}
+.zone{background:linear-gradient(180deg,#151515,#101010);border:1px solid var(--border);border-radius:8px;padding:12px;min-height:138px}
+.zone-head{display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:9px}
+.zone-name{color:var(--green);font-size:13px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.zone-count{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+.zone-item{color:var(--text);font-size:13px;line-height:1.25;margin-top:7px;display:flex;justify-content:space-between;gap:8px}
+.zone-item span:last-child{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+.cards{grid-template-columns:repeat(4,minmax(0,1fr))}
+.item-card{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:8px;padding:12px;min-width:0;box-shadow:0 8px 18px rgba(0,0,0,.28)}
+.item-card.low{border-color:rgba(255,77,77,.72);border-left-color:var(--red);background:linear-gradient(135deg,rgba(255,77,77,.16),var(--card) 54%)}
+.item-card.pvc{border-left-color:var(--green)}
+.item-card.sleeves{border-left-color:var(--purple)}
+.item-card.packaging{border-left-color:var(--gold)}
+.item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.item-name{font-size:17px;font-weight:850;line-height:1.18}
+.qty{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text);font-size:19px;font-weight:950;white-space:nowrap}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.pill{border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:12px;font-weight:800;padding:4px 8px}
+.pill.location{color:var(--blue);border-color:rgba(77,163,255,.45);background:rgba(77,163,255,.12)}
+.pill.low{color:var(--red);border-color:rgba(255,77,77,.55);background:rgba(255,77,77,.12)}
+.notes{color:var(--muted);font-size:13px;line-height:1.35;margin-top:10px}
+.table-strip{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.table-chip{border:1px solid var(--border);border-radius:7px;background:#101010;color:var(--muted);font-size:12px;font-weight:750;padding:7px 9px}
+.loading,.error{background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;padding:28px;text-align:center}
+.error{color:var(--red);border-color:rgba(255,77,77,.5)}
+@media(max-width:1200px){.top-grid{grid-template-columns:1fr 1fr}.warehouse{grid-template-columns:repeat(3,minmax(0,1fr))}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){body{font-size:15px}.nav{gap:8px;justify-content:flex-start;overflow-x:auto;padding:10px 12px;flex-wrap:nowrap}.nav::-webkit-scrollbar{display:none}.nav img{height:42px!important;margin-right:2px!important;flex:0 0 auto}.nav a{font-size:15px;padding:10px 12px;flex:0 0 auto}.content{padding:14px}.header{align-items:flex-start;flex-direction:column}.source{text-align:left}h1{font-size:28px}.top-grid,.warehouse,.cards{grid-template-columns:1fr}.pvc-wrap{grid-template-columns:1fr}.dial{max-width:210px;margin:0 auto}}
 </style>
 </head>
 <body>
@@ -73,150 +77,193 @@ h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:
 <a href="/staff/qc">Shift Logs</a>
 </div>
 
-<div class="content">
-  <h1>Inventory Dashboard <span class="read-only-badge">READ ONLY</span></h1>
-  <p class="subtitle">Current stock levels — updated by admin</p>
+<main class="content">
+  <header class="header">
+    <div>
+      <div class="eyebrow">New Orleans Record Press</div>
+      <h1>Warehouse Inventory</h1>
+    </div>
+    <div class="source" id="source">Loading Airtable inventory...</div>
+  </header>
 
   <div id="root">
-    <p class="loading">Loading inventory…</p>
+    <p class="loading">Loading inventory...</p>
   </div>
-</div>
+</main>
 
 <script>
 (function() {
-  const PVC_COLORS = [
-    { key: 'black',  label: 'Black',  bar: '#333',    swatch: '#333' },
-    { key: 'clear',  label: 'Clear',  bar: null,      swatch: null, striped: true },
-    { key: 'yellow', label: 'Yellow', bar: '#FFD700', swatch: '#FFD700' },
-    { key: 'red',    label: 'Red',    bar: '#DC143C', swatch: '#DC143C' },
-  ];
+  const CATEGORY_LABELS = {
+    pvc: 'PVC Compound',
+    sleeves: 'Sleeves',
+    packaging: 'Packaging',
+    warehouse: 'Warehouse Stock'
+  };
 
-  const STRIPED = 'repeating-linear-gradient(45deg,#b0c4cc,#b0c4cc 4px,#d0e4ec 4px,#d0e4ec 8px)';
-  const STRIPED_SWATCH = 'repeating-linear-gradient(45deg,#b0c4cc,#b0c4cc 3px,#d0e4ec 3px,#d0e4ec 6px)';
+  function esc(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
 
-  const INNER = [
-    { key: 'whitePaper', label: 'White Paper' },
-    { key: 'blackPaper', label: 'Black Paper' },
-    { key: 'whitePoly',  label: 'White Poly' },
-    { key: 'blackPoly',  label: 'Black Poly' },
-    { key: 'ricePaper',  label: 'Rice Paper' },
-  ];
+  function fmt(value) {
+    return Math.round(Number(value) || 0).toLocaleString();
+  }
 
-  const OUTER = [
-    { key: 'twoMil',           label: '2 mil' },
-    { key: 'twoMilResealable', label: '2 mil Resealable' },
-    { key: 'threeMil',         label: '3 mil' },
-  ];
-
-  const BOXES = [
-    { key: 'innerBox',    label: 'Inner Box' },
-    { key: 'outerBox',    label: 'Outer Box' },
-    { key: 'shippingBox', label: 'Shipping Box' },
-  ];
-
-  function pct(val, max) {
+  function pct(value, max) {
     if (!max) return 0;
-    return Math.min(100, (val / max) * 100);
+    return Math.max(0, Math.min(100, (value / max) * 100));
   }
 
-  function render(inv) {
-    const cap = inv.pvc.capacity;
-    const colors = inv.pvc.colors;
-    const totalLbs = PVC_COLORS.reduce((s, c) => s + (colors[c.key] ? colors[c.key].lbs : 0), 0);
+  function normalizeLegacy(data) {
+    const inv = data.legacy || data;
+    const items = [];
+    const pvcColors = inv.pvc && inv.pvc.colors ? inv.pvc.colors : {};
+    Object.keys(pvcColors).forEach(key => {
+      items.push({
+        id: `pvc-${key}`,
+        tableName: 'Local PVC',
+        category: 'pvc',
+        item: key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()),
+        quantity: pvcColors[key].lbs || 0,
+        unit: 'lbs',
+        location: 'PVC Storage',
+        status: pvcColors[key].status || '',
+        notes: ''
+      });
+    });
+    ['innerSleeves','outerSleeves','boxes'].forEach(group => {
+      Object.keys(inv[group] || {}).forEach(key => {
+        items.push({
+          id: `${group}-${key}`,
+          tableName: 'Local Supplies',
+          category: group === 'boxes' ? 'packaging' : 'sleeves',
+          item: key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()),
+          quantity: inv[group][key] || 0,
+          unit: 'units',
+          location: 'Warehouse',
+          status: '',
+          notes: ''
+        });
+      });
+    });
+    return { ...data, items, pvcCapacityLbs: inv.pvc && inv.pvc.capacity ? inv.pvc.capacity : 10000 };
+  }
 
-    // Build total multi-color bar segments
-    const segs = PVC_COLORS.map(c => {
-      const lbs = colors[c.key] ? colors[c.key].lbs : 0;
-      const p = pct(lbs, cap);
-      if (p <= 0) return '';
-      const bg = c.striped ? STRIPED : c.bar;
-      return `<div class="total-bar-seg" style="width:${p}%;background:${bg}"></div>`;
-    }).join('');
+  function lowStock(item) {
+    return item.reorderPoint && item.quantity <= item.reorderPoint;
+  }
 
-    // PVC rows
-    const pvcRows = PVC_COLORS.map(c => {
-      const col = colors[c.key] || { lbs: 0, status: '' };
-      const p = pct(col.lbs, cap);
-      const bg = c.striped ? STRIPED : c.bar;
-      const swatchBg = c.striped ? STRIPED_SWATCH : c.swatch;
-      const onOrder = col.status === 'on order';
-      const lbsLabel = col.lbs === 0 && onOrder
-        ? `0 lbs — <span style="color:#F2A623">ON ORDER</span>`
-        : `${col.lbs.toLocaleString()} lbs`;
-      return `
-        <div class="pvc-row">
-          <div class="pvc-label">
-            <div class="pvc-swatch" style="background:${swatchBg}"></div>
-            ${c.label}
-          </div>
-          <div class="pvc-lbs">${lbsLabel}</div>
-          <div class="pvc-bar-wrap">
-            <div class="pvc-bar-fill" style="width:${p}%;background:${bg};min-width:${p>0?4:0}px"></div>
-          </div>
-          <div class="pvc-status">${onOrder && col.lbs > 0 ? 'ON ORDER' : ''}</div>
-        </div>`;
-    }).join('');
+  function render(data) {
+    if (data.legacy) data = normalizeLegacy(data);
+    const items = Array.isArray(data.items) ? data.items : [];
+    const pvcCapacity = data.pvcCapacityLbs || 10000;
+    const pvcItems = items.filter(item => item.category === 'pvc');
+    const pvcTotal = pvcItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    const byCategory = items.reduce((acc, item) => {
+      const key = item.category || 'warehouse';
+      acc[key] = acc[key] || [];
+      acc[key].push(item);
+      return acc;
+    }, {});
+    const byLocation = items.reduce((acc, item) => {
+      const key = item.location || 'Unassigned';
+      acc[key] = acc[key] || [];
+      acc[key].push(item);
+      return acc;
+    }, {});
+    const locationEntries = Object.entries(byLocation).sort((a, b) => b[1].length - a[1].length).slice(0, 12);
+    const lowItems = items.filter(lowStock);
 
-    // Sleeve cards helper
-    function sleeveCards(items, data) {
-      return items.map(item => {
-        const count = data[item.key] !== undefined ? data[item.key] : 0;
-        return `
-          <div class="sleeve-card">
-            <div class="sleeve-label">${item.label}</div>
-            <div class="sleeve-count">${count.toLocaleString()}</div>
-            <div class="sleeve-unit">units</div>
-          </div>`;
-      }).join('');
-    }
-
-    document.getElementById('root').innerHTML = `
-      <!-- PVC -->
-      <div class="section pvc">
-        <div class="section-title">PVC Compound</div>
-        <div class="total-bar-wrap">
-          <div class="total-bar-label">
-            <span>Total on hand</span>
-            <span>${totalLbs.toLocaleString()} / ${cap.toLocaleString()} lbs (${Math.round((totalLbs/cap)*100)}%)</span>
-          </div>
-          <div class="total-bar">${segs || '<div style="width:100%;height:100%;background:#1a1d24"></div>'}</div>
-        </div>
-        <div class="pvc-rows">${pvcRows}</div>
-      </div>
-
-      <!-- Inner Sleeves -->
-      <div class="section inner">
-        <div class="section-title">Inner Sleeves</div>
-        <div class="sleeve-grid">${sleeveCards(INNER, inv.innerSleeves)}</div>
-      </div>
-
-      <!-- Outer Sleeves -->
-      <div class="section outer">
-        <div class="section-title">Outer Sleeves</div>
-        <div class="sleeve-grid">${sleeveCards(OUTER, inv.outerSleeves)}</div>
-      </div>
-
-      <!-- Boxes -->
-      <div class="section boxes">
-        <div class="section-title">Boxes</div>
-        <div class="sleeve-grid">${sleeveCards(BOXES, inv.boxes || {})}</div>
-      </div>
-
-      <div class="edit-note">
-        To update inventory levels, go to <a href="/admin">Admin Panel → Inventory tab</a>.
-        This dashboard is read-only.
-      </div>
+    document.getElementById('source').innerHTML = `
+      ${esc(data.source === 'airtable' ? 'Source: Airtable' : 'Source: local fallback')}
+      <div>${fmt(items.length)} inventory items${data.warning ? ' - Airtable warning' : ''}</div>
     `;
+
+    const tableStrip = data.tables && data.tables.length
+      ? `<div class="table-strip">${data.tables.map(table => `<div class="table-chip">${esc(table.name)} - ${fmt(table.count)} rows</div>`).join('')}</div>`
+      : '';
+
+    const metricCards = `
+      <section class="grid top-grid">
+        <div class="panel pvc-wrap">
+          <div class="dial" style="--pct:${pct(pvcTotal, pvcCapacity)}">
+            <div class="dial-inner">
+              <div class="dial-num">${Math.round(pct(pvcTotal, pvcCapacity))}%</div>
+              <div class="dial-unit">PVC full</div>
+            </div>
+          </div>
+          <div>
+            <div class="metric-label">PVC compound</div>
+            <div class="metric-value">${fmt(pvcTotal)} lbs</div>
+            <div class="metric-sub">${fmt(pvcTotal)} / ${fmt(pvcCapacity)} lbs max inventory</div>
+            <div class="bar" style="margin-top:14px"><div class="bar-fill" style="width:${pct(pvcTotal, pvcCapacity)}%"></div></div>
+            ${tableStrip}
+          </div>
+        </div>
+        <div class="panel"><div class="metric-label">Total items</div><div class="metric-value">${fmt(items.length)}</div><div class="metric-sub">Across active Airtable inventory tables</div></div>
+        <div class="panel"><div class="metric-label">Locations</div><div class="metric-value">${fmt(Object.keys(byLocation).length)}</div><div class="metric-sub">Warehouse zones with assigned stock</div></div>
+        <div class="panel"><div class="metric-label">Low stock</div><div class="metric-value" style="color:${lowItems.length ? 'var(--red)' : 'var(--green)'}">${fmt(lowItems.length)}</div><div class="metric-sub">At or below reorder point</div></div>
+      </section>`;
+
+    const warehouse = `
+      <div class="section-title"><h2>Warehouse Locations</h2><span class="count-pill">${fmt(Object.keys(byLocation).length)} zones</span></div>
+      <section class="grid warehouse">
+        ${locationEntries.map(([location, zoneItems]) => `
+          <div class="zone">
+            <div class="zone-head"><div class="zone-name">${esc(location)}</div><div class="zone-count">${fmt(zoneItems.length)}</div></div>
+            ${zoneItems.slice(0, 5).map(item => `
+              <div class="zone-item"><span>${esc(item.item)}</span><span>${fmt(item.quantity)} ${esc(item.unit || '')}</span></div>
+            `).join('')}
+            ${zoneItems.length > 5 ? `<div class="zone-item"><span>More</span><span>+${fmt(zoneItems.length - 5)}</span></div>` : ''}
+          </div>
+        `).join('')}
+      </section>`;
+
+    const categorySections = ['pvc','sleeves','packaging','warehouse'].map(category => {
+      const categoryItems = (byCategory[category] || []).sort((a, b) => String(a.item).localeCompare(String(b.item)));
+      if (!categoryItems.length) return '';
+      return `
+        <div class="section-title"><h2>${CATEGORY_LABELS[category]}</h2><span class="count-pill">${fmt(categoryItems.length)} items</span></div>
+        <section class="grid cards">
+          ${categoryItems.map(item => {
+            const isLow = lowStock(item);
+            const itemMax = item.max || (item.category === 'pvc' ? pvcCapacity : 0);
+            return `
+              <article class="item-card ${esc(item.category || 'warehouse')} ${isLow ? 'low' : ''}">
+                <div class="item-top">
+                  <div class="item-name">${esc(item.item)}</div>
+                  <div class="qty">${fmt(item.quantity)} ${esc(item.unit || '')}</div>
+                </div>
+                ${itemMax ? `<div class="bar" style="margin-top:11px"><div class="bar-fill" style="width:${pct(item.quantity, itemMax)}%;background:${isLow ? 'var(--red)' : 'linear-gradient(90deg,var(--green),#c9ffe0)'}"></div></div>` : ''}
+                <div class="meta">
+                  <span class="pill location">${esc(item.location || 'Unassigned')}</span>
+                  <span class="pill">${esc(item.tableName || 'Inventory')}</span>
+                  ${item.status ? `<span class="pill">${esc(item.status)}</span>` : ''}
+                  ${isLow ? `<span class="pill low">Reorder at ${fmt(item.reorderPoint)}</span>` : ''}
+                </div>
+                ${item.notes ? `<div class="notes">${esc(item.notes)}</div>` : ''}
+              </article>`;
+          }).join('')}
+        </section>`;
+    }).join('');
+
+    document.getElementById('root').innerHTML = metricCards + warehouse + categorySections;
   }
 
-  fetch('/api/admin/inventory')
-    .then(r => r.json())
-    .then(data => render(data))
-    .catch(() => {
-      document.getElementById('root').innerHTML = '<p class="error">Failed to load inventory data.</p>';
+  fetch('/api/staff/inventory')
+    .then(response => response.json())
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+      render(data);
+    })
+    .catch(error => {
+      document.getElementById('root').innerHTML = `<p class="error">Failed to load inventory data. ${esc(error.message || error)}</p>`;
     });
 })();
 </script>
-
 </body>
 </html>

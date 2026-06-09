@@ -37,6 +37,8 @@ Set all of the following in Vercel → Project → Settings → Environment Vari
 | `AIRTABLE_STAGE_FIELD` | Airtable field that stores the production station | Defaults to `Dashboard Stage` |
 | `AIRTABLE_ORDER_FIELD` | Airtable field that stores card order inside each station | Defaults to `Dashboard Order` |
 | `AIRTABLE_STAGE_WRITE_MODE` | Writes stage values as labels or dashboard keys | Defaults to `label`; use `key` for values like `test_pressing` |
+| `AIRTABLE_INVENTORY_TABLES` | Optional comma-separated list of the three Airtable inventory table names or table IDs for `/staff/inventory` | If omitted, the app discovers inventory-looking tables |
+| `AIRTABLE_PVC_CAPACITY_LBS` | Maximum PVC compound inventory shown on `/staff/inventory` | Defaults to `10000` |
 
 ---
 
