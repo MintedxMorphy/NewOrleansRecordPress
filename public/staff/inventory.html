@@ -49,6 +49,7 @@ h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
 .item-card.packaging{border-left-color:var(--gold)}
 .item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .item-name{font-size:17px;font-weight:850;line-height:1.18}
+.item-matrix{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;font-weight:850;margin-top:5px}
 .qty{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text);font-size:19px;font-weight:950;white-space:nowrap}
 .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .pill{border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:12px;font-weight:800;padding:4px 8px}
@@ -96,7 +97,7 @@ h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
   const CATEGORY_LABELS = {
     pvc: 'PVC Compound',
     sleeves: 'Sleeves',
-    packaging: 'Packaging',
+    packaging: 'Jackets & Inserts',
     warehouse: 'Warehouse Stock'
   };
 
@@ -123,14 +124,17 @@ h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
     const items = [];
     const pvcColors = inv.pvc && inv.pvc.colors ? inv.pvc.colors : {};
     Object.keys(pvcColors).forEach(key => {
-      items.push({
-        id: `pvc-${key}`,
-        tableName: 'Local PVC',
-        category: 'pvc',
-        item: key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()),
-        quantity: pvcColors[key].lbs || 0,
-        unit: 'lbs',
-        location: 'PVC Storage',
+        items.push({
+          id: `pvc-${key}`,
+          tableName: 'Local PVC',
+          category: 'pvc',
+          item: key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()),
+          artist: '',
+          matrix: '',
+          quantity: pvcColors[key].lbs || 0,
+          quantityLabel: `${(pvcColors[key].lbs || 0).toLocaleString()} lbs`,
+          unit: 'lbs',
+          location: 'PVC Storage',
         status: pvcColors[key].status || '',
         notes: ''
       });
@@ -142,7 +146,10 @@ h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
           tableName: 'Local Supplies',
           category: group === 'boxes' ? 'packaging' : 'sleeves',
           item: key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()),
+          artist: '',
+          matrix: '',
           quantity: inv[group][key] || 0,
+          quantityLabel: `${(inv[group][key] || 0).toLocaleString()} units`,
           unit: 'units',
           location: 'Warehouse',
           status: '',
@@ -216,7 +223,7 @@ h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
           <div class="zone">
             <div class="zone-head"><div class="zone-name">${esc(location)}</div><div class="zone-count">${fmt(zoneItems.length)}</div></div>
             ${zoneItems.slice(0, 5).map(item => `
-              <div class="zone-item"><span>${esc(item.item)}</span><span>${fmt(item.quantity)} ${esc(item.unit || '')}</span></div>
+              <div class="zone-item"><span>${esc(item.artist || item.item)}${item.matrix ? ` - ${esc(item.matrix)}` : ''}</span><span>${esc(item.quantityLabel || `${fmt(item.quantity)} ${item.unit || ''}`)}</span></div>
             `).join('')}
             ${zoneItems.length > 5 ? `<div class="zone-item"><span>More</span><span>+${fmt(zoneItems.length - 5)}</span></div>` : ''}
           </div>
@@ -232,11 +239,16 @@ h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
           ${categoryItems.map(item => {
             const isLow = lowStock(item);
             const itemMax = item.max || (item.category === 'pvc' ? pvcCapacity : 0);
+            const title = item.artist || item.item || 'Unlabeled inventory item';
+            const quantity = item.quantityLabel || `${fmt(item.quantity)} ${item.unit || ''}`;
             return `
               <article class="item-card ${esc(item.category || 'warehouse')} ${isLow ? 'low' : ''}">
                 <div class="item-top">
-                  <div class="item-name">${esc(item.item)}</div>
-                  <div class="qty">${fmt(item.quantity)} ${esc(item.unit || '')}</div>
+                  <div>
+                    <div class="item-name">${esc(title)}</div>
+                    ${item.matrix ? `<div class="item-matrix">${esc(item.matrix)}</div>` : ''}
+                  </div>
+                  <div class="qty">${esc(quantity)}</div>
                 </div>
                 ${itemMax ? `<div class="bar" style="margin-top:11px"><div class="bar-fill" style="width:${pct(item.quantity, itemMax)}%;background:${isLow ? 'var(--red)' : 'linear-gradient(90deg,var(--green),#c9ffe0)'}"></div></div>` : ''}
                 <div class="meta">

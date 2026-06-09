@@ -54,7 +54,10 @@ export type AirtableInventoryItem = {
   tableName: string;
   category: 'pvc' | 'sleeves' | 'packaging' | 'warehouse';
   item: string;
+  artist: string;
+  matrix: string;
   quantity: number;
+  quantityLabel: string;
   unit: string;
   location: string;
   status: string;
@@ -873,7 +876,30 @@ export async function updateAirtableJobDashNotes(jobId: string, dashNotes: strin
 
 const INVENTORY_FIELD_ALIASES = {
   item: ['Item', 'Material', 'Product', 'Product Name', 'Name', 'Description', 'SKU', 'Color', 'Type'],
-  quantity: ['Quantity', 'Qty', 'On Hand', 'On Hand Qty', 'On Hand Quantity', 'Stock', 'Count', 'Units', 'Lbs', 'Pounds', 'Weight'],
+  artist: ['Artist', 'Customer', 'Customer Name', 'Client', 'Project', 'Project Name', 'Title'],
+  matrix: ['Matrix', 'MATRIX', 'Matrix ID', 'Catalog Number', 'Catalog #', 'Job ID', 'Job Id', 'Order Number', 'ORDER NUMBER'],
+  quantity: [
+    'Quantity',
+    'Qty',
+    'QTY',
+    'On Hand',
+    'On Hand Qty',
+    'On Hand Quantity',
+    'Stock',
+    'Count',
+    'Units',
+    'Lbs',
+    'Pounds',
+    'Weight',
+    'Quantity Info',
+    'Qty Info',
+    'Jacket Quantity',
+    'Insert Quantity',
+    'Label Quantity',
+    'Record Quantity',
+    'Run Size',
+    'Amount',
+  ],
   unit: ['Unit', 'Units', 'UOM', 'Measure'],
   location: ['Location', 'Warehouse Location', 'Warehouse', 'Bin', 'Rack', 'Shelf', 'Zone', 'Aisle'],
   status: ['Status', 'Inventory Status', 'On Order', 'Order Status'],
@@ -884,11 +910,38 @@ const INVENTORY_FIELD_ALIASES = {
   category: ['Category', 'Item Type', 'Material Type', 'Inventory Type'],
 };
 
+function isAirtableRecordId(value: string) {
+  return /^rec[a-zA-Z0-9]{10,}$/.test(value.trim());
+}
+
+function humanInventoryField(fields: Record<string, unknown>, aliases: string[]) {
+  const raw = field(fields, aliases).trim();
+  if (!raw || isAirtableRecordId(raw)) return '';
+
+  const parts = raw.split(',').map(part => part.trim()).filter(Boolean);
+  if (parts.length && parts.every(isAirtableRecordId)) return '';
+
+  return raw;
+}
+
+function normalizedMatrixKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
 function inventoryNumber(value: unknown) {
   const cleaned = stringValue(value).replace(/,/g, '').replace(/lbs?/gi, '').trim();
   if (!cleaned) return 0;
-  const parsed = Number(cleaned);
+  const firstNumber = cleaned.match(/-?\d+(\.\d+)?/)?.[0] || '';
+  const parsed = Number(firstNumber || cleaned);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function inventoryQuantityLabel(value: unknown, unit: string) {
+  const raw = stringValue(value).trim();
+  if (!raw || isAirtableRecordId(raw)) return 'Qty not listed';
+  const numeric = inventoryNumber(value);
+  if (numeric > 0) return `${numeric.toLocaleString()} ${unit || 'units'}`;
+  return raw;
 }
 
 function normalizeInventoryUnit(value: unknown, tableName: string, item: string) {
@@ -915,6 +968,41 @@ function inventoryCategory(tableName: string, fields: Record<string, unknown>, i
     return 'packaging';
   }
   return 'warehouse';
+}
+
+function jobReferenceFromRecord(record: AirtableRecord) {
+  const artist = field(record.fields, FIELD_ALIASES.customer);
+  const matrix = field(record.fields, FIELD_ALIASES.matrix) || field(record.fields, FIELD_ALIASES.job_id);
+  return { artist, matrix };
+}
+
+function buildJobReferenceLookup(records: AirtableRecord[]) {
+  const lookup = new Map<string, { artist: string; matrix: string }>();
+
+  for (const record of records) {
+    const reference = jobReferenceFromRecord(record);
+    if (!reference.matrix) continue;
+    const key = normalizedMatrixKey(reference.matrix);
+    if (!key || lookup.has(key)) continue;
+    lookup.set(key, reference);
+  }
+
+  return lookup;
+}
+
+function inventoryDisplayName(input: {
+  item: string;
+  artist: string;
+  matrix: string;
+  matched?: { artist: string; matrix: string };
+}) {
+  const artist = input.artist || input.matched?.artist || '';
+  const matrix = input.matrix || input.matched?.matrix || '';
+  if (artist && matrix) return `${artist} - ${matrix}`;
+  if (artist) return artist;
+  if (matrix) return matrix;
+  if (input.item && !isAirtableRecordId(input.item)) return input.item;
+  return 'Unlabeled inventory item';
 }
 
 function isInventoryLikeTable(table: AirtableTableMeta) {
@@ -966,6 +1054,8 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
   const selectedTables = configuredTables.length
     ? configuredTables.map(nameOrId => resolveAirtableTable(tables, nameOrId)).filter(Boolean) as AirtableTableMeta[]
     : tables.filter(isInventoryLikeTable).slice(0, 3);
+  const productionTable = resolveAirtableTable(tables, airtableJobsTable());
+  const completedTable = resolveAirtableTable(tables, airtableCompletedTable());
 
   if (!selectedTables.length) {
     throw new Error('No Airtable inventory tables found. Set AIRTABLE_INVENTORY_TABLES to the three inventory table names or IDs.');
@@ -974,16 +1064,23 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
   // Airtable is the source of truth at page-load time. If warehouse staff still
   // update upstream Sheets and manually sync them into Airtable, this read layer
   // intentionally shows whatever Airtable currently contains.
-  const recordGroups = await Promise.all(selectedTables.map(async table => ({
-    table,
-    records: await getAirtableRecordsForTable(table),
-  })));
+  const [recordGroups, productionRefs, completedRefs] = await Promise.all([
+    Promise.all(selectedTables.map(async table => ({
+      table,
+      records: await getAirtableRecordsForTable(table),
+    }))),
+    productionTable ? getAirtableRecordsForTable(productionTable).catch(() => []) : Promise.resolve([]),
+    completedTable ? getAirtableRecordsForTable(completedTable).catch(() => []) : Promise.resolve([]),
+  ]);
+  const jobLookup = buildJobReferenceLookup([...productionRefs, ...completedRefs]);
 
   const items = recordGroups.flatMap(({ table, records }) => records.map(record => {
-    const item =
-      field(record.fields, INVENTORY_FIELD_ALIASES.item) ||
-      field(record.fields, ['Name']) ||
-      record.id;
+    const rawItem = humanInventoryField(record.fields, INVENTORY_FIELD_ALIASES.item);
+    const matrix = humanInventoryField(record.fields, INVENTORY_FIELD_ALIASES.matrix);
+    const matched = matrix ? jobLookup.get(normalizedMatrixKey(matrix)) : undefined;
+    const artist = humanInventoryField(record.fields, INVENTORY_FIELD_ALIASES.artist) || matched?.artist || '';
+    const item = inventoryDisplayName({ item: rawItem, artist, matrix, matched });
+    const rawQuantity = rawField(record.fields, INVENTORY_FIELD_ALIASES.quantity);
     const unit = normalizeInventoryUnit(rawField(record.fields, INVENTORY_FIELD_ALIASES.unit), table.name, item);
 
     return {
@@ -992,7 +1089,10 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
       tableName: table.name,
       category: inventoryCategory(table.name, record.fields, item),
       item,
-      quantity: inventoryNumber(rawField(record.fields, INVENTORY_FIELD_ALIASES.quantity)),
+      artist,
+      matrix: matrix || matched?.matrix || '',
+      quantity: inventoryNumber(rawQuantity),
+      quantityLabel: inventoryQuantityLabel(rawQuantity, unit),
       unit,
       location: field(record.fields, INVENTORY_FIELD_ALIASES.location) || 'Unassigned',
       status: field(record.fields, INVENTORY_FIELD_ALIASES.status),
