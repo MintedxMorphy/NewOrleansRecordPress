@@ -52,7 +52,7 @@ export type AirtableInventoryItem = {
   id: string;
   tableId: string;
   tableName: string;
-  category: 'pvc' | 'sleeves' | 'packaging' | 'warehouse';
+  category: 'pvc' | 'jackets' | 'labels' | 'sleeves' | 'warehouse';
   item: string;
   artist: string;
   matrix: string;
@@ -956,16 +956,14 @@ function inventoryCategory(tableName: string, fields: Record<string, unknown>, i
   const explicit = field(fields, INVENTORY_FIELD_ALIASES.category).toLowerCase();
   const text = `${tableName} ${explicit} ${item}`.toLowerCase();
   if (text.includes('pvc') || text.includes('compound')) return 'pvc';
-  if (text.includes('sleeve')) return 'sleeves';
+  if (text.includes('label')) return 'labels';
+  if (text.includes('sleeve') || text.includes('poly')) return 'sleeves';
   if (
-    text.includes('box') ||
-    text.includes('carton') ||
     text.includes('jacket') ||
-    text.includes('label') ||
     text.includes('insert') ||
-    text.includes('packaging')
+    text.includes('gatefold')
   ) {
-    return 'packaging';
+    return 'jackets';
   }
   return 'warehouse';
 }

@@ -5,10 +5,6 @@ import { SessionProvider } from "next-auth/react";
 const navLinks = [
   { href: "/staff", label: "Operations Guide" },
   { href: "/staff/dashboard", label: "Production Board", active: true },
-  { href: "/staff/pricing", label: "Pricing & Market" },
-  { href: "/staff/suppliers", label: "PVC Suppliers" },
-  { href: "/staff/plants", label: "Plant Directory" },
-  { href: "/staff/mastering", label: "Mastering & Plating" },
   { href: "/staff/inventory", label: "Inventory" },
   { href: "/staff/qc", label: "Shift Logs" },
 ];

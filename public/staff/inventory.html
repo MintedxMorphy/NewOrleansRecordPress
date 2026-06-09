@@ -45,8 +45,9 @@ h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
 .item-card{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:8px;padding:12px;min-width:0;box-shadow:0 8px 18px rgba(0,0,0,.28)}
 .item-card.low{border-color:rgba(255,77,77,.72);border-left-color:var(--red);background:linear-gradient(135deg,rgba(255,77,77,.16),var(--card) 54%)}
 .item-card.pvc{border-left-color:var(--green)}
+.item-card.jackets{border-left-color:var(--gold)}
+.item-card.labels{border-left-color:var(--blue)}
 .item-card.sleeves{border-left-color:var(--purple)}
-.item-card.packaging{border-left-color:var(--gold)}
 .item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .item-name{font-size:17px;font-weight:850;line-height:1.18}
 .item-matrix{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;font-weight:850;margin-top:5px}
@@ -70,10 +71,6 @@ h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
 <img src="/staff/norp-logo.png" alt="NORP" style="height:70px;margin-right:8px">
 <a href="/staff">Operations Guide</a>
 <a href="/staff/dashboard">Production Board</a>
-<a href="/staff/pricing">Pricing &amp; Market</a>
-<a href="/staff/suppliers">PVC Suppliers</a>
-<a href="/staff/plants">Plant Directory</a>
-<a href="/staff/mastering">Mastering &amp; Plating</a>
 <a href="/staff/inventory" class="active">Inventory</a>
 <a href="/staff/qc">Shift Logs</a>
 </div>
@@ -96,8 +93,9 @@ h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
 (function() {
   const CATEGORY_LABELS = {
     pvc: 'PVC Compound',
-    sleeves: 'Sleeves',
-    packaging: 'Jackets & Inserts',
+    jackets: 'Jackets & Inserts',
+    labels: 'Label Inventory',
+    sleeves: 'Sleeves & Poly-sleeves',
     warehouse: 'Warehouse Stock'
   };
 
@@ -144,7 +142,7 @@ h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
         items.push({
           id: `${group}-${key}`,
           tableName: 'Local Supplies',
-          category: group === 'boxes' ? 'packaging' : 'sleeves',
+          category: group === 'boxes' ? 'jackets' : 'sleeves',
           item: key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()),
           artist: '',
           matrix: '',
@@ -230,7 +228,7 @@ h1{font-size:36px;line-height:1.05;margin:0;color:var(--text)}
         `).join('')}
       </section>`;
 
-    const categorySections = ['pvc','sleeves','packaging','warehouse'].map(category => {
+    const categorySections = ['pvc','jackets','labels','sleeves'].map(category => {
       const categoryItems = (byCategory[category] || []).sort((a, b) => String(a.item).localeCompare(String(b.item)));
       if (!categoryItems.length) return '';
       return `

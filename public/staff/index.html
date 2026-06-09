@@ -15,6 +15,14 @@ body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-heigh
 .page-content{padding:32px}
 h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:#f5f3e8}
 .subtitle{font-size:18px;color:#8a8878;margin-bottom:32px;font-family:'Space Mono',monospace}
+.guide-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:0 0 28px}
+.guide-card{background:#14161b;border:1px solid #2a2c33;border-radius:12px;color:#d2d0c3;text-decoration:none;padding:18px;min-height:112px;display:flex;flex-direction:column;justify-content:space-between;transition:all .2s;position:relative;overflow:hidden}
+.guide-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#5DCAA5,#3B8BD4)}
+.guide-card:hover{border-color:#5DCAA5;color:#f5f3e8;transform:translateY(-1px);box-shadow:0 12px 24px rgba(0,0,0,.22)}
+.guide-card.active{background:#0a1a15;border-color:#1f7d5b;color:#5DCAA5}
+.guide-kicker{font-family:'Space Mono',monospace;font-size:11px;color:#6a6858;text-transform:uppercase;letter-spacing:.08em}
+.guide-title{font-size:19px;font-weight:800;line-height:1.15}
+.section-heading{font-size:24px;font-weight:800;color:#f5f3e8;margin:0 0 14px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px}
 .section{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:24px;position:relative;overflow:hidden}
 .section::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
@@ -80,6 +88,8 @@ h1{font-size:36px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;color:
 .nav a{color:#d2d0c3;text-decoration:none;font-size:24px;font-weight:800;padding:13px 18px;border-radius:10px;border:1px solid #2a2c33;background:#14161b;transition:all .2s;white-space:nowrap;line-height:1}
 .nav img{height:60px !important;margin:0 auto 4px !important}
 .grid{grid-template-columns:1fr}
+.guide-grid{grid-template-columns:1fr}
+.guide-card{min-height:auto;gap:14px}
 .flow-row{grid-template-columns:repeat(2,1fr);gap:8px}
 .flow-box:not(:last-child)::after{display:none}
 .flow-box .fb-title{font-size:14px}
@@ -111,16 +121,22 @@ h1{font-size:26px}
 <img src="/staff/norp-logo.png" alt="NORP" style="height:70px;margin-right:8px">
 <a href="/staff" class="active">Operations Guide</a>
 <a href="/staff/dashboard">Production Board</a>
-<a href="/staff/pricing">Pricing & Market</a>
-<a href="/staff/suppliers">PVC Suppliers</a>
-<a href="/staff/plants">Plant Directory</a>
-<a href="/staff/mastering">Mastering &amp; Plating</a>
 <a href="/staff/inventory">Inventory</a>
 <a href="/staff/qc">Shift Logs</a>
 </div>
 <div class="page-content">
 <h1>Operations Guide</h1>
 <div class="subtitle">New Orleans Record Press · 1336 Montegut Street, New Orleans, LA 70117 · May 2026</div>
+
+<div class="guide-grid">
+<a class="guide-card active" href="/staff"><span class="guide-kicker">Equipment</span><span class="guide-title">Machinery</span></a>
+<a class="guide-card" href="/staff/pricing"><span class="guide-kicker">Market</span><span class="guide-title">Pricing &amp; Market</span></a>
+<a class="guide-card" href="/staff/suppliers"><span class="guide-kicker">Materials</span><span class="guide-title">PVC Suppliers</span></a>
+<a class="guide-card" href="/staff/plants"><span class="guide-kicker">Peers</span><span class="guide-title">Press Plant Directory</span></a>
+<a class="guide-card" href="/staff/mastering"><span class="guide-kicker">Audio</span><span class="guide-title">Mastering &amp; Plating</span></a>
+</div>
+
+<div class="section-heading">Machinery</div>
 
 <div class="flow-section">
 <div class="section-title" style="margin-bottom:20px"><span class="dot" style="background:#7F77DD"></span> Production workflow</div>
@@ -353,7 +369,7 @@ h1{font-size:26px}
 </div>
 
 <div style="text-align:center;padding:24px 0;font-size:11px;color:#3a3a33;font-family:'Space Mono',monospace">
-New Orleans Record Press LLC | Operations Guide | Updated May 21, 2026<br>
+New Orleans Record Press LLC | Machinery | Updated May 21, 2026<br>
 Document for internal partnership use only &mdash; not for distribution
 </div>
 
@@ -362,7 +378,7 @@ Document for internal partnership use only &mdash; not for distribution
 
 
 <div style="text-align:center;padding:24px 0;font-size:11px;color:#3a3a33;font-family:'Space Mono',monospace">
-New Orleans Record Press LLC | Operations Guide | Updated May 21, 2026<br>
+New Orleans Record Press LLC | Machinery | Updated May 21, 2026<br>
 Confidential &mdash; Internal use only
 </div>
 </div>
