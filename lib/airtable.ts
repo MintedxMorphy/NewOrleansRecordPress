@@ -52,7 +52,8 @@ export type AirtableInventoryItem = {
   id: string;
   tableId: string;
   tableName: string;
-  category: 'pvc' | 'jackets' | 'labels' | 'sleeves' | 'warehouse';
+  section: 'compound' | 'jackets' | 'inserts' | 'labels' | 'sleeves';
+  sectionTitle: string;
   item: string;
   artist: string;
   matrix: string;
@@ -64,6 +65,7 @@ export type AirtableInventoryItem = {
   reorderPoint?: number;
   max?: number;
   notes: string;
+  details?: string[];
   updatedAt: string;
 };
 
@@ -72,6 +74,7 @@ export type AirtableInventoryDashboard = {
   pvcCapacityLbs: number;
   tables: Array<{ id: string; name: string; count: number }>;
   items: AirtableInventoryItem[];
+  missingTables: string[];
 };
 
 type AirtableFieldMeta = {
@@ -130,19 +133,19 @@ function airtableDashNotesField() {
 }
 
 function airtableInventoryTables() {
-  const configured = [
-    process.env.AIRTABLE_INVENTORY_TABLES,
-    process.env.AIRTABLE_PVC_INVENTORY_TABLE,
-    process.env.AIRTABLE_SUPPLIES_INVENTORY_TABLE,
-    process.env.AIRTABLE_WAREHOUSE_INVENTORY_TABLE,
-  ]
-    .filter(Boolean)
-    .join(',');
+  return INVENTORY_SECTIONS.map(section => section.tableNames[0]);
+}
 
-  return configured
-    .split(',')
-    .map(table => table.trim())
-    .filter(Boolean);
+const INVENTORY_SECTIONS = [
+  { key: 'compound', title: 'Compound Inventory', tableNames: ['Compound Inventory'] },
+  { key: 'jackets', title: 'Jackets', tableNames: ['Jackets, Inserts - Inventory', 'Jackets'] },
+  { key: 'inserts', title: 'Inserts', tableNames: ['Jackets, Inserts - Inventory', 'Inserts'] },
+  { key: 'labels', title: 'Center Lable', tableNames: ['Center Label Inventory', 'Center Lable', 'Center Label'] },
+  { key: 'sleeves', title: 'Sleeves & Poly', tableNames: ['Sleeves & Poly-sleeve Inventory', 'Sleeves & Poly', 'Sleeves & Poly-sleeves'] },
+] as const;
+
+function inventorySections() {
+  return INVENTORY_SECTIONS.map(section => ({ ...section }));
 }
 
 function airtablePvcCapacityLbs() {
@@ -910,6 +913,14 @@ const INVENTORY_FIELD_ALIASES = {
   category: ['Category', 'Item Type', 'Material Type', 'Inventory Type'],
 };
 
+const COMPOUND_FIELD_ALIASES = {
+  color: ['Color'],
+  virgin: ['Virgin Compound (lbs)', 'Virgin Compound', 'Virgin lbs'],
+  regrind: ['Regrind Compound (lbs)', 'Regrind Compound', 'Regrind lbs'],
+  virginOnOrder: ['Virgin Compound On Order (lbs)', 'Virgin On Order', 'Virgin Ordered'],
+  regrindOnOrder: ['Regrind On Order (lbs)', 'Regrind Compound On Order (lbs)', 'Regrind Ordered'],
+};
+
 function isAirtableRecordId(value: string) {
   return /^rec[a-zA-Z0-9]{10,}$/.test(value.trim());
 }
@@ -938,7 +949,7 @@ function inventoryNumber(value: unknown) {
 
 function inventoryQuantityLabel(value: unknown, unit: string) {
   const raw = stringValue(value).trim();
-  if (!raw || isAirtableRecordId(raw)) return 'Qty not listed';
+  if (!raw || isAirtableRecordId(raw)) return `0 ${unit || 'units'}`;
   const numeric = inventoryNumber(value);
   if (numeric > 0) return `${numeric.toLocaleString()} ${unit || 'units'}`;
   return raw;
@@ -950,22 +961,6 @@ function normalizeInventoryUnit(value: unknown, tableName: string, item: string)
   const text = `${tableName} ${item}`.toLowerCase();
   if (text.includes('pvc') || text.includes('compound')) return 'lbs';
   return 'units';
-}
-
-function inventoryCategory(tableName: string, fields: Record<string, unknown>, item: string): AirtableInventoryItem['category'] {
-  const explicit = field(fields, INVENTORY_FIELD_ALIASES.category).toLowerCase();
-  const text = `${tableName} ${explicit} ${item}`.toLowerCase();
-  if (text.includes('pvc') || text.includes('compound')) return 'pvc';
-  if (text.includes('label')) return 'labels';
-  if (text.includes('sleeve') || text.includes('poly')) return 'sleeves';
-  if (
-    text.includes('jacket') ||
-    text.includes('insert') ||
-    text.includes('gatefold')
-  ) {
-    return 'jackets';
-  }
-  return 'warehouse';
 }
 
 function jobReferenceFromRecord(record: AirtableRecord) {
@@ -1003,22 +998,39 @@ function inventoryDisplayName(input: {
   return 'Unlabeled inventory item';
 }
 
-function isInventoryLikeTable(table: AirtableTableMeta) {
-  const name = table.name.toLowerCase();
-  if (name.includes('production') || name.includes('completed') || name.includes('quote')) return false;
-  return [
-    'inventory',
-    'stock',
-    'warehouse',
-    'pvc',
-    'compound',
-    'sleeve',
-    'packaging',
-    'supplies',
-    'boxes',
-    'jackets',
-    'labels',
-  ].some(term => name.includes(term));
+function inventoryTypeText(fields: Record<string, unknown>) {
+  return field(fields, ['Type', 'Category', 'Item Type', 'Inventory Type']).toLowerCase();
+}
+
+function inventoryRecordBelongsToSection(sectionKey: AirtableInventoryItem['section'], fields: Record<string, unknown>) {
+  if (sectionKey === 'jackets') {
+    const type = inventoryTypeText(fields);
+    return !type || type.includes('jacket');
+  }
+
+  if (sectionKey === 'inserts') {
+    const type = inventoryTypeText(fields);
+    return type.includes('insert');
+  }
+
+  return true;
+}
+
+function compoundInventoryFields(fields: Record<string, unknown>) {
+  const virgin = inventoryNumber(rawField(fields, COMPOUND_FIELD_ALIASES.virgin));
+  const regrind = inventoryNumber(rawField(fields, COMPOUND_FIELD_ALIASES.regrind));
+  const virginOnOrder = inventoryNumber(rawField(fields, COMPOUND_FIELD_ALIASES.virginOnOrder));
+  const regrindOnOrder = inventoryNumber(rawField(fields, COMPOUND_FIELD_ALIASES.regrindOnOrder));
+  return {
+    color: humanInventoryField(fields, COMPOUND_FIELD_ALIASES.color) || 'Unlabeled compound',
+    onHand: virgin + regrind,
+    onOrder: virginOnOrder + regrindOnOrder,
+    details: [
+      `Virgin: ${virgin.toLocaleString()} lbs`,
+      `Regrind: ${regrind.toLocaleString()} lbs`,
+      `On order: ${(virginOnOrder + regrindOnOrder).toLocaleString()} lbs`,
+    ],
+  };
 }
 
 async function getAirtableRecordsForTable(table: AirtableTableMeta) {
@@ -1048,31 +1060,67 @@ async function getAirtableRecordsForTable(table: AirtableTableMeta) {
 
 export async function getAirtableInventoryDashboard(): Promise<AirtableInventoryDashboard> {
   const tables = await getAirtableTablesMeta();
-  const configuredTables = airtableInventoryTables();
-  const selectedTables = configuredTables.length
-    ? configuredTables.map(nameOrId => resolveAirtableTable(tables, nameOrId)).filter(Boolean) as AirtableTableMeta[]
-    : tables.filter(isInventoryLikeTable).slice(0, 3);
+  const configuredSections = inventorySections();
+  const selectedSections = configuredSections.map(section => {
+    const table = section.tableNames
+      .map(nameOrId => resolveAirtableTable(tables, nameOrId))
+      .find(Boolean);
+
+    return { ...section, table };
+  });
+  const foundSections = selectedSections.filter(section => section.table) as Array<typeof selectedSections[number] & { table: AirtableTableMeta }>;
+  const missingTables = selectedSections
+    .filter(section => !section.table)
+    .map(section => section.title);
   const productionTable = resolveAirtableTable(tables, airtableJobsTable());
   const completedTable = resolveAirtableTable(tables, airtableCompletedTable());
 
-  if (!selectedTables.length) {
-    throw new Error('No Airtable inventory tables found. Set AIRTABLE_INVENTORY_TABLES to the three inventory table names or IDs.');
+  if (!foundSections.length) {
+    throw new Error(`No Airtable inventory tables found. Expected: ${configuredSections.map(section => section.tableNames[0]).join(', ')}`);
   }
 
   // Airtable is the source of truth at page-load time. If warehouse staff still
   // update upstream Sheets and manually sync them into Airtable, this read layer
   // intentionally shows whatever Airtable currently contains.
   const [recordGroups, productionRefs, completedRefs] = await Promise.all([
-    Promise.all(selectedTables.map(async table => ({
-      table,
-      records: await getAirtableRecordsForTable(table),
+    Promise.all(foundSections.map(async section => ({
+      section,
+      table: section.table,
+      records: await getAirtableRecordsForTable(section.table),
     }))),
     productionTable ? getAirtableRecordsForTable(productionTable).catch(() => []) : Promise.resolve([]),
     completedTable ? getAirtableRecordsForTable(completedTable).catch(() => []) : Promise.resolve([]),
   ]);
   const jobLookup = buildJobReferenceLookup([...productionRefs, ...completedRefs]);
 
-  const items = recordGroups.flatMap(({ table, records }) => records.map(record => {
+  const items = recordGroups.flatMap(({ section, table, records }) => records.filter(record =>
+    inventoryRecordBelongsToSection(section.key, record.fields)
+  ).map(record => {
+    if (section.key === 'compound') {
+      const compound = compoundInventoryFields(record.fields);
+      const status = compound.onOrder > 0 ? `${compound.onOrder.toLocaleString()} lbs on order` : '';
+      return {
+        id: `${record.id}-${section.key}`,
+        tableId: table.id,
+        tableName: table.name,
+        section: section.key,
+        sectionTitle: section.title,
+        item: compound.color,
+        artist: '',
+        matrix: '',
+        quantity: compound.onHand,
+        quantityLabel: `${compound.onHand.toLocaleString()} lbs`,
+        unit: 'lbs',
+        location: 'Compound Inventory',
+        status,
+        reorderPoint: parseQuantity(rawField(record.fields, INVENTORY_FIELD_ALIASES.reorderPoint)),
+        max: parseQuantity(rawField(record.fields, INVENTORY_FIELD_ALIASES.max)),
+        notes: field(record.fields, INVENTORY_FIELD_ALIASES.notes),
+        details: compound.details,
+        updatedAt: field(record.fields, INVENTORY_FIELD_ALIASES.updatedAt),
+      };
+    }
+
     const rawItem = humanInventoryField(record.fields, INVENTORY_FIELD_ALIASES.item);
     const matrix = humanInventoryField(record.fields, INVENTORY_FIELD_ALIASES.matrix);
     const matched = matrix ? jobLookup.get(normalizedMatrixKey(matrix)) : undefined;
@@ -1082,10 +1130,11 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
     const unit = normalizeInventoryUnit(rawField(record.fields, INVENTORY_FIELD_ALIASES.unit), table.name, item);
 
     return {
-      id: record.id,
+      id: `${record.id}-${section.key}`,
       tableId: table.id,
       tableName: table.name,
-      category: inventoryCategory(table.name, record.fields, item),
+      section: section.key,
+      sectionTitle: section.title,
       item,
       artist,
       matrix: matrix || matched?.matrix || '',
@@ -1097,6 +1146,7 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
       reorderPoint: parseQuantity(rawField(record.fields, INVENTORY_FIELD_ALIASES.reorderPoint)),
       max: parseQuantity(rawField(record.fields, INVENTORY_FIELD_ALIASES.max)),
       notes: field(record.fields, INVENTORY_FIELD_ALIASES.notes),
+      details: [field(record.fields, ['Type', 'Category', 'Item Type'])].filter(Boolean),
       updatedAt: field(record.fields, INVENTORY_FIELD_ALIASES.updatedAt),
     };
   })).filter(item => item.item || item.quantity || item.location !== 'Unassigned');
@@ -1106,5 +1156,6 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
     pvcCapacityLbs: airtablePvcCapacityLbs(),
     tables: recordGroups.map(({ table, records }) => ({ id: table.id, name: table.name, count: records.length })),
     items,
+    missingTables,
   };
 }
