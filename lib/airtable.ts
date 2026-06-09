@@ -52,7 +52,8 @@ export type AirtableInventoryItem = {
   id: string;
   tableId: string;
   tableName: string;
-  category: 'pvc' | 'jackets' | 'labels' | 'sleeves' | 'warehouse';
+  section: 'compound' | 'jackets' | 'inserts' | 'labels' | 'sleeves';
+  sectionTitle: string;
   item: string;
   artist: string;
   matrix: string;
@@ -72,6 +73,7 @@ export type AirtableInventoryDashboard = {
   pvcCapacityLbs: number;
   tables: Array<{ id: string; name: string; count: number }>;
   items: AirtableInventoryItem[];
+  missingTables: string[];
 };
 
 type AirtableFieldMeta = {
@@ -130,18 +132,27 @@ function airtableDashNotesField() {
 }
 
 function airtableInventoryTables() {
-  const configured = [
-    process.env.AIRTABLE_INVENTORY_TABLES,
-    process.env.AIRTABLE_PVC_INVENTORY_TABLE,
-    process.env.AIRTABLE_SUPPLIES_INVENTORY_TABLE,
-    process.env.AIRTABLE_WAREHOUSE_INVENTORY_TABLE,
-  ]
-    .filter(Boolean)
-    .join(',');
+  return INVENTORY_SECTIONS.map(section => section.tableName);
+}
 
-  return configured
-    .split(',')
-    .map(table => table.trim())
+const INVENTORY_SECTIONS = [
+  { key: 'compound', title: 'Compound Inventory', tableName: 'Compound Inventory' },
+  { key: 'jackets', title: 'Jackets', tableName: 'Jackets' },
+  { key: 'inserts', title: 'Inserts', tableName: 'Inserts' },
+  { key: 'labels', title: 'Center Lable', tableName: 'Center Lable' },
+  { key: 'sleeves', title: 'Sleeves & Poly', tableName: 'Sleeves & Poly' },
+] as const;
+
+function inventorySections() {
+  return INVENTORY_SECTIONS.map(section => ({ ...section }));
+}
+
+function tableNameFallbacks(tableName: string) {
+  return [
+    tableName,
+    tableName === 'Center Lable' ? 'Center Label' : '',
+  ]
+    .map(value => value.trim())
     .filter(Boolean);
 }
 
@@ -952,22 +963,6 @@ function normalizeInventoryUnit(value: unknown, tableName: string, item: string)
   return 'units';
 }
 
-function inventoryCategory(tableName: string, fields: Record<string, unknown>, item: string): AirtableInventoryItem['category'] {
-  const explicit = field(fields, INVENTORY_FIELD_ALIASES.category).toLowerCase();
-  const text = `${tableName} ${explicit} ${item}`.toLowerCase();
-  if (text.includes('pvc') || text.includes('compound')) return 'pvc';
-  if (text.includes('label')) return 'labels';
-  if (text.includes('sleeve') || text.includes('poly')) return 'sleeves';
-  if (
-    text.includes('jacket') ||
-    text.includes('insert') ||
-    text.includes('gatefold')
-  ) {
-    return 'jackets';
-  }
-  return 'warehouse';
-}
-
 function jobReferenceFromRecord(record: AirtableRecord) {
   const artist = field(record.fields, FIELD_ALIASES.customer);
   const matrix = field(record.fields, FIELD_ALIASES.matrix) || field(record.fields, FIELD_ALIASES.job_id);
@@ -1003,24 +998,6 @@ function inventoryDisplayName(input: {
   return 'Unlabeled inventory item';
 }
 
-function isInventoryLikeTable(table: AirtableTableMeta) {
-  const name = table.name.toLowerCase();
-  if (name.includes('production') || name.includes('completed') || name.includes('quote')) return false;
-  return [
-    'inventory',
-    'stock',
-    'warehouse',
-    'pvc',
-    'compound',
-    'sleeve',
-    'packaging',
-    'supplies',
-    'boxes',
-    'jackets',
-    'labels',
-  ].some(term => name.includes(term));
-}
-
 async function getAirtableRecordsForTable(table: AirtableTableMeta) {
   const records: AirtableRecord[] = [];
   let offset: string | undefined;
@@ -1048,44 +1025,54 @@ async function getAirtableRecordsForTable(table: AirtableTableMeta) {
 
 export async function getAirtableInventoryDashboard(): Promise<AirtableInventoryDashboard> {
   const tables = await getAirtableTablesMeta();
-  const configuredTables = airtableInventoryTables();
-  const selectedTables = configuredTables.length
-    ? configuredTables.map(nameOrId => resolveAirtableTable(tables, nameOrId)).filter(Boolean) as AirtableTableMeta[]
-    : tables.filter(isInventoryLikeTable).slice(0, 3);
+  const configuredSections = inventorySections();
+  const selectedSections = configuredSections.map(section => {
+    const table = tableNameFallbacks(section.tableName)
+      .map(nameOrId => resolveAirtableTable(tables, nameOrId))
+      .find(Boolean);
+
+    return { ...section, table };
+  });
+  const foundSections = selectedSections.filter(section => section.table) as Array<typeof selectedSections[number] & { table: AirtableTableMeta }>;
+  const missingTables = selectedSections
+    .filter(section => !section.table)
+    .map(section => section.tableName);
   const productionTable = resolveAirtableTable(tables, airtableJobsTable());
   const completedTable = resolveAirtableTable(tables, airtableCompletedTable());
 
-  if (!selectedTables.length) {
-    throw new Error('No Airtable inventory tables found. Set AIRTABLE_INVENTORY_TABLES to the three inventory table names or IDs.');
+  if (!foundSections.length) {
+    throw new Error(`No Airtable inventory tables found. Expected: ${configuredSections.map(section => section.tableName).join(', ')}`);
   }
 
   // Airtable is the source of truth at page-load time. If warehouse staff still
   // update upstream Sheets and manually sync them into Airtable, this read layer
   // intentionally shows whatever Airtable currently contains.
   const [recordGroups, productionRefs, completedRefs] = await Promise.all([
-    Promise.all(selectedTables.map(async table => ({
-      table,
-      records: await getAirtableRecordsForTable(table),
+    Promise.all(foundSections.map(async section => ({
+      section,
+      table: section.table,
+      records: await getAirtableRecordsForTable(section.table),
     }))),
     productionTable ? getAirtableRecordsForTable(productionTable).catch(() => []) : Promise.resolve([]),
     completedTable ? getAirtableRecordsForTable(completedTable).catch(() => []) : Promise.resolve([]),
   ]);
   const jobLookup = buildJobReferenceLookup([...productionRefs, ...completedRefs]);
 
-  const items = recordGroups.flatMap(({ table, records }) => records.map(record => {
+  const items = recordGroups.flatMap(({ section, table, records }) => records.map(record => {
     const rawItem = humanInventoryField(record.fields, INVENTORY_FIELD_ALIASES.item);
     const matrix = humanInventoryField(record.fields, INVENTORY_FIELD_ALIASES.matrix);
     const matched = matrix ? jobLookup.get(normalizedMatrixKey(matrix)) : undefined;
     const artist = humanInventoryField(record.fields, INVENTORY_FIELD_ALIASES.artist) || matched?.artist || '';
     const item = inventoryDisplayName({ item: rawItem, artist, matrix, matched });
     const rawQuantity = rawField(record.fields, INVENTORY_FIELD_ALIASES.quantity);
-    const unit = normalizeInventoryUnit(rawField(record.fields, INVENTORY_FIELD_ALIASES.unit), table.name, item);
+    const unit = section.key === 'compound' ? 'lbs' : normalizeInventoryUnit(rawField(record.fields, INVENTORY_FIELD_ALIASES.unit), table.name, item);
 
     return {
       id: record.id,
       tableId: table.id,
       tableName: table.name,
-      category: inventoryCategory(table.name, record.fields, item),
+      section: section.key,
+      sectionTitle: section.title,
       item,
       artist,
       matrix: matrix || matched?.matrix || '',
@@ -1106,5 +1093,6 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
     pvcCapacityLbs: airtablePvcCapacityLbs(),
     tables: recordGroups.map(({ table, records }) => ({ id: table.id, name: table.name, count: records.length })),
     items,
+    missingTables,
   };
 }
