@@ -105,6 +105,8 @@ const COLORS = {
 
 const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2QqTZmnF/viwybIIrPi9Pd9Tyo?blocks=hide';
 const RUSH_MARKER = '[Rush Order]';
+const STAGE_SPAN_MARKER_RE = /\[Stage\s+Span:\s*([^\]]+)\]/i;
+const STAGE_SPAN_MARKER_GLOBAL_RE = /\[Stage\s+Span:\s*[^\]]+\]/gi;
 
 function value(job: Job, keys: string[]) {
   for (const key of keys) {
@@ -154,6 +156,78 @@ function stationJobs(jobs: Job[], station: Station) {
   return sortJobs(jobs.filter(job => stationOf(job) === station));
 }
 
+function normalizeStationToken(raw: string): Station | undefined {
+  const normalized = raw.toLowerCase().trim().replace(/["']/g, '').replace(/[\s-]+/g, '_');
+  const aliases: Record<string, Station> = {
+    prep: 'pre_production',
+    pre_production: 'pre_production',
+    preproduction: 'pre_production',
+    queue: 'press_queue',
+    press_queue: 'press_queue',
+    pressing: 'now_pressing',
+    now_pressing: 'now_pressing',
+    qc: 'quality_control',
+    quality: 'quality_control',
+    quality_control: 'quality_control',
+    sleeve: 'sleeving',
+    sleeving: 'sleeving',
+    build: 'assembly',
+    assembly: 'assembly',
+    ship: 'shipping',
+    shipping: 'shipping',
+  };
+
+  if (STATIONS.includes(normalized as Station)) return normalized as Station;
+  return aliases[normalized];
+}
+
+function contiguousStageSpan(stations: Station[]) {
+  const indices = stations
+    .map(station => STATIONS.indexOf(station))
+    .filter(index => index >= 0);
+
+  if (!indices.length) return [] as Station[];
+
+  const start = Math.min(...indices);
+  const end = Math.max(...indices);
+  return STATIONS.slice(start, end + 1) as Station[];
+}
+
+function stageSpanFromNotes(notes: string) {
+  const match = notes.match(STAGE_SPAN_MARKER_RE);
+  if (!match) return [] as Station[];
+
+  const parsedStations = match[1]
+    .split(/\s*(?:,|\||>|→|–|—)\s*/)
+    .map(normalizeStationToken)
+    .filter(Boolean) as Station[];
+
+  return contiguousStageSpan(parsedStations);
+}
+
+function stageSpanForJob(job: Job) {
+  const jobStage = stationOf(job);
+  if (jobStage === 'completed') return [] as Station[];
+
+  const primary = jobStage as Station;
+  const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
+  const span = stageSpanFromNotes(rawDashNotes);
+
+  if (span.length < 2 || !span.includes(primary)) return [primary];
+  return span;
+}
+
+function stationVisualJobs(jobs: Job[], station: Station) {
+  return sortJobs(jobs.filter(job => stageSpanForJob(job).includes(station)));
+}
+
+function stationSpanJobs(jobs: Job[], station: Station) {
+  return sortJobs(jobs.filter(job => {
+    const jobStage = stationOf(job);
+    return jobStage !== 'completed' && jobStage !== station && stageSpanForJob(job).includes(station);
+  }));
+}
+
 function stationAnchor(station: Station) {
   return `station-${station}`;
 }
@@ -183,15 +257,33 @@ function visibleDashNotes(notes: string) {
   return notes
     .replace(/\[Run\s+\d+\s*\/\s*\d+\]/gi, '')
     .replace(/\[Rush\s+Order\]/gi, '')
+    .replace(STAGE_SPAN_MARKER_GLOBAL_RE, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
-function dashNotesWithDashboardMarkers(originalNotes: string, visibleNotes: string, rushOverride?: boolean) {
+function formatStageSpanMarker(span: Station[]) {
+  const normalized = contiguousStageSpan(span);
+  return normalized.length > 1 ? `[Stage Span: ${normalized.join(', ')}]` : '';
+}
+
+function dashNotesWithDashboardMarkers(
+  originalNotes: string,
+  visibleNotes: string,
+  options?: boolean | { rushOverride?: boolean; stageSpanOverride?: Station[] },
+) {
   const match = originalNotes.match(/\[Run\s+\d+\s*\/\s*\d+\]/i);
+  const rushOverride = typeof options === 'boolean' ? options : options?.rushOverride;
+  const stageSpanOverride = typeof options === 'object' ? options.stageSpanOverride : undefined;
   const rushed = rushOverride ?? isRushOrder(originalNotes);
-  return [match?.[0], rushed ? RUSH_MARKER : '', visibleNotes.trim()].filter(Boolean).join('\n');
+  const stageSpan = stageSpanOverride ?? stageSpanFromNotes(originalNotes);
+  return [
+    match?.[0],
+    rushed ? RUSH_MARKER : '',
+    formatStageSpanMarker(stageSpan),
+    visibleNotes.trim(),
+  ].filter(Boolean).join('\n');
 }
 
 function useMediaQuery(query: string) {
@@ -285,6 +377,8 @@ function JobCard({
   dragHandleProps,
   compact = false,
   queueRank,
+  displayStation,
+  spanGhost = false,
 }: {
   job: Job;
   onOpen: () => void;
@@ -292,10 +386,14 @@ function JobCard({
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
   compact?: boolean;
   queueRank?: number;
+  displayStation?: Station;
+  spanGhost?: boolean;
 }) {
   const jobStage = stationOf(job);
-  const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
+  const primaryStation: Station = jobStage === 'completed' ? 'shipping' : jobStage;
+  const station: Station = displayStation ?? primaryStation;
   const meta = STATION_META[station];
+  const stageSpan = stageSpanForJob(job);
   const customer = value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']) || 'Untitled job';
   const matrix = value(job, ['matrix', 'MATRIX', 'Matrix ID', 'job_id']);
   const quantity = value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']);
@@ -317,7 +415,7 @@ function JobCard({
   const inferredAt = value(job, ['inferred_stage_at']);
   const duplicateCount = value(job, ['duplicate_count']);
   const artReady = job.art_received === true || job.art_received === 'true';
-  const canComplete = station === 'shipping';
+  const canComplete = station === 'shipping' && !spanGhost;
   const completeColor = COLORS.red;
 
   return (
@@ -327,15 +425,17 @@ function JobCard({
       style={{
         background: rushed
           ? `linear-gradient(135deg, ${COLORS.red}24 0%, ${COLORS.card} 52%, ${COLORS.red}14 100%)`
-          : COLORS.card,
+          : spanGhost ? `linear-gradient(135deg, ${meta.color}16 0%, ${COLORS.card} 72%)` : COLORS.card,
         border: `1px solid ${rushed ? `${COLORS.red}88` : COLORS.border}`,
         borderLeft: `4px solid ${rushed ? COLORS.red : meta.color}`,
+        borderStyle: spanGhost ? 'dashed' : 'solid',
         borderRadius: '8px',
         boxShadow: rushed
           ? `0 0 0 1px ${COLORS.red}33, 0 12px 30px #00000055`
-          : station === 'now_pressing' ? `0 0 0 1px ${meta.color}44, 0 12px 30px #00000055` : '0 8px 18px #00000035',
+          : spanGhost ? '0 6px 15px #00000026' : station === 'now_pressing' ? `0 0 0 1px ${meta.color}44, 0 12px 30px #00000055` : '0 8px 18px #00000035',
         cursor: 'pointer',
         marginBottom: '8px',
+        opacity: spanGhost ? 0.84 : 1,
         padding: compact ? '13px' : '10px',
         position: 'relative',
         userSelect: 'none',
@@ -384,6 +484,8 @@ function JobCard({
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '9px' }}>
+          {spanGhost && <StatusPill color={meta.color}>Also Here</StatusPill>}
+          {!spanGhost && stageSpan.length > 1 && <StatusPill color={meta.color}>Stretch {stageSpan.length}</StatusPill>}
           {rushed && <StatusPill color={COLORS.red}>Rush</StatusPill>}
           {quantity && <StatusPill color={meta.color}>{quantity}</StatusPill>}
           {colors && <StatusPill color="#C9A84C">{colors}</StatusPill>}
@@ -647,6 +749,8 @@ function Pipeline({
         {STATIONS.map(station => {
           const meta = STATION_META[station];
           const list = stationJobs(visibleJobs, station);
+          const spanList = stationSpanJobs(visibleJobs, station);
+          const visualCount = list.length + spanList.length;
           const isNowPressing = station === 'now_pressing';
 
           return (
@@ -697,7 +801,7 @@ function Pipeline({
                     textAlign: 'center',
                     flexShrink: 0,
                   }}>
-                    {list.length}
+                    {visualCount}
                   </div>
                 </div>
               </div>
@@ -742,6 +846,32 @@ function Pipeline({
                   </div>
                 )}
               </Droppable>
+
+              {spanList.length > 0 && (
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{
+                    color: meta.color,
+                    fontSize: '10px',
+                    fontWeight: 950,
+                    letterSpacing: '0.08em',
+                    margin: '0 0 8px',
+                    textTransform: 'uppercase',
+                  }}>
+                    Also Active Here
+                  </div>
+                  {spanList.map(job => (
+                    <JobCard
+                      key={`${jobKey(job)}-${station}-span`}
+                      job={job}
+                      onOpen={() => onJobOpen(job)}
+                      onComplete={() => setConfirmCompleteJob(job)}
+                      compact={isMobile}
+                      displayStation={station}
+                      spanGhost
+                    />
+                  ))}
+                </div>
+              )}
             </section>
           );
         })}
@@ -828,12 +958,14 @@ function JobDrawer({
   onClose,
   onDashNotesSave,
   onRushToggle,
+  onStageSpanSave,
   onSplitJob,
 }: {
   job: Job;
   onClose: () => void;
   onDashNotesSave: (job: Job, dashNotes: string) => Promise<void>;
   onRushToggle: (job: Job, rushed: boolean) => Promise<void>;
+  onStageSpanSave: (job: Job, span: Station[]) => Promise<void>;
   onSplitJob: (job: Job, payload: { stage: Station; quantity: string }) => Promise<void>;
 }) {
   const jobStage = stationOf(job);
@@ -843,10 +975,17 @@ function JobDrawer({
   const dashNotes = visibleDashNotes(rawDashNotes);
   const runLabel = runLabelFromNotes(rawDashNotes);
   const rushed = isRushOrder(rawDashNotes);
+  const currentStageSpan = stageSpanForJob(job);
+  const currentSpanStart = currentStageSpan[0] ?? station;
+  const currentSpanEnd = currentStageSpan[currentStageSpan.length - 1] ?? station;
   const [draftDashNotes, setDraftDashNotes] = useState(dashNotes);
   const [savingNotes, setSavingNotes] = useState(false);
   const [savingRush, setSavingRush] = useState(false);
+  const [spanStart, setSpanStart] = useState<Station>(currentSpanStart);
+  const [spanEnd, setSpanEnd] = useState<Station>(currentSpanEnd);
+  const [savingSpan, setSavingSpan] = useState(false);
   const [notesError, setNotesError] = useState('');
+  const [spanError, setSpanError] = useState('');
   const [splitStage, setSplitStage] = useState<Station>('now_pressing');
   const [splitQuantity, setSplitQuantity] = useState('');
   const [splitting, setSplitting] = useState(false);
@@ -856,6 +995,12 @@ function JobDrawer({
     setDraftDashNotes(dashNotes);
     setNotesError('');
   }, [dashNotes, job]);
+
+  useEffect(() => {
+    setSpanStart(currentSpanStart);
+    setSpanEnd(currentSpanEnd);
+    setSpanError('');
+  }, [currentSpanStart, currentSpanEnd, job]);
 
   const details = [
     ['Station', jobStage === 'completed' ? 'Completed' : meta.label],
@@ -889,6 +1034,9 @@ function JobDrawer({
     }
   };
   const notesDirty = draftDashNotes !== dashNotes;
+  const selectedStageSpan = contiguousStageSpan([spanStart, spanEnd]);
+  const selectedSpanText = selectedStageSpan.map(spanStation => STATION_META[spanStation].shortLabel).join(' -> ');
+  const spanDirty = selectedStageSpan.join('|') !== currentStageSpan.join('|');
   const toggleRush = async () => {
     setSavingRush(true);
     setNotesError('');
@@ -898,6 +1046,17 @@ function JobDrawer({
       setNotesError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingRush(false);
+    }
+  };
+  const saveStageSpan = async (span: Station[]) => {
+    setSavingSpan(true);
+    setSpanError('');
+    try {
+      await onStageSpanSave(job, span);
+    } catch (error) {
+      setSpanError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingSpan(false);
     }
   };
   const createSplit = async () => {
@@ -973,6 +1132,105 @@ function JobDrawer({
         >
           {savingRush ? 'Saving Rush...' : rushed ? 'Rush Order On' : 'Rush Order'}
         </button>
+
+        {jobStage !== 'completed' && (
+          <div style={{
+            background: COLORS.card,
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: '8px',
+            marginBottom: '22px',
+            padding: '14px',
+          }}>
+            <div style={{ color: meta.color, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', marginBottom: '10px', textTransform: 'uppercase' }}>
+              Stage Stretch
+            </div>
+            <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: '1fr 1fr' }}>
+              <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                From
+                <select
+                  value={spanStart}
+                  onChange={event => setSpanStart(event.target.value as Station)}
+                  style={{
+                    background: COLORS.panel,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: '8px',
+                    color: COLORS.text,
+                    font: 'inherit',
+                    fontSize: '14px',
+                    padding: '10px',
+                  }}
+                >
+                  {STATIONS.map(spanStation => (
+                    <option key={spanStation} value={spanStation}>{STATION_META[spanStation].shortLabel}</option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Through
+                <select
+                  value={spanEnd}
+                  onChange={event => setSpanEnd(event.target.value as Station)}
+                  style={{
+                    background: COLORS.panel,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: '8px',
+                    color: COLORS.text,
+                    font: 'inherit',
+                    fontSize: '14px',
+                    padding: '10px',
+                  }}
+                >
+                  {STATIONS.map(spanStation => (
+                    <option key={spanStation} value={spanStation}>{STATION_META[spanStation].shortLabel}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div style={{ alignItems: 'center', display: 'flex', gap: '10px', justifyContent: 'space-between', marginTop: '11px' }}>
+              <div style={{ color: spanError ? COLORS.red : COLORS.muted, fontSize: '12px', lineHeight: 1.35 }}>
+                {spanError || selectedSpanText}
+              </div>
+              <div style={{ display: 'flex', flexShrink: 0, gap: '8px' }}>
+                {currentStageSpan.length > 1 && (
+                  <button
+                    type="button"
+                    disabled={savingSpan}
+                    onClick={() => saveStageSpan([])}
+                    style={{
+                      background: COLORS.elevated,
+                      border: `1px solid ${COLORS.border}`,
+                      borderRadius: '6px',
+                      color: COLORS.muted,
+                      cursor: savingSpan ? 'default' : 'pointer',
+                      fontSize: '12px',
+                      fontWeight: 900,
+                      padding: '8px 10px',
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={savingSpan || !spanDirty}
+                  onClick={() => saveStageSpan(selectedStageSpan.length > 1 ? selectedStageSpan : [])}
+                  style={{
+                    background: savingSpan || !spanDirty ? COLORS.elevated : meta.color,
+                    border: `1px solid ${savingSpan || !spanDirty ? COLORS.border : meta.color}`,
+                    borderRadius: '6px',
+                    color: savingSpan || !spanDirty ? COLORS.muted : '#050505',
+                    cursor: savingSpan || !spanDirty ? 'default' : 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 900,
+                    padding: '8px 10px',
+                  }}
+                >
+                  {savingSpan ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gap: '14px 18px', gridTemplateColumns: '1fr 1fr' }}>
           {details.map(([label, detail]) => (
@@ -1149,7 +1407,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   const activeJobs = jobs.filter(job => stationOf(job) !== 'completed');
   const visibleActiveJobs = visibleJobs.filter(job => stationOf(job) !== 'completed');
   const counts = useMemo(() => Object.fromEntries(
-    STATIONS.map(station => [station, stationJobs(visibleJobs, station).length])
+    STATIONS.map(station => [station, stationVisualJobs(visibleJobs, station).length])
   ) as Record<Station, number>, [visibleJobs]);
 
   const jumpToStation = (station: Station) => {
@@ -1182,7 +1440,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   const toggleRushOrder = async (job: Job, rushed: boolean) => {
     const key = jobKey(job);
     const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
-    const nextDashNotes = dashNotesWithDashboardMarkers(rawDashNotes, visibleDashNotes(rawDashNotes), rushed);
+    const nextDashNotes = dashNotesWithDashboardMarkers(rawDashNotes, visibleDashNotes(rawDashNotes), { rushOverride: rushed });
     const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/dash-notes`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -1192,6 +1450,31 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || `Airtable rush save failed (${response.status})`);
+    }
+
+    const updateJob = (candidate: Job) => (
+      jobKey(candidate) === key ? { ...candidate, dash_notes: nextDashNotes, 'Dash Notes': nextDashNotes } : candidate
+    );
+    setJobs(current => current.map(updateJob));
+    setSelectedJob(current => current && jobKey(current) === key ? updateJob(current) : current);
+    setError('');
+  };
+
+  const saveStageSpan = async (job: Job, span: Station[]) => {
+    const key = jobKey(job);
+    const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
+    const nextDashNotes = dashNotesWithDashboardMarkers(rawDashNotes, visibleDashNotes(rawDashNotes), {
+      stageSpanOverride: span,
+    });
+    const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/dash-notes`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dash_notes: nextDashNotes }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || `Airtable stretch save failed (${response.status})`);
     }
 
     const updateJob = (candidate: Job) => (
@@ -1402,6 +1685,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
           onClose={() => setSelectedJob(null)}
           onDashNotesSave={saveDashNotes}
           onRushToggle={toggleRushOrder}
+          onStageSpanSave={saveStageSpan}
           onSplitJob={splitJob}
         />
       )}
