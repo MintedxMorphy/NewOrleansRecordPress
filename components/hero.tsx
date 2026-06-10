@@ -32,7 +32,8 @@ export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
               muted
               loop
               playsInline
-              preload="metadata"
+              poster="/images/vinyl-press-hero-original-backup.jpg"
+              preload="auto"
               aria-label="Record pressing room video loop"
               onTimeUpdate={(event) => {
                 const video = event.currentTarget

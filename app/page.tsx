@@ -15,7 +15,7 @@ export default function Home() {
       <Header />
       <Marquee />
       <main>
-        <Hero />
+        <Hero videoSrc="/videos/stylus-spinning-hero.mp4" videoMood="warm" />
         <Services />
         <RecentWorkStatic />
         <VinylColors />
