@@ -35,22 +35,28 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
 .search span{color:var(--muted);font-size:18px}
 .search input{background:transparent;border:0;color:var(--text);font:inherit;font-size:16px;outline:0;width:100%}
 .search-count{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;white-space:nowrap}
-.section{background:rgba(18,18,18,.82);border:1px solid var(--border);border-radius:8px;margin-bottom:16px;overflow:hidden}
-.section-head{align-items:center;border-bottom:1px solid var(--border);display:flex;gap:14px;justify-content:space-between;padding:15px 16px}
+.inventory-sections{display:grid;gap:12px}
+.section{background:rgba(18,18,18,.82);border:1px solid var(--border);border-radius:8px;overflow:hidden;transition:border-color .18s,transform .18s,box-shadow .18s}
+.section:hover{border-color:#444;box-shadow:0 12px 28px rgba(0,0,0,.22);transform:translateY(-1px)}
+.section-head{align-items:center;background:transparent;border:0;color:inherit;cursor:pointer;display:flex;font:inherit;gap:14px;justify-content:space-between;padding:18px 16px;text-align:left;width:100%}
+.section-head:hover{background:rgba(255,255,255,.025)}
 .section-title{align-items:center;display:flex;gap:10px;min-width:0}
 .section-dot{background:var(--green);border-radius:8px;height:38px;width:8px;flex:0 0 auto}
 .section h2{font-size:20px;letter-spacing:.05em;line-height:1.1;text-transform:uppercase}
 .section-sub{color:var(--muted);font-size:13px;margin-top:4px}
+.section-stats{align-items:flex-end;display:flex;flex-direction:column;gap:7px}
+.section-total{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:24px;font-weight:950;line-height:1}
+.section-total span{color:var(--muted);font-size:12px;font-weight:800;margin-left:4px;text-transform:uppercase}
+.section-hint{color:var(--faint);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 .count-pill{border:1px solid var(--border);border-radius:999px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;padding:5px 10px;white-space:nowrap}
+.section-body{border-top:1px solid var(--border)}
 .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:12px}
 .item-card{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:8px;box-shadow:0 8px 18px rgba(0,0,0,.28);min-width:0;padding:13px}
 .item-card.low{background:linear-gradient(135deg,rgba(255,77,77,.16),var(--card) 54%);border-color:rgba(255,77,77,.72);border-left-color:var(--red)}
 .compound .section-dot,.compound .item-card{border-left-color:var(--green)}
 .compound .section-dot{background:var(--green)}
-.jackets .section-dot,.jackets .item-card{border-left-color:var(--gold)}
-.jackets .section-dot{background:var(--gold)}
-.inserts .section-dot,.inserts .item-card{border-left-color:var(--orange)}
-.inserts .section-dot{background:var(--orange)}
+.print .section-dot,.print .item-card{border-left-color:var(--gold)}
+.print .section-dot{background:var(--gold)}
 .labels .section-dot,.labels .item-card{border-left-color:var(--blue)}
 .labels .section-dot{background:var(--blue)}
 .sleeves .section-dot,.sleeves .item-card{border-left-color:var(--purple)}
@@ -68,7 +74,7 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
 .loading,.error{background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;padding:28px;text-align:center}
 .error{border-color:rgba(255,77,77,.5);color:var(--red)}
 @media(max-width:1200px){.summary{grid-template-columns:1fr 1fr}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:760px){body{font-size:15px}.nav{gap:8px;justify-content:flex-start;overflow-x:auto;padding:10px 12px;flex-wrap:nowrap}.nav::-webkit-scrollbar{display:none}.nav img{height:42px!important;margin-right:2px!important;flex:0 0 auto}.nav a{font-size:15px;padding:10px 12px;flex:0 0 auto}.content{padding:14px}.header{align-items:flex-start;flex-direction:column}.source{text-align:left}h1{font-size:28px}.summary,.compound-panel,.cards{grid-template-columns:1fr}.controls{align-items:stretch;flex-direction:column}.search-count{white-space:normal}.section-head{align-items:flex-start;flex-direction:column}.qty{text-align:left}}
+@media(max-width:760px){body{font-size:15px}.nav{gap:8px;justify-content:flex-start;overflow-x:auto;padding:10px 12px;flex-wrap:nowrap}.nav::-webkit-scrollbar{display:none}.nav img{height:42px!important;margin-right:2px!important;flex:0 0 auto}.nav a{font-size:15px;padding:10px 12px;flex:0 0 auto}.content{padding:14px}.header{align-items:flex-start;flex-direction:column}.source{text-align:left}h1{font-size:28px}.summary,.compound-panel,.cards{grid-template-columns:1fr}.controls{align-items:stretch;flex-direction:column}.search-count{white-space:normal}.section-head{align-items:flex-start;flex-direction:column}.section-stats{align-items:flex-start}.qty{text-align:left}}
 </style>
 </head>
 <body>
@@ -97,16 +103,16 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
 
 <script>
 (function() {
-  const SECTIONS = [
-    { key: 'compound', title: 'Compound Inventory', sub: 'PVC compound measured in pounds' },
-    { key: 'jackets', title: 'Jackets', sub: 'Printed jackets and related jacket stock' },
-    { key: 'inserts', title: 'Inserts', sub: 'Printed inserts and loose printed extras' },
-    { key: 'labels', title: 'Center Lable', sub: 'Center label shelf inventory' },
-    { key: 'sleeves', title: 'Sleeves & Poly', sub: 'Inner sleeves, poly sleeves, and protective bags' },
+  const DISPLAY_SECTIONS = [
+    { key: 'compound', title: 'Compound Inventory', sub: 'PVC compound measured in pounds', sections: ['compound'], unit: 'lbs' },
+    { key: 'print', title: 'Jackets & Inserts', sub: 'Printed jackets, inserts, stickers, and related print stock', sections: ['jackets', 'inserts'], unit: 'items' },
+    { key: 'sleeves', title: 'Sleeves & Poly', sub: 'Inner sleeves, poly sleeves, and protective bags', sections: ['sleeves'], unit: 'items' },
+    { key: 'labels', title: 'Center Labels', sub: 'Center label shelf inventory', sections: ['labels'], unit: 'items' },
   ];
   let allItems = [];
   let currentData = null;
   let query = '';
+  const openSections = new Set();
 
   function esc(value) {
     return String(value == null ? '' : value)
@@ -226,32 +232,40 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
       </section>
     `;
 
-    const sections = SECTIONS.map(section => {
+    const sections = DISPLAY_SECTIONS.map(section => {
       const sectionItems = visibleItems
-        .filter(item => item.section === section.key)
+        .filter(item => section.sections.includes(item.section))
         .sort((a, b) => String(a.item || a.artist || '').localeCompare(String(b.item || b.artist || '')));
-      const body = sectionItems.length
-        ? `<div class="cards">${sectionItems.map(itemCard).join('')}</div>`
-        : `<div class="empty">${query ? 'No matches in this section.' : 'No Airtable rows found for this tab.'}</div>`;
+      const isOpen = openSections.has(section.key) || Boolean(query.trim());
+      const sectionTotal = section.key === 'compound'
+        ? sectionItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+        : sectionItems.length;
+      const locationCount = new Set(sectionItems.map(item => item.location || 'Unassigned')).size;
+      const body = !isOpen ? '' : sectionItems.length
+        ? `<div class="section-body"><div class="cards">${sectionItems.map(itemCard).join('')}</div></div>`
+        : `<div class="section-body"><div class="empty">${query ? 'No matches in this section.' : 'No Airtable rows found for this tab.'}</div></div>`;
 
       return `
         <section class="section ${section.key}">
-          <div class="section-head">
+          <button class="section-head" type="button" data-section="${esc(section.key)}" aria-expanded="${isOpen ? 'true' : 'false'}">
             <div class="section-title">
               <div class="section-dot"></div>
               <div>
                 <h2>${esc(section.title)}</h2>
-                <div class="section-sub">${esc(section.sub)}</div>
+                <div class="section-sub">${esc(section.sub)} · ${fmt(locationCount)} locations</div>
               </div>
             </div>
-            <div class="count-pill">${fmt(sectionItems.length)} items</div>
-          </div>
+            <div class="section-stats">
+              <div class="section-total">${fmt(sectionTotal)}<span>${esc(section.unit)}</span></div>
+              <div class="section-hint">${isOpen ? 'Close section' : 'Open section'}</div>
+            </div>
+          </button>
           ${body}
         </section>
       `;
     }).join('');
 
-    document.getElementById('root').innerHTML = summary + sections;
+    document.getElementById('root').innerHTML = summary + `<div class="inventory-sections">${sections}</div>`;
     const input = document.getElementById('inventorySearch');
     if (input) {
       input.focus({ preventScroll: true });
@@ -261,6 +275,15 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
         render(currentData);
       });
     }
+    document.querySelectorAll('[data-section]').forEach(button => {
+      button.addEventListener('click', () => {
+        const key = button.getAttribute('data-section');
+        if (!key) return;
+        if (openSections.has(key)) openSections.delete(key);
+        else openSections.add(key);
+        render(currentData);
+      });
+    });
   }
 
   function itemCard(item) {
