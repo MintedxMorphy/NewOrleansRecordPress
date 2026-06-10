@@ -225,11 +225,10 @@ function stationAnchor(station: Station) {
   return `station-${station}`;
 }
 
-function stretchTranslate(offset: number) {
-  if (offset === 0) return undefined;
+function stretchMarginLeft(offset: number) {
+  if (offset >= 0) return undefined;
   const distance = Math.abs(offset);
-  const direction = offset < 0 ? '-' : '';
-  return `translateX(calc(${direction}${distance * 100}% ${offset < 0 ? '-' : '+'} ${distance * 10}px))`;
+  return `calc(-${distance * 100}% - ${distance * 10}px)`;
 }
 
 function stretchForJob(job: Job, isMobile: boolean) {
@@ -459,9 +458,9 @@ function JobCard({
           : isStretched ? `0 0 0 1px ${meta.color}33, 0 12px 30px #00000066` : station === 'now_pressing' ? `0 0 0 1px ${meta.color}44, 0 12px 30px #00000055` : '0 8px 18px #00000035',
         cursor: 'pointer',
         marginBottom: '8px',
+        marginLeft: stretch ? stretchMarginLeft(stretch.offset) : undefined,
         padding: compact ? '13px' : '10px',
         position: 'relative',
-        transform: stretch ? stretchTranslate(stretch.offset) : undefined,
         userSelect: 'none',
         width: stretch ? `calc(${stretch.columns * 100}% + ${(stretch.columns - 1) * 10}px)` : '100%',
         zIndex: isStretched ? 8 : 1,
@@ -1023,6 +1022,9 @@ function JobDrawer({
     ['Order', value(job, ['order_number', 'ORDER NUMBER'])],
   ].filter(([, detail]) => detail);
   const notes = value(job, ['notes', 'Notes', 'Project Notes', 'Production Notes']);
+  const stationIndex = STATIONS.indexOf(station);
+  const leftEdgeStations = STATIONS.slice(0, stationIndex + 1) as Station[];
+  const rightEdgeStations = STATIONS.slice(stationIndex) as Station[];
   const saveDashNotes = async () => {
     setSavingNotes(true);
     setNotesError('');
@@ -1145,9 +1147,12 @@ function JobDrawer({
             <div style={{ color: meta.color, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', marginBottom: '10px', textTransform: 'uppercase' }}>
               Stage Stretch
             </div>
+            <div style={{ color: COLORS.muted, fontSize: '12px', lineHeight: 1.35, marginBottom: '10px' }}>
+              Keep the job in {meta.shortLabel}, then stretch its card left or right across neighboring stages.
+            </div>
             <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: '1fr 1fr' }}>
               <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                From
+                Left Edge
                 <select
                   value={spanStart}
                   onChange={event => setSpanStart(event.target.value as Station)}
@@ -1161,13 +1166,13 @@ function JobDrawer({
                     padding: '10px',
                   }}
                 >
-                  {STATIONS.map(spanStation => (
+                  {leftEdgeStations.map(spanStation => (
                     <option key={spanStation} value={spanStation}>{STATION_META[spanStation].shortLabel}</option>
                   ))}
                 </select>
               </label>
               <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                Through
+                Right Edge
                 <select
                   value={spanEnd}
                   onChange={event => setSpanEnd(event.target.value as Station)}
@@ -1181,7 +1186,7 @@ function JobDrawer({
                     padding: '10px',
                   }}
                 >
-                  {STATIONS.map(spanStation => (
+                  {rightEdgeStations.map(spanStation => (
                     <option key={spanStation} value={spanStation}>{STATION_META[spanStation].shortLabel}</option>
                   ))}
                 </select>
