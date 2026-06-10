@@ -141,11 +141,52 @@ const INVENTORY_SECTIONS = [
   { key: 'jackets', title: 'Jackets', tableNames: ['Jackets, Inserts - Inventory', 'Jackets'] },
   { key: 'inserts', title: 'Inserts', tableNames: ['Jackets, Inserts - Inventory', 'Inserts'] },
   { key: 'labels', title: 'Center Lable', tableNames: ['Center Label Inventory', 'Center Lable', 'Center Label'] },
-  { key: 'sleeves', title: 'Sleeves & Poly', tableNames: ['Sleeves & Poly-sleeve Inventory', 'Sleeves & Poly', 'Sleeves & Poly-sleeves'] },
+  {
+    key: 'sleeves',
+    title: 'Sleeves & Poly',
+    tableNames: [
+      'Sleeves & Poly-sleeve Inventory',
+      'Sleeves & Poly-sleeves Inventory',
+      'Sleeves and Poly-sleeve Inventory',
+      'Sleeves and Poly-sleeves Inventory',
+      'Sleeves & Poly',
+      'Sleeves & Poly-sleeves',
+      'Sleeves and Poly',
+      'Sleeves Poly Inventory',
+    ],
+  },
 ] as const;
 
 function inventorySections() {
   return INVENTORY_SECTIONS.map(section => ({ ...section }));
+}
+
+function normalizedInventoryTableName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function resolveInventoryTable(
+  tables: AirtableTableMeta[],
+  section: ReturnType<typeof inventorySections>[number],
+) {
+  const exact = section.tableNames
+    .map(nameOrId => resolveAirtableTable(tables, nameOrId))
+    .find(Boolean);
+
+  if (exact) return exact;
+
+  const normalizedNames = section.tableNames.map(normalizedInventoryTableName);
+  const fuzzyMatch = tables.find(table => {
+    const normalizedTable = normalizedInventoryTableName(table.name);
+    if (normalizedNames.some(name => normalizedTable.includes(name) || name.includes(normalizedTable))) return true;
+    if (section.key === 'compound') return normalizedTable.includes('compound') && normalizedTable.includes('inventory');
+    if (section.key === 'labels') return normalizedTable.includes('center') && normalizedTable.includes('label') && normalizedTable.includes('inventory');
+    if (section.key === 'sleeves') return normalizedTable.includes('sleeve') && normalizedTable.includes('poly') && normalizedTable.includes('inventory');
+    if (section.key === 'jackets' || section.key === 'inserts') return normalizedTable.includes('jacket') && normalizedTable.includes('insert') && normalizedTable.includes('inventory');
+    return false;
+  });
+
+  return fuzzyMatch;
 }
 
 function airtablePvcCapacityLbs() {
@@ -878,7 +919,7 @@ export async function updateAirtableJobDashNotes(jobId: string, dashNotes: strin
 }
 
 const INVENTORY_FIELD_ALIASES = {
-  item: ['Item', 'Material', 'Product', 'Product Name', 'Name', 'Description', 'SKU', 'Color', 'Type'],
+  item: ['Item', 'Material', 'Product', 'Product Name', 'Name', 'Description', 'SKU', 'Color', 'Type', 'Sleeve', 'Sleeve Type', 'Poly Sleeve', 'Poly-sleeve', 'Size'],
   artist: ['Artist', 'Customer', 'Customer Name', 'Client', 'Project', 'Project Name', 'Title'],
   matrix: ['Matrix', 'MATRIX', 'Matrix ID', 'Catalog Number', 'Catalog #', 'Job ID', 'Job Id', 'Order Number', 'ORDER NUMBER'],
   quantity: [
@@ -902,9 +943,12 @@ const INVENTORY_FIELD_ALIASES = {
     'Record Quantity',
     'Run Size',
     'Amount',
+    'quantity',
+    'Qty On Hand',
+    'Available',
   ],
   unit: ['Unit', 'Units', 'UOM', 'Measure'],
-  location: ['Location', 'Warehouse Location', 'Warehouse', 'Bin', 'Rack', 'Shelf', 'Zone', 'Aisle'],
+  location: ['Location', 'location', 'Warehouse Location', 'Warehouse', 'Bin', 'Rack', 'Shelf', 'Zone', 'Aisle'],
   status: ['Status', 'Inventory Status', 'On Order', 'Order Status'],
   reorderPoint: ['Reorder Point', 'Reorder', 'Min', 'Minimum', 'Par', 'Low Stock'],
   max: ['Max', 'Maximum', 'Capacity', 'Target Stock'],
@@ -1062,10 +1106,7 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
   const tables = await getAirtableTablesMeta();
   const configuredSections = inventorySections();
   const selectedSections = configuredSections.map(section => {
-    const table = section.tableNames
-      .map(nameOrId => resolveAirtableTable(tables, nameOrId))
-      .find(Boolean);
-
+    const table = resolveInventoryTable(tables, section);
     return { ...section, table };
   });
   const foundSections = selectedSections.filter(section => section.table) as Array<typeof selectedSections[number] & { table: AirtableTableMeta }>;
