@@ -415,6 +415,8 @@ function JobCard({
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
   const meta = STATION_META[station];
+  const stageSpan = stageSpanForJob(job);
+  const stretchLabel = stretch?.label ?? (stageSpan.length > 1 ? stageSpan.map(spanStation => STATION_META[spanStation].shortLabel).join(' -> ') : '');
   const customer = value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']) || 'Untitled job';
   const matrix = value(job, ['matrix', 'MATRIX', 'Matrix ID', 'job_id']);
   const quantity = value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']);
@@ -508,7 +510,7 @@ function JobCard({
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '9px' }}>
-          {isStretched && <StatusPill color={meta.color}>Spans {stretch?.label}</StatusPill>}
+          {stretchLabel && <StatusPill color={meta.color}>Spans {stretchLabel}</StatusPill>}
           {rushed && <StatusPill color={COLORS.red}>Rush</StatusPill>}
           {quantity && <StatusPill color={meta.color}>{quantity}</StatusPill>}
           {colors && <StatusPill color="#C9A84C">{colors}</StatusPill>}
