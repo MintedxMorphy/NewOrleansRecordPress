@@ -17,17 +17,6 @@ body{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;ba
 .eyebrow{color:var(--green);font-size:12px;font-weight:950;letter-spacing:.12em;text-transform:uppercase;margin-bottom:7px}
 h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
 .source{color:var(--muted);font-size:13px;text-align:right;line-height:1.5}
-.summary{display:grid;grid-template-columns:1.4fr repeat(3,minmax(0,.7fr));gap:12px;margin-bottom:14px}
-.panel{background:linear-gradient(180deg,#141414,#101010);border:1px solid var(--border);border-radius:8px;padding:16px;box-shadow:0 10px 24px rgba(0,0,0,.22);min-width:0}
-.metric-label{color:var(--muted);font-size:12px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}
-.metric-value{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:36px;font-weight:950;line-height:1;margin-top:8px}
-.metric-sub{color:var(--faint);font-size:13px;line-height:1.35;margin-top:8px}
-.compound-panel{display:grid;grid-template-columns:140px 1fr;gap:18px;align-items:center}
-.dial{aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--green) calc(var(--pct)*1%),#1a1d24 0);position:relative;border:1px solid rgba(0,232,106,.35)}
-.dial::after{content:"";position:absolute;inset:14px;border-radius:50%;background:#101010;border:1px solid var(--border)}
-.dial-inner{position:relative;z-index:1;text-align:center}
-.dial-num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:28px;font-weight:950}
-.dial-unit{color:var(--muted);font-size:12px;font-weight:850;text-transform:uppercase;margin-top:3px}
 .bar{height:12px;border-radius:999px;background:#1a1d24;overflow:hidden;margin-top:13px}
 .bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--green),#c9ffe0)}
 .controls{align-items:center;background:var(--panel);border:1px solid var(--border);border-radius:8px;display:flex;gap:12px;margin-bottom:16px;padding:12px}
@@ -49,7 +38,10 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
 .section-total span{color:var(--muted);font-size:12px;font-weight:800;margin-left:4px;text-transform:uppercase}
 .section-hint{color:var(--faint);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 .count-pill{border:1px solid var(--border);border-radius:999px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;padding:5px 10px;white-space:nowrap}
-.section-body{border-top:1px solid var(--border)}
+.section-body{border-top:1px solid var(--border);max-height:700px;overflow-y:auto;overscroll-behavior:contain;background:rgba(8,8,8,.34)}
+.section-body::-webkit-scrollbar{width:10px}
+.section-body::-webkit-scrollbar-track{background:#0d0d0d}
+.section-body::-webkit-scrollbar-thumb{background:#343434;border-radius:999px;border:2px solid #0d0d0d}
 .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:12px}
 .item-card{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:8px;box-shadow:0 8px 18px rgba(0,0,0,.28);min-width:0;padding:13px}
 .item-card.low{background:linear-gradient(135deg,rgba(255,77,77,.16),var(--card) 54%);border-color:rgba(255,77,77,.72);border-left-color:var(--red)}
@@ -77,8 +69,8 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
 .empty{color:var(--muted);font-size:14px;padding:18px}
 .loading,.error{background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;padding:28px;text-align:center}
 .error{border-color:rgba(255,77,77,.5);color:var(--red)}
-@media(max-width:1200px){.summary{grid-template-columns:1fr 1fr}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:760px){body{font-size:15px}.nav{gap:8px;justify-content:flex-start;overflow-x:auto;padding:10px 12px;flex-wrap:nowrap}.nav::-webkit-scrollbar{display:none}.nav img{height:42px!important;margin-right:2px!important;flex:0 0 auto}.nav a{font-size:15px;padding:10px 12px;flex:0 0 auto}.content{padding:14px}.header{align-items:flex-start;flex-direction:column}.source{text-align:left}h1{font-size:28px}.summary,.compound-panel,.cards{grid-template-columns:1fr}.controls{align-items:stretch;flex-direction:column}.search-count{white-space:normal}.section-head{align-items:flex-start;flex-direction:column}.section-stats{align-items:flex-start}.qty{text-align:left}}
+@media(max-width:1200px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){body{font-size:15px}.nav{gap:8px;justify-content:flex-start;overflow-x:auto;padding:10px 12px;flex-wrap:nowrap}.nav::-webkit-scrollbar{display:none}.nav img{height:42px!important;margin-right:2px!important;flex:0 0 auto}.nav a{font-size:15px;padding:10px 12px;flex:0 0 auto}.content{padding:14px}.header{align-items:flex-start;flex-direction:column}.source{text-align:left}h1{font-size:28px}.cards{grid-template-columns:1fr}.controls{align-items:stretch;flex-direction:column}.search-count{white-space:normal}.section-head{align-items:flex-start;flex-direction:column}.section-stats{align-items:flex-start}.section-body{max-height:680px}.qty{text-align:left}}
 </style>
 </head>
 <body>
@@ -194,11 +186,6 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
     allItems = Array.isArray(data.items) ? data.items : [];
 
     const visibleItems = filteredItems();
-    const pvcCapacity = data.pvcCapacityLbs || 10000;
-    const compoundItems = allItems.filter(item => item.section === 'compound');
-    const compoundTotal = compoundItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-    const locations = new Set(allItems.map(item => item.location || 'Unassigned'));
-    const lowItems = allItems.filter(lowStock);
     const missing = Array.isArray(data.missingTables) && data.missingTables.length
       ? `<div>Missing Airtable tabs: ${esc(data.missingTables.join(', '))}</div>`
       : '';
@@ -209,26 +196,7 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
       ${missing}
     `;
 
-    const summary = `
-      <section class="summary">
-        <div class="panel compound-panel">
-          <div class="dial" style="--pct:${pct(compoundTotal, pvcCapacity)}">
-            <div class="dial-inner">
-              <div class="dial-num">${Math.round(pct(compoundTotal, pvcCapacity))}%</div>
-              <div class="dial-unit">PVC full</div>
-            </div>
-          </div>
-          <div>
-            <div class="metric-label">Compound Inventory</div>
-            <div class="metric-value">${fmt(compoundTotal)} lbs</div>
-            <div class="metric-sub">${fmt(compoundTotal)} / ${fmt(pvcCapacity)} lbs max inventory</div>
-            <div class="bar"><div class="bar-fill" style="width:${pct(compoundTotal, pvcCapacity)}%"></div></div>
-          </div>
-        </div>
-        <div class="panel"><div class="metric-label">Visible items</div><div class="metric-value">${fmt(visibleItems.length)}</div><div class="metric-sub">Showing after search</div></div>
-        <div class="panel"><div class="metric-label">Locations</div><div class="metric-value">${fmt(locations.size)}</div><div class="metric-sub">Warehouse locations in Airtable</div></div>
-        <div class="panel"><div class="metric-label">Low stock</div><div class="metric-value" style="color:${lowItems.length ? 'var(--red)' : 'var(--green)'}">${fmt(lowItems.length)}</div><div class="metric-sub">At or below reorder point</div></div>
-      </section>
+    const controls = `
       <section class="controls">
         <label class="search">
           <span>Search</span>
@@ -271,7 +239,7 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
       `;
     }).join('');
 
-    document.getElementById('root').innerHTML = summary + `<div class="inventory-sections">${sections}</div>`;
+    document.getElementById('root').innerHTML = controls + `<div class="inventory-sections">${sections}</div>`;
     const input = document.getElementById('inventorySearch');
     if (input) {
       input.focus({ preventScroll: true });
