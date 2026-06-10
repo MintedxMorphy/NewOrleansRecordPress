@@ -6,7 +6,7 @@
 <title>NORP Inventory Dashboard</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#090909;--panel:#121212;--card:#181818;--elevated:#202020;--text:#f2f2f2;--muted:#a0a0a0;--faint:#707070;--border:#2a2a2a;--green:#00e86a;--blue:#4da3ff;--gold:#c9a84c;--purple:#b781ff;--red:#ff4d4d;--orange:#ff8c00}
+:root{--bg:#090909;--panel:#121212;--card:#181818;--elevated:#202020;--text:#f2f2f2;--muted:#a0a0a0;--faint:#707070;--border:#2a2a2a;--green:#00e86a;--blue:#4da3ff;--gold:#c9a84c;--purple:#b781ff;--red:#ff4d4d;--orange:#ff8c00;--teal:#39d8d0;--pink:#ff71b8}
 body{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at 14% 0%,rgba(0,232,106,.13),transparent 30%),radial-gradient(circle at 82% 6%,rgba(77,163,255,.13),transparent 26%),var(--bg);color:var(--text);min-height:100vh;font-size:16px}
 .nav{background:#0a0c0f;border-bottom:1px solid #2a2c33;padding:16px 28px;display:flex;gap:14px;align-items:center;justify-content:center;position:sticky;top:0;z-index:100;flex-wrap:wrap;box-shadow:0 10px 30px rgba(0,0,0,.25)}
 .nav a{color:#d2d0c3;text-decoration:none;font-size:24px;font-weight:800;padding:13px 18px;border-radius:10px;border:1px solid #2a2c33;background:#14161b;transition:all .2s;white-space:nowrap;line-height:1}
@@ -61,6 +61,10 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
 .labels .section-dot{background:var(--blue)}
 .sleeves .section-dot,.sleeves .item-card{border-left-color:var(--purple)}
 .sleeves .section-dot{background:var(--purple)}
+.stampers .section-dot,.stampers .item-card{border-left-color:var(--teal)}
+.stampers .section-dot{background:var(--teal)}
+.test-presses .section-dot,.test-presses .item-card{border-left-color:var(--pink)}
+.test-presses .section-dot{background:var(--pink)}
 .item-top{align-items:flex-start;display:flex;gap:10px;justify-content:space-between}
 .item-name{font-size:17px;font-weight:850;line-height:1.18;min-width:0;overflow-wrap:anywhere}
 .item-matrix{color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;font-weight:850;margin-top:5px;overflow-wrap:anywhere}
@@ -108,6 +112,8 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
     { key: 'print', title: 'Jackets & Inserts', sub: 'Printed jackets, inserts, stickers, and related print stock', sections: ['jackets', 'inserts'], unit: 'items' },
     { key: 'sleeves', title: 'Sleeves & Poly', sub: 'Inner sleeves, poly sleeves, and protective bags', sections: ['sleeves'], unit: 'items' },
     { key: 'labels', title: 'Center Labels', sub: 'Center label shelf inventory', sections: ['labels'], unit: 'items' },
+    { key: 'stampers', title: 'Stamper Inventory', sub: 'Stampers, plates, and metal parts ready for production', sections: ['stampers'], unit: 'items' },
+    { key: 'test-presses', title: 'Test Press Inventory', sub: 'Stored test pressings and approval copies', sections: ['testPresses'], unit: 'items' },
   ];
   let allItems = [];
   let currentData = null;

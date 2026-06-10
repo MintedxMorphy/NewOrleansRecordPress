@@ -52,7 +52,7 @@ export type AirtableInventoryItem = {
   id: string;
   tableId: string;
   tableName: string;
-  section: 'compound' | 'jackets' | 'inserts' | 'labels' | 'sleeves';
+  section: 'compound' | 'jackets' | 'inserts' | 'labels' | 'sleeves' | 'stampers' | 'testPresses';
   sectionTitle: string;
   item: string;
   artist: string;
@@ -155,6 +155,8 @@ const INVENTORY_SECTIONS = [
       'Sleeves Poly Inventory',
     ],
   },
+  { key: 'stampers', title: 'Stamper Inventory', tableNames: ['Stamper Inventory', 'Stampers Inventory', 'Stampers'] },
+  { key: 'testPresses', title: 'Test Press Inventory', tableNames: ['Test Press Inventory', 'Test Pressings Inventory', 'Test Presses'] },
 ] as const;
 
 function inventorySections() {
@@ -183,6 +185,8 @@ function resolveInventoryTable(
     if (section.key === 'labels') return normalizedTable.includes('center') && normalizedTable.includes('label') && normalizedTable.includes('inventory');
     if (section.key === 'sleeves') return normalizedTable.includes('sleeve') && normalizedTable.includes('poly') && normalizedTable.includes('inventory');
     if (section.key === 'jackets' || section.key === 'inserts') return normalizedTable.includes('jacket') && normalizedTable.includes('insert') && normalizedTable.includes('inventory');
+    if (section.key === 'stampers') return normalizedTable.includes('stamper') && normalizedTable.includes('inventory');
+    if (section.key === 'testPresses') return normalizedTable.includes('test') && normalizedTable.includes('press') && normalizedTable.includes('inventory');
     return false;
   });
 
@@ -919,7 +923,7 @@ export async function updateAirtableJobDashNotes(jobId: string, dashNotes: strin
 }
 
 const INVENTORY_FIELD_ALIASES = {
-  item: ['Item', 'Material', 'Product', 'Product Name', 'Name', 'Description', 'SKU', 'Color', 'Type', 'Sleeve', 'Sleeve Type', 'Poly Sleeve', 'Poly-sleeve', 'Size'],
+  item: ['Item', 'Material', 'Product', 'Product Name', 'Name', 'Description', 'SKU', 'Color', 'Type', 'Sleeve', 'Sleeve Type', 'Poly Sleeve', 'Poly-sleeve', 'Size', 'Stamper', 'Stamper ID', 'Test Press', 'Test Pressing'],
   artist: ['Artist', 'Customer', 'Customer Name', 'Client', 'Project', 'Project Name', 'Title'],
   matrix: ['Matrix', 'MATRIX', 'Matrix ID', 'Catalog Number', 'Catalog #', 'Job ID', 'Job Id', 'Order Number', 'ORDER NUMBER'],
   quantity: [
@@ -946,6 +950,9 @@ const INVENTORY_FIELD_ALIASES = {
     'quantity',
     'Qty On Hand',
     'Available',
+    'Copies',
+    'Sets',
+    'Pairs',
   ],
   unit: ['Unit', 'Units', 'UOM', 'Measure'],
   location: ['Location', 'location', 'Warehouse Location', 'Warehouse', 'Bin', 'Rack', 'Shelf', 'Zone', 'Aisle'],
