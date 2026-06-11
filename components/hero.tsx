@@ -169,29 +169,29 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
           {/* Logo - smaller */}
           <div className="relative mt-4 lg:mt-6">
             <Image
-              src="/images/norp-logo.png"
+              src="/images/norp-old-logo.jpg"
               alt="New Orleans Record Press"
-              width={400}
-              height={120}
-              className="w-[200px] md:w-[280px] lg:w-[320px] h-auto"
+              width={960}
+              height={960}
+              className="h-auto w-[170px] rounded-md md:w-[230px] lg:w-[270px]"
               priority
             />
           </div>
           
           {/* Headline */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground leading-tight max-w-lg">
-            Pure Analog Craftsmanship from the Heart of New Orleans
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold uppercase text-foreground leading-tight max-w-lg">
+            PURE ANALOG CRAFTSMANSHIP FROM THE HEART OF NEW ORLEANS
           </h1>
           
           {/* Description */}
-          <p className="text-base md:text-lg text-[#aaaaaa] max-w-lg leading-relaxed">
-            An independent, artisan vinyl press dedicated to flawless 12&quot; and 7&quot; high-fidelity playback. From exclusive 100-unit private pressings to expansive audiophile runs in the tens of thousands, we preserve the warmth of your sound with uncompromising quality control.
+          <p className="text-lg md:text-xl text-[#aaaaaa] max-w-lg leading-relaxed">
+            An independent vinyl press dedicated to flawless 12&quot; and 7&quot; high-fidelity playback. From exclusive 100-unit private pressings to expansive audiophile runs in the tens of thousands, we preserve the warmth of your sound with uncompromising quality control.
           </p>
 
           {/* Single CTA Button */}
           <Link
             href="#contact"
-            className="px-8 py-4 bg-primary text-primary-foreground font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-all inline-flex items-center justify-center gap-2 glow-green hover:glow-green-strong rounded-lg"
+            className="px-8 py-4 bg-primary text-primary-foreground font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-colors inline-flex items-center justify-center gap-2 rounded-lg"
           >
             Start Your Project
           </Link>
