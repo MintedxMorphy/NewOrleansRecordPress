@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DragDropContext, Draggable, Droppable, DraggableProvidedDragHandleProps, DropResult } from '@hello-pangea/dnd';
 import {
   BadgeCheck,
   Boxes,
+  Bug,
   ClipboardList,
   Disc3,
   Layers3,
-  PackageCheck,
+  Paperclip,
   SearchCheck,
   Truck,
 } from 'lucide-react';
@@ -107,6 +108,7 @@ const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2
 const RUSH_MARKER = '[Rush Order]';
 const STAGE_SPAN_MARKER_RE = /\[Stage\s+Span:\s*([^\]]+)\]/i;
 const STAGE_SPAN_MARKER_GLOBAL_RE = /\[Stage\s+Span:\s*[^\]]+\]/gi;
+const SPAN_ROW_HEIGHT = 260;
 
 function value(job: Job, keys: string[]) {
   for (const key of keys) {
@@ -225,12 +227,6 @@ function stationAnchor(station: Station) {
   return `station-${station}`;
 }
 
-function stretchMarginLeft(offset: number) {
-  if (offset >= 0) return undefined;
-  const distance = Math.abs(offset);
-  return `calc(-${distance * 100}% - ${distance * 10}px)`;
-}
-
 function stretchForJob(job: Job, isMobile: boolean) {
   if (isMobile) return undefined;
 
@@ -250,6 +246,10 @@ function stretchForJob(job: Job, isMobile: boolean) {
     label: span.map(spanStation => STATION_META[spanStation].shortLabel).join(' -> '),
     offset: startIndex - primaryIndex,
   };
+}
+
+function stretchedJobs(jobs: Job[]) {
+  return sortJobs(jobs.filter(job => stationOf(job) !== 'completed' && stageSpanForJob(job).length > 1));
 }
 
 function searchableJobText(job: Job) {
@@ -458,11 +458,10 @@ function JobCard({
           : isStretched ? `0 0 0 1px ${meta.color}33, 0 12px 30px #00000066` : station === 'now_pressing' ? `0 0 0 1px ${meta.color}44, 0 12px 30px #00000055` : '0 8px 18px #00000035',
         cursor: 'pointer',
         marginBottom: '8px',
-        marginLeft: stretch ? stretchMarginLeft(stretch.offset) : undefined,
         padding: compact ? '13px' : '10px',
         position: 'relative',
         userSelect: 'none',
-        width: stretch ? `calc(${stretch.columns * 100}% + ${(stretch.columns - 1) * 10}px)` : '100%',
+        width: '100%',
         zIndex: isStretched ? 8 : 1,
       }}
       onMouseEnter={e => (e.currentTarget.style.borderColor = rushed ? COLORS.red : meta.color)}
@@ -762,6 +761,9 @@ function Pipeline({
     return <div style={{ color: COLORS.muted, padding: '24px' }}>Loading board...</div>;
   }
 
+  const spanEntries = isMobile ? [] : stretchedJobs(visibleJobs);
+  const spanRailHeight = spanEntries.length ? spanEntries.length * SPAN_ROW_HEIGHT + 14 : 0;
+
   return (
     <DragDropContext onDragEnd={onDragEnd}>
       <div style={{
@@ -769,12 +771,54 @@ function Pipeline({
         gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(0, 1fr))',
         gap: isMobile ? '14px' : '10px',
         paddingBottom: '12px',
+        position: 'relative',
       }}>
+        {!isMobile && spanEntries.length > 0 && (
+          <div
+            aria-label="Stretched production jobs"
+            style={{
+              display: 'grid',
+              gap: '10px',
+              gridAutoRows: `${SPAN_ROW_HEIGHT - 10}px`,
+              gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+              left: 0,
+              pointerEvents: 'none',
+              position: 'absolute',
+              right: 0,
+              top: '96px',
+              zIndex: 20,
+            }}
+          >
+            {spanEntries.map((job, index) => {
+              const span = stageSpanForJob(job);
+              const startIndex = STATIONS.indexOf(span[0]);
+              const endIndex = STATIONS.indexOf(span[span.length - 1]);
+              if (startIndex < 0 || endIndex < 0) return null;
+              return (
+                <div
+                  key={`span-${jobKey(job)}`}
+                  style={{
+                    gridColumn: `${startIndex + 1} / ${endIndex + 2}`,
+                    gridRow: `${index + 1}`,
+                    minWidth: 0,
+                    pointerEvents: 'auto',
+                  }}
+                >
+                  <JobCard
+                    job={job}
+                    onOpen={() => onJobOpen(job)}
+                    onComplete={() => setConfirmCompleteJob(job)}
+                    stretch={stretchForJob(job, isMobile)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
         {STATIONS.map(station => {
           const meta = STATION_META[station];
-          const list = stationJobs(visibleJobs, station);
+          const list = stationJobs(visibleJobs, station).filter(job => isMobile || stageSpanForJob(job).length < 2);
           const isNowPressing = station === 'now_pressing';
-          const hasStretchedCard = !isMobile && list.some(job => stageSpanForJob(job).length > 1);
 
           return (
             <section
@@ -790,7 +834,7 @@ function Pipeline({
                 padding: isMobile ? '10px' : '8px',
                 position: 'relative',
                 scrollMarginTop: isMobile ? '96px' : '112px',
-                zIndex: hasStretchedCard ? 4 : 1,
+                zIndex: 1,
               }}
             >
               <div style={{ borderBottom: `1px solid ${COLORS.border}`, marginBottom: '8px', paddingBottom: '9px' }}>
@@ -840,6 +884,7 @@ function Pipeline({
                       background: snapshot.isDraggingOver ? `${meta.color}14` : 'transparent',
                       borderRadius: '8px',
                       minHeight: isMobile ? '72px' : '540px',
+                      paddingTop: !isMobile && spanRailHeight ? `${spanRailHeight}px` : undefined,
                       transition: 'background 0.15s',
                     }}
                   >
@@ -1383,6 +1428,285 @@ function JobDrawer({
   );
 }
 
+function BugReportControl({ isMobile }: { isMobile: boolean }) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState('');
+  const [bugError, setBugError] = useState('');
+
+  const addFiles = (incoming: FileList | File[]) => {
+    const nextFiles = Array.from(incoming).filter(file => file.size > 0);
+    if (!nextFiles.length) return;
+    setFiles(current => {
+      const seen = new Set(current.map(file => `${file.name}:${file.size}:${file.lastModified}`));
+      const merged = [...current];
+      for (const file of nextFiles) {
+        const key = `${file.name}:${file.size}:${file.lastModified}`;
+        if (!seen.has(key)) merged.push(file);
+      }
+      return merged.slice(0, 8);
+    });
+    setStatus('');
+    setBugError('');
+  };
+
+  const submitBug = async () => {
+    if (!message.trim() && files.length === 0) {
+      setBugError('Add a note or an attachment first.');
+      return;
+    }
+
+    setSending(true);
+    setStatus('');
+    setBugError('');
+
+    const formData = new FormData();
+    formData.set('message', message.trim());
+    formData.set('page_url', typeof window !== 'undefined' ? window.location.href : '/staff/dashboard');
+    formData.set('user_agent', typeof navigator !== 'undefined' ? navigator.userAgent : '');
+    for (const file of files) formData.append('attachments', file, file.name);
+
+    try {
+      const response = await fetch('/api/staff/dashboard-bugs', {
+        method: 'POST',
+        body: formData,
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || `Bug report failed (${response.status})`);
+      setMessage('');
+      setFiles([]);
+      setStatus('Sent to Gregory.');
+      setOpen(false);
+    } catch (error) {
+      setBugError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+          setStatus('');
+          setBugError('');
+        }}
+        style={{
+          alignItems: 'center',
+          background: COLORS.panel,
+          border: `1px solid ${COLORS.red}66`,
+          borderRadius: '8px',
+          color: COLORS.text,
+          cursor: 'pointer',
+          display: 'flex',
+          font: 'inherit',
+          fontSize: '13px',
+          fontWeight: 900,
+          gap: '8px',
+          justifyContent: 'center',
+          minHeight: '44px',
+          padding: '0 14px',
+          whiteSpace: 'nowrap',
+          width: isMobile ? '100%' : undefined,
+        }}
+      >
+        <Bug size={16} color={COLORS.red} />
+        Report Bugs
+      </button>
+      {status && !open && (
+        <div style={{ color: COLORS.green, fontSize: '12px', fontWeight: 850, whiteSpace: 'nowrap' }}>
+          {status}
+        </div>
+      )}
+
+      {open && (
+        <>
+          <div
+            onClick={() => setOpen(false)}
+            style={{
+              background: '#000000AA',
+              inset: 0,
+              position: 'fixed',
+              zIndex: 130,
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bug-report-title"
+            onDragOver={event => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'copy';
+            }}
+            onDrop={event => {
+              event.preventDefault();
+              addFiles(event.dataTransfer.files);
+            }}
+            style={{
+              background: COLORS.panel,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: '10px',
+              boxShadow: '0 24px 80px #000000CC',
+              left: '50%',
+              maxHeight: 'min(740px, calc(100vh - 32px))',
+              maxWidth: 'min(560px, calc(100vw - 28px))',
+              overflowY: 'auto',
+              padding: '20px',
+              position: 'fixed',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '100%',
+              zIndex: 131,
+            }}
+          >
+            <div style={{ alignItems: 'flex-start', display: 'flex', gap: '16px', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div>
+                <div id="bug-report-title" style={{ color: COLORS.text, fontSize: '20px', fontWeight: 950 }}>
+                  Report Bugs
+                </div>
+                <div style={{ color: COLORS.muted, fontSize: '13px', lineHeight: 1.4, marginTop: '5px' }}>
+                  Paste screenshots, drop files here, or attach anything helpful.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: COLORS.muted, cursor: 'pointer', fontSize: '28px', lineHeight: 1 }}
+              >
+                x
+              </button>
+            </div>
+
+            <textarea
+              value={message}
+              onChange={event => setMessage(event.target.value)}
+              onPaste={event => {
+                if (event.clipboardData.files.length) addFiles(event.clipboardData.files);
+              }}
+              onDrop={event => {
+                event.preventDefault();
+                addFiles(event.dataTransfer.files);
+              }}
+              placeholder="What happened? Which job? What did you expect?"
+              style={{
+                background: COLORS.card,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: '8px',
+                boxSizing: 'border-box',
+                color: COLORS.text,
+                font: 'inherit',
+                fontSize: '15px',
+                lineHeight: 1.45,
+                minHeight: '150px',
+                outline: 'none',
+                padding: '12px',
+                resize: 'vertical',
+                width: '100%',
+              }}
+            />
+
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                alignItems: 'center',
+                background: COLORS.card,
+                border: `1px dashed ${COLORS.border}`,
+                borderRadius: '8px',
+                color: COLORS.muted,
+                cursor: 'pointer',
+                display: 'flex',
+                gap: '8px',
+                justifyContent: 'center',
+                marginTop: '10px',
+                minHeight: '72px',
+                padding: '12px',
+                textAlign: 'center',
+              }}
+            >
+              <Paperclip size={18} />
+              <span style={{ fontSize: '13px', fontWeight: 850 }}>
+                Drop screenshots/files or click to attach
+              </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={event => {
+                  if (event.target.files) addFiles(event.target.files);
+                  event.currentTarget.value = '';
+                }}
+                style={{ display: 'none' }}
+              />
+            </div>
+
+            {files.length > 0 && (
+              <div style={{ display: 'grid', gap: '6px', marginTop: '10px' }}>
+                {files.map((file, index) => (
+                  <div
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
+                    style={{
+                      alignItems: 'center',
+                      background: COLORS.elevated,
+                      border: `1px solid ${COLORS.border}`,
+                      borderRadius: '6px',
+                      color: COLORS.text,
+                      display: 'flex',
+                      fontSize: '12px',
+                      gap: '8px',
+                      justifyContent: 'space-between',
+                      padding: '7px 9px',
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFiles(current => current.filter((_, fileIndex) => fileIndex !== index))}
+                      style={{ background: 'transparent', border: 'none', color: COLORS.red, cursor: 'pointer', fontSize: '12px', fontWeight: 900 }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ alignItems: 'center', display: 'flex', gap: '12px', justifyContent: 'space-between', marginTop: '16px' }}>
+              <div style={{ color: bugError ? COLORS.red : COLORS.muted, fontSize: '12px', lineHeight: 1.35 }}>
+                {bugError || 'Reports go to gregory@neworleansrecordpress.com'}
+              </div>
+              <button
+                type="button"
+                disabled={sending}
+                onClick={submitBug}
+                style={{
+                  background: sending ? COLORS.elevated : COLORS.red,
+                  border: `1px solid ${sending ? COLORS.border : COLORS.red}`,
+                  borderRadius: '7px',
+                  color: '#FFFFFF',
+                  cursor: sending ? 'default' : 'pointer',
+                  flexShrink: 0,
+                  fontSize: '13px',
+                  fontWeight: 950,
+                  padding: '10px 14px',
+                }}
+              >
+                {sending ? 'Sending...' : 'Send Bug'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 export default function DashboardClient({ jobs: initialJobs }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs ?? []);
   const [loading, setLoading] = useState(true);
@@ -1594,6 +1918,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
               {visibleActiveJobs.length} shown
             </div>
           )}
+          <BugReportControl isMobile={isMobile} />
           <a
             href={AIRTABLE_DATABASE_URL}
             target="_blank"
