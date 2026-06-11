@@ -119,7 +119,7 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
               fill
               className={
                 isTimelessImage
-                  ? "object-contain object-center"
+                  ? "object-cover object-center"
                   : "object-cover"
               }
               priority
@@ -151,17 +151,6 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
           <div className="absolute inset-[40%] rounded-full border border-foreground" />
           <div className="absolute inset-[45%] rounded-full bg-foreground" />
         </div>
-      </div>
-
-      {/* 10-Year Anniversary Badge — top-right, black bg blends via screen mode */}
-      <div className="absolute top-32 right-10 z-20 hidden lg:block overflow-hidden rounded-2xl opacity-60 hover:opacity-80 transition-opacity duration-300">
-        <Image
-          src="/images/10-year-badge.png"
-          alt="Celebrating 10 Years in the Art of Pressing Vinyl"
-          width={438}
-          height={351}
-          className="w-[280px] xl:w-[340px] h-auto block rounded-2xl [mix-blend-mode:screen]"
-        />
       </div>
 
       <div className="relative z-10 w-full px-6 pt-28 pb-20 lg:px-0">
