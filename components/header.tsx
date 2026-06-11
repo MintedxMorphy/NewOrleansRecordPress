@@ -19,19 +19,19 @@ export function Header() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
-      <div className="px-6 py-3">
+      <div className="px-6 py-5">
         {/* Desktop: 3-column grid so nav is truly centered and CTA stays right */}
-        <nav className="hidden md:grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <nav className="hidden md:grid grid-cols-[1fr_auto_1fr] items-center gap-6">
           {/* Left spacer */}
           <div />
 
           {/* Center: nav links */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 lg:gap-5 xl:gap-7">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors whitespace-nowrap px-2 py-3 -my-3"
+                className="text-base lg:text-lg xl:text-xl font-bold uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors whitespace-nowrap px-2 py-4 -my-4"
               >
                 {link.label}
               </Link>
@@ -42,7 +42,7 @@ export function Header() {
           <div className="flex justify-end">
             <Link
               href="/quote"
-              className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors rounded-lg whitespace-nowrap"
+              className="px-6 py-4 bg-primary text-primary-foreground text-base lg:text-lg xl:text-xl font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors rounded-lg whitespace-nowrap"
             >
               Get a Quote
             </Link>
