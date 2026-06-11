@@ -1,5 +1,6 @@
 'use client'
 
+// Temporarily parked while Stripe/shop issues are resolved. Rename back to page.tsx to restore /shop.
 import { useState, useEffect } from 'react'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'

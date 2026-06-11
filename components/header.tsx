@@ -11,7 +11,6 @@ const navLinks = [
   { href: "/quote", label: "Quote Calculator" },
   { href: "/team", label: "Team" },
   { href: "/#contact", label: "Contact" },
-  { href: "/shop", label: "Shop" },
 ]
 
 export function Header() {
