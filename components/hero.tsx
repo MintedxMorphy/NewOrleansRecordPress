@@ -6,13 +6,16 @@ import Link from "next/link"
 import Image from "next/image"
 
 type HeroProps = {
+  imageSrc?: string
+  imageMood?: "classic" | "timeless"
   videoSrc?: string
   videoMood?: "raw" | "warm" | "psychedelic"
 }
 
-export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
+export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "warm" }: HeroProps = {}) {
   const isRaw = videoMood === "raw"
   const isPsychedelic = videoMood === "psychedelic"
+  const isTimelessImage = imageMood === "timeless"
   const [loopFade, setLoopFade] = useState(0)
 
   return (
@@ -111,13 +114,32 @@ export function Hero({ videoSrc, videoMood = "warm" }: HeroProps = {}) {
         ) : (
           <>
             <Image
-              src="/images/vinyl-press-hero.jpg"
+              src={imageSrc ?? "/images/vinyl-press-hero.jpg"}
               alt="Vinyl record pressing machine"
               fill
-              className="object-cover"
+              className={
+                isTimelessImage
+                  ? "object-cover object-center brightness-[0.74] contrast-[1.18] saturate-[0.82] sepia-[0.16]"
+                  : "object-cover"
+              }
               priority
             />
-            <div className="absolute inset-0 bg-black/60" />
+            {isTimelessImage ? (
+              <>
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_58%_42%,rgba(255,236,198,0.12),rgba(0,0,0,0.22)_38%,rgba(0,0,0,0.72)_100%)]" />
+                <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.58),rgba(37,25,13,0.22)_46%,rgba(0,0,0,0.34)_100%)]" />
+                <div
+                  className="absolute inset-0 opacity-[0.08] mix-blend-overlay"
+                  style={{
+                    backgroundImage:
+                      "radial-gradient(circle at 16% 22%, rgba(255,255,255,0.5) 0 1px, transparent 1px), radial-gradient(circle at 68% 58%, rgba(255,255,255,0.36) 0 1px, transparent 1px)",
+                    backgroundSize: "12px 16px, 19px 23px",
+                  }}
+                />
+              </>
+            ) : (
+              <div className="absolute inset-0 bg-black/60" />
+            )}
           </>
         )}
       </div>

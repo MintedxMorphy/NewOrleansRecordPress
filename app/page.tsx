@@ -15,7 +15,7 @@ export default function Home() {
       <Header />
       <Marquee />
       <main>
-        <Hero videoSrc="/videos/stylus-spinning-hero.mp4" videoMood="warm" />
+        <Hero imageSrc="/images/finebilt-stampers-hero.jpg" imageMood="timeless" />
         <Services />
         <RecentWorkStatic />
         <VinylColors />
