@@ -19,7 +19,7 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
   const [loopFade, setLoopFade] = useState(0)
 
   return (
-    <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       <div className="absolute inset-0">
         {videoSrc ? (
           <>
@@ -153,7 +153,7 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
         </div>
       </div>
 
-      <div className="relative z-10 flex min-h-[80vh] w-full items-center px-6 pb-16 pt-32 lg:px-0 lg:pt-28">
+      <div className="relative z-10 flex min-h-screen w-full items-center px-6 pb-16 pt-32 lg:px-0 lg:pt-28">
         <div className="flex flex-col items-start gap-6 max-w-3xl mx-auto lg:mx-0 lg:ml-10">
           {/* Logo - smaller */}
           <div className="relative mt-4 lg:mt-6">
@@ -168,7 +168,7 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
           </div>
           
           {/* Headline */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold uppercase leading-tight max-w-lg text-[#b99500]">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold uppercase leading-tight max-w-lg text-[#f0c400]">
             PURE ANALOG CRAFTSMANSHIP FROM THE HEART OF NEW ORLEANS
           </h1>
 
