@@ -1,6 +1,5 @@
 import { Header } from "@/components/header"
 import { Hero } from "@/components/hero"
-import { Marquee } from "@/components/marquee"
 import { Services } from "@/components/services"
 import { RecentWorkStatic } from "@/components/recent-work-static"
 import { VinylColors } from "@/components/vinyl-colors"
@@ -13,7 +12,6 @@ export default function Home() {
   return (
     <>
       <Header />
-      <Marquee />
       <main>
         <Hero imageSrc="/images/finebilt-stampers-hero.jpg" imageMood="timeless" />
         <Services />

@@ -119,17 +119,17 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
               fill
               className={
                 isTimelessImage
-                  ? "object-cover object-[center_34%] brightness-[0.96] contrast-[1.06] saturate-[0.94] sepia-[0.05]"
+                  ? "object-contain object-center"
                   : "object-cover"
               }
               priority
             />
             {isTimelessImage ? (
               <>
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_56%_38%,rgba(255,240,202,0.06),rgba(0,0,0,0.08)_44%,rgba(0,0,0,0.42)_100%)]" />
-                <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.48),rgba(37,25,13,0.12)_44%,rgba(0,0,0,0.2)_100%)]" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,240,202,0.03),rgba(0,0,0,0.04)_48%,rgba(0,0,0,0.22)_100%)]" />
+                <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.46),rgba(0,0,0,0.08)_38%,rgba(0,0,0,0.12)_100%)]" />
                 <div
-                  className="absolute inset-0 opacity-[0.05] mix-blend-overlay"
+                  className="absolute inset-0 opacity-[0.025] mix-blend-overlay"
                   style={{
                     backgroundImage:
                       "radial-gradient(circle at 16% 22%, rgba(255,255,255,0.5) 0 1px, transparent 1px), radial-gradient(circle at 68% 58%, rgba(255,255,255,0.36) 0 1px, transparent 1px)",
@@ -164,7 +164,7 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
         />
       </div>
 
-      <div className="relative z-10 w-full px-6 pt-44 pb-20 lg:px-0">
+      <div className="relative z-10 w-full px-6 pt-28 pb-20 lg:px-0">
         <div className="flex -translate-y-6 flex-col items-start gap-6 max-w-3xl mx-auto lg:mx-0 lg:ml-10 lg:-translate-y-10">
           {/* Logo - smaller */}
           <div className="relative mt-4 lg:mt-6">
