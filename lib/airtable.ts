@@ -262,6 +262,66 @@ function airtableValueForField(field: AirtableFieldMeta, value: number) {
   return String(value);
 }
 
+function choiceForFieldValue(field: AirtableFieldMeta, value: unknown) {
+  const raw = stringValue(value).trim();
+  if (!raw) return undefined;
+
+  const choices = field.options?.choices || [];
+  if (!choices.length) return raw;
+
+  return choices.find(choice => choiceKey(choice.name) === choiceKey(raw))?.name;
+}
+
+function sanitizedAirtableValueForField(field: AirtableFieldMeta, value: unknown): unknown {
+  if (isEmptyAirtableValue(value)) return undefined;
+
+  if (['number', 'currency', 'percent', 'rating', 'duration'].includes(field.type)) {
+    const parsed = parseQuantity(value);
+    return parsed === undefined ? undefined : parsed;
+  }
+
+  if (['date', 'dateTime'].includes(field.type)) {
+    const raw = stringValue(value).trim();
+    return isDateLike(raw) ? raw : undefined;
+  }
+
+  if (field.type === 'checkbox') {
+    if (typeof value === 'boolean') return value;
+    const normalized = stringValue(value).trim().toLowerCase();
+    if (['yes', 'y', 'true', '1', 'done', 'complete', 'completed', 'approved'].includes(normalized)) return true;
+    if (['no', 'n', 'false', '0'].includes(normalized)) return false;
+    return undefined;
+  }
+
+  if (field.type === 'singleSelect') {
+    return choiceForFieldValue(field, value);
+  }
+
+  if (field.type === 'multipleSelects') {
+    const rawValues = Array.isArray(value)
+      ? value.map(item => stringValue(item))
+      : stringValue(value).split(',');
+    const choices = rawValues
+      .map(item => choiceForFieldValue(field, item))
+      .filter((item): item is string => Boolean(item));
+
+    return choices.length ? Array.from(new Set(choices)) : undefined;
+  }
+
+  if ([
+    'multipleAttachments',
+    'multipleCollaborators',
+    'multipleRecordLinks',
+  ].includes(field.type)) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) return stringValue(value);
+  if (typeof value === 'object') return stringValue(value);
+
+  return value;
+}
+
 function runMarker(run: number, total: number) {
   return `[Run ${run}/${total}]`;
 }
@@ -436,24 +496,7 @@ function isDateLike(value: unknown) {
 }
 
 function isValueCompatibleWithField(field: AirtableFieldMeta, value: unknown) {
-  if (isEmptyAirtableValue(value)) return true;
-  if (Array.isArray(value)) {
-    return ['multipleAttachments', 'multipleCollaborators', 'multipleRecordLinks', 'multipleSelects'].includes(field.type);
-  }
-
-  if (['number', 'currency', 'percent', 'rating', 'duration'].includes(field.type)) {
-    return parseQuantity(value) !== undefined;
-  }
-
-  if (['date', 'dateTime'].includes(field.type)) {
-    return isDateLike(value);
-  }
-
-  if (field.type === 'checkbox') {
-    return typeof value === 'boolean' || ['yes', 'no', 'true', 'false', '1', '0'].includes(stringValue(value).trim().toLowerCase());
-  }
-
-  return true;
+  return sanitizedAirtableValueForField(field, value) !== undefined;
 }
 
 function matchingSourceFieldForCompletedTarget(
@@ -637,11 +680,60 @@ function completedFieldsFromRecord(record: AirtableRecord, production: AirtableT
     const sourceField = matchingSourceFieldForCompletedTarget(targetField, production, record);
     const value = sourceField ? record.fields[sourceField.name] : undefined;
 
-    if (value === undefined) continue;
-    fields[targetField.name] = value;
+    const sanitized = sanitizedAirtableValueForField(targetField, value);
+    if (sanitized === undefined) continue;
+    fields[targetField.name] = sanitized;
   }
 
   return fields;
+}
+
+function completedFallbackFields(fields: Record<string, unknown>, completed: AirtableTableMeta) {
+  const fieldNames = new Set<string>();
+  for (const aliases of [
+    FIELD_ALIASES.job_id,
+    FIELD_ALIASES.customer,
+    FIELD_ALIASES.matrix,
+    FIELD_ALIASES.quantity,
+    FIELD_ALIASES.order_number,
+    FIELD_ALIASES.notes,
+    FIELD_ALIASES.dash_notes,
+  ]) {
+    const field = resolveAirtableField(completed, aliases);
+    if (field) fieldNames.add(field.name);
+  }
+
+  return Object.fromEntries(
+    Object.entries(fields).filter(([key]) => fieldNames.has(key))
+  );
+}
+
+async function createCompletedRecord(completed: AirtableTableMeta, fields: Record<string, unknown>) {
+  const create = async (fieldsToCreate: Record<string, unknown>) => {
+    const res = await airtableFetch(tableUrl('', completed.name), {
+      method: 'POST',
+      headers: airtableHeaders(),
+      body: JSON.stringify({ fields: fieldsToCreate, typecast: true }),
+    });
+    const created = await res.json() as { id?: string; error?: { message?: string } };
+    return { res, created };
+  };
+
+  const firstAttempt = await create(fields);
+  if (firstAttempt.res.ok) return firstAttempt.created;
+
+  const fallbackFields = completedFallbackFields(fields, completed);
+  if (Object.keys(fallbackFields).length && Object.keys(fallbackFields).length < Object.keys(fields).length) {
+    const fallbackAttempt = await create(fallbackFields);
+    if (fallbackAttempt.res.ok) return fallbackAttempt.created;
+    throw new Error(
+      fallbackAttempt.created.error?.message ||
+      firstAttempt.created.error?.message ||
+      `Airtable completed record create failed (${fallbackAttempt.res.status})`
+    );
+  }
+
+  throw new Error(firstAttempt.created.error?.message || `Airtable completed record create failed (${firstAttempt.res.status})`);
 }
 
 function formulaField(fieldName: string) {
@@ -710,58 +802,57 @@ export async function completeAirtableJob(jobId: string) {
   if (matchingCompleted) {
     const productionQuantityField = resolveAirtableField(production, FIELD_ALIASES.quantity);
     const completedQuantityField = resolveAirtableField(completed, FIELD_ALIASES.quantity);
-    if (!productionQuantityField || !completedQuantityField) {
-      throw new Error('Airtable quantity field not found for completion merge');
+    const productionQuantity = productionQuantityField ? parseQuantity(record.fields[productionQuantityField.name]) : undefined;
+    const completedQuantity = completedQuantityField ? parseQuantity(matchingCompleted.fields[completedQuantityField.name]) : undefined;
+
+    if (
+      productionQuantityField &&
+      completedQuantityField &&
+      productionQuantity !== undefined &&
+      productionQuantity > 0 &&
+      completedQuantity !== undefined &&
+      completedQuantity >= 0
+    ) {
+      const mergedQuantity = productionQuantity + completedQuantity;
+      const completedFieldsToUpdate: Record<string, unknown> = {
+        [completedQuantityField.name]: airtableValueForField(completedQuantityField, mergedQuantity),
+      };
+      const completedDashNotesField = resolveAirtableField(completed, FIELD_ALIASES.dash_notes);
+      if (completedDashNotesField && isWritableField(completedDashNotesField)) {
+        completedFieldsToUpdate[completedDashNotesField.name] = stripRunMarkers(matchingCompleted.fields[completedDashNotesField.name]);
+      }
+
+      const updateCompletedRes = await airtableFetch(tableUrl(`/${encodeURIComponent(matchingCompleted.id)}`, completed.name), {
+        method: 'PATCH',
+        headers: airtableHeaders(),
+        body: JSON.stringify({
+          fields: completedFieldsToUpdate,
+          typecast: true,
+        }),
+      });
+      const updatedCompleted = await updateCompletedRes.json() as { error?: { message?: string } };
+
+      if (!updateCompletedRes.ok) {
+        throw new Error(updatedCompleted.error?.message || `Airtable completed quantity merge failed (${updateCompletedRes.status})`);
+      }
+
+      const deleteRes = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+        method: 'DELETE',
+        headers: airtableHeaders(),
+      });
+      const deleted = await deleteRes.json() as { deleted?: boolean; error?: { message?: string } };
+
+      if (!deleteRes.ok || !deleted.deleted) {
+        throw new Error(deleted.error?.message || `Airtable production record delete failed (${deleteRes.status})`);
+      }
+
+      return {
+        completedRecordId: matchingCompleted.id,
+        deletedRecordId: recordId,
+        mergedCompletedRecord: true,
+        completedQuantity: mergedQuantity,
+      };
     }
-
-    const productionQuantity = parseQuantity(record.fields[productionQuantityField.name]);
-    const completedQuantity = parseQuantity(matchingCompleted.fields[completedQuantityField.name]);
-    if (!productionQuantity || productionQuantity <= 0) {
-      throw new Error('Remaining production quantity is not a number Airtable can merge');
-    }
-    if (completedQuantity === undefined || completedQuantity < 0) {
-      throw new Error('Existing completed quantity is not a number Airtable can merge');
-    }
-
-    const mergedQuantity = productionQuantity + completedQuantity;
-    const completedFieldsToUpdate: Record<string, unknown> = {
-      [completedQuantityField.name]: airtableValueForField(completedQuantityField, mergedQuantity),
-    };
-    const completedDashNotesField = resolveAirtableField(completed, FIELD_ALIASES.dash_notes);
-    if (completedDashNotesField && isWritableField(completedDashNotesField)) {
-      completedFieldsToUpdate[completedDashNotesField.name] = stripRunMarkers(matchingCompleted.fields[completedDashNotesField.name]);
-    }
-
-    const updateCompletedRes = await airtableFetch(tableUrl(`/${encodeURIComponent(matchingCompleted.id)}`, completed.name), {
-      method: 'PATCH',
-      headers: airtableHeaders(),
-      body: JSON.stringify({
-        fields: completedFieldsToUpdate,
-        typecast: true,
-      }),
-    });
-    const updatedCompleted = await updateCompletedRes.json() as { error?: { message?: string } };
-
-    if (!updateCompletedRes.ok) {
-      throw new Error(updatedCompleted.error?.message || `Airtable completed quantity merge failed (${updateCompletedRes.status})`);
-    }
-
-    const deleteRes = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
-      method: 'DELETE',
-      headers: airtableHeaders(),
-    });
-    const deleted = await deleteRes.json() as { deleted?: boolean; error?: { message?: string } };
-
-    if (!deleteRes.ok || !deleted.deleted) {
-      throw new Error(deleted.error?.message || `Airtable production record delete failed (${deleteRes.status})`);
-    }
-
-    return {
-      completedRecordId: matchingCompleted.id,
-      deletedRecordId: recordId,
-      mergedCompletedRecord: true,
-      completedQuantity: mergedQuantity,
-    };
   }
 
   const fields = completedFieldsFromRecord(record, production, completed);
@@ -770,16 +861,7 @@ export async function completeAirtableJob(jobId: string) {
     fields[completedDashNotesField.name] = stripRunMarkers(fields[completedDashNotesField.name]);
   }
 
-  const createRes = await airtableFetch(tableUrl('', completed.name), {
-    method: 'POST',
-    headers: airtableHeaders(),
-    body: JSON.stringify({ fields, typecast: true }),
-  });
-  const created = await createRes.json() as { id?: string; error?: { message?: string } };
-
-  if (!createRes.ok) {
-    throw new Error(created.error?.message || `Airtable completed record create failed (${createRes.status})`);
-  }
+  const created = await createCompletedRecord(completed, fields);
 
   const deleteRes = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
     method: 'DELETE',
@@ -861,15 +943,7 @@ export async function createAirtableJobSplit(
     completedFields[completedDashNotesField.name] = withRunMarker(sourceDashNotes, 1, 2);
   }
 
-  const createCompletedRes = await airtableFetch(tableUrl('', completed.name), {
-    method: 'POST',
-    headers: airtableHeaders(),
-    body: JSON.stringify({ fields: completedFields, typecast: true }),
-  });
-  const completedRecord = await createCompletedRes.json() as (AirtableRecord & { error?: { message?: string } });
-  if (!createCompletedRes.ok) {
-    throw new Error(completedRecord.error?.message || `Airtable completed split create failed (${createCompletedRes.status})`);
-  }
+  const completedRecord = await createCompletedRecord(completed, completedFields);
 
   const productionFields: Record<string, unknown> = {
     [quantityField.name]: airtableValueForField(quantityField, remainingQuantity),
