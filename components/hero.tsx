@@ -158,11 +158,11 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
           {/* Logo - smaller */}
           <div className="relative mt-4 lg:mt-6">
             <Image
-              src="/images/norp-old-logo.jpg"
+              src="/images/norp-old-logo-white-transparent.png"
               alt="New Orleans Record Press"
-              width={960}
-              height={960}
-              className="h-auto w-[170px] rounded-md md:w-[230px] lg:w-[270px]"
+              width={811}
+              height={487}
+              className="h-auto w-[210px] md:w-[290px] lg:w-[340px]"
               priority
             />
           </div>
