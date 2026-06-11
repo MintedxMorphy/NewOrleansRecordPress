@@ -168,19 +168,19 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
           </div>
           
           {/* Headline */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold uppercase text-foreground leading-tight max-w-lg">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold uppercase leading-tight max-w-lg text-[#c8af16]">
             PURE ANALOG CRAFTSMANSHIP FROM THE HEART OF NEW ORLEANS
           </h1>
           
           {/* Description */}
-          <p className="text-lg md:text-xl text-[#aaaaaa] max-w-lg leading-relaxed">
+          <p className="text-[27px] md:text-[30px] text-black max-w-2xl leading-snug font-semibold">
             An independent vinyl press dedicated to flawless 12&quot; and 7&quot; high-fidelity playback. From exclusive 100-unit private pressings to expansive audiophile runs in the tens of thousands, we preserve the warmth of your sound with uncompromising quality control.
           </p>
 
           {/* Single CTA Button */}
           <Link
             href="#contact"
-            className="px-8 py-4 bg-primary text-primary-foreground font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-colors inline-flex items-center justify-center gap-2 rounded-lg"
+            className="px-8 py-4 bg-primary text-primary-foreground text-sm lg:text-base xl:text-lg font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors inline-flex items-center justify-center gap-2 rounded-lg"
           >
             Start Your Project
           </Link>
