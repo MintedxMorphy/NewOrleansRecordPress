@@ -171,11 +171,6 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold uppercase leading-tight max-w-lg text-[#b99500]">
             PURE ANALOG CRAFTSMANSHIP FROM THE HEART OF NEW ORLEANS
           </h1>
-          
-          {/* Description */}
-          <p className="text-[27px] md:text-[30px] text-black max-w-2xl leading-snug font-semibold">
-            An independent vinyl press dedicated to flawless 12&quot; and 7&quot; high-fidelity playback. From exclusive 100-unit private pressings to expansive audiophile runs in the tens of thousands, we preserve the warmth of your sound with uncompromising quality control.
-          </p>
 
           {/* Single CTA Button */}
           <Link
