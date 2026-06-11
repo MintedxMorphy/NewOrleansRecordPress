@@ -3,7 +3,8 @@
 import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowLeft, Sparkles } from "lucide-react"
+import { Sparkles } from "lucide-react"
+import { Header } from "@/components/header"
 
 const SUPABASE_URL = "https://ihqnczpjjtvtjdtwwzre.supabase.co/storage/v1/object/public/Vinyl-Colors/record-images"
 
@@ -216,26 +217,7 @@ export default function VinylColorsPage() {
   
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Link 
-              href="/" 
-              className="flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Home
-            </Link>
-            <Link
-              href="/#contact"
-              className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors rounded-md"
-            >
-              Get a Quote
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main className="pt-24 pb-20">
         <div className="max-w-7xl mx-auto px-6">

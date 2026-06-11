@@ -19,7 +19,7 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
   const [loopFade, setLoopFade] = useState(0)
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+    <section className="relative flex min-h-[100svh] items-center justify-center overflow-hidden">
       <div className="absolute inset-0">
         {videoSrc ? (
           <>
@@ -119,7 +119,7 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
               fill
               className={
                 isTimelessImage
-                  ? "object-cover object-center"
+                  ? "object-cover object-[50%_62%] md:object-[50%_59%]"
                   : "object-cover"
               }
               priority
@@ -127,7 +127,7 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
             {isTimelessImage ? (
               <>
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,240,202,0.03),rgba(0,0,0,0.04)_48%,rgba(0,0,0,0.22)_100%)]" />
-                <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.46),rgba(0,0,0,0.08)_38%,rgba(0,0,0,0.12)_100%)]" />
+                <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.48),rgba(0,0,0,0.1)_42%,rgba(0,0,0,0.12)_100%)]" />
                 <div
                   className="absolute inset-0 opacity-[0.025] mix-blend-overlay"
                   style={{
@@ -153,30 +153,30 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
         </div>
       </div>
 
-      <div className="absolute left-6 top-24 z-20 lg:left-10 lg:top-[104px]">
+      <div className="absolute left-5 top-20 z-20 sm:left-6 sm:top-24 lg:left-10 lg:top-[104px]">
         <Image
           src="/images/norp-old-logo-white-transparent.png"
           alt="New Orleans Record Press"
           width={811}
           height={487}
-          className="h-auto w-[158px] md:w-[218px] lg:w-[255px]"
+          className="h-auto w-[132px] sm:w-[158px] md:w-[218px] lg:w-[255px]"
           priority
         />
       </div>
 
-      <div className="relative z-10 flex min-h-screen w-full items-center px-6 pb-16 pt-32 lg:px-0 lg:pt-28">
-        <div className="flex flex-col items-start gap-6 max-w-3xl mx-auto lg:mx-0 lg:ml-10">
-          <div aria-hidden="true" className="mt-4 h-[95px] w-[158px] md:h-[131px] md:w-[218px] lg:mt-6 lg:h-[153px] lg:w-[255px]" />
+      <div className="relative z-10 flex min-h-[100svh] w-full items-center px-5 pb-14 pt-24 sm:px-6 sm:pb-16 sm:pt-32 lg:px-0 lg:pt-28">
+        <div className="mx-0 flex max-w-[22rem] flex-col items-start gap-5 sm:max-w-3xl sm:gap-6 md:mx-auto lg:mx-0 lg:ml-10">
+          <div aria-hidden="true" className="mt-4 h-[80px] w-[132px] sm:h-[95px] sm:w-[158px] md:h-[131px] md:w-[218px] lg:mt-6 lg:h-[153px] lg:w-[255px]" />
           
           {/* Headline */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold uppercase leading-tight max-w-lg text-[#f0c400]">
+          <h1 className="max-w-[20rem] text-[2.45rem] font-bold uppercase leading-[1.02] text-[#f3ca03] sm:max-w-lg sm:text-5xl sm:leading-tight md:text-6xl">
             PURE ANALOG CRAFTSMANSHIP FROM THE HEART OF NEW ORLEANS
           </h1>
 
           {/* Single CTA Button */}
           <Link
             href="#contact"
-            className="px-8 py-4 bg-primary text-primary-foreground text-sm lg:text-base xl:text-lg font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors inline-flex items-center justify-center gap-2 rounded-lg"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-7 py-4 text-sm font-bold uppercase tracking-wider text-primary-foreground transition-colors hover:bg-primary/90 sm:px-8 lg:text-base xl:text-lg"
           >
             Start Your Project
           </Link>
@@ -184,7 +184,7 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
       </div>
 
       {/* Scroll Indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
+      <div className="absolute bottom-8 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 animate-bounce md:flex">
         <span className="text-xs uppercase tracking-widest text-muted-foreground">Scroll</span>
         <ArrowDown size={16} className="text-muted-foreground" />
       </div>

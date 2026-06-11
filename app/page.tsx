@@ -13,7 +13,7 @@ export default function Home() {
     <>
       <Header />
       <main>
-        <Hero imageSrc="/images/finebilt-stampers-hero.jpg" imageMood="timeless" />
+        <Hero imageSrc="/images/finebilt-stampers-hero-polished.jpg" imageMood="timeless" />
         <Services />
         <RecentWorkStatic />
         <VinylColors />
