@@ -1669,17 +1669,18 @@ function BugReportControl({ isMobile }: { isMobile: boolean }) {
           cursor: 'pointer',
           display: 'flex',
           font: 'inherit',
-          fontSize: '13px',
+          fontSize: isMobile ? '15px' : '24px',
           fontWeight: 900,
           gap: '8px',
           justifyContent: 'center',
-          minHeight: '44px',
-          padding: '0 14px',
+          lineHeight: 1,
+          minHeight: isMobile ? '44px' : '56px',
+          padding: isMobile ? '0 14px' : '0 18px',
           whiteSpace: 'nowrap',
           width: isMobile ? '100%' : undefined,
         }}
       >
-        <Bug size={16} color={COLORS.red} />
+        <Bug size={isMobile ? 16 : 24} color={COLORS.red} />
         Report Bugs
       </button>
       {status && !open && (
@@ -2092,9 +2093,13 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
               border: `1px solid ${COLORS.border}`,
               borderRadius: '8px',
               color: COLORS.text,
-              fontSize: '13px',
-              fontWeight: 850,
-              padding: '12px 14px',
+              fontSize: isMobile ? '15px' : '24px',
+              fontWeight: 900,
+              lineHeight: 1,
+              minHeight: isMobile ? '44px' : '56px',
+              padding: isMobile ? '0 14px' : '0 18px',
+              display: 'inline-flex',
+              alignItems: 'center',
               textDecoration: 'none',
               whiteSpace: 'nowrap',
             }}
