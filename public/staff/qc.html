@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NORP Shift Logs</title>
+<title>NORP Team Logs</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
@@ -13,7 +13,7 @@ body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-heigh
 .nav a:hover{color:#f5f3e8;background:#1c2028;border-color:#4a4c53;transform:translateY(-1px)}
 .nav a.active{color:#5DCAA5;background:#0a1a15;border:1px solid #1f7d5b;box-shadow:0 0 0 1px rgba(93,202,165,.18),0 8px 18px rgba(0,0,0,.18)}
 .content{padding:16px 24px;max-width:1600px;margin:0 auto}
-/* Shift Wars */
+/* Team totals */
 .shift-wars{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:20px 24px;margin-bottom:16px;position:relative;overflow:hidden}
 .shift-wars::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#3B8BD4,#7F77DD,#E8593C);border-radius:12px 12px 0 0}
 .sw-title{font-size:12px;font-weight:700;color:#6a6858;text-transform:uppercase;letter-spacing:.1em;font-family:'Space Mono',monospace;margin-bottom:16px}
@@ -26,6 +26,7 @@ body{font-family:'DM Sans',sans-serif;background:#0d0f12;color:#e4e2d8;min-heigh
 .sw-total{font-size:52px;font-weight:800;line-height:1;letter-spacing:-2px}
 .sw-total.day{color:#9cc9f2}
 .sw-total.night{color:#c7c1ff}
+.sw-total.team{color:#5DCAA5}
 .sw-sub{font-size:11px;color:#6a6858;font-family:'Space Mono',monospace}
 .sw-vs{text-align:center;padding:0 24px}
 .sw-vs-text{font-size:13px;font-weight:700;color:#4a4c53;font-family:'Space Mono',monospace}
@@ -70,6 +71,10 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
 .segmented button.active,.tag-button.active{color:#f5f3e8;border-color:#5DCAA5;background:#0a1a15}
 .segmented .day.active{border-color:#3B8BD4;background:#0b1b2a;color:#9cc9f2}
 .segmented .night.active{border-color:#7F77DD;background:#171533;color:#c7c1ff}
+.select-actions{display:flex;gap:8px;align-items:center}
+.select-actions select{flex:1}
+.small-button.remove{color:#ff8b7a;border-color:#5a2b25;background:#24110f}
+.small-button.add{color:#5DCAA5;border-color:#1f7d5b;background:#0a1a15}
 .hint{font-family:'Space Mono',monospace;color:#6a6858;font-size:12px;margin-top:2px}
 .submit-button{width:100%;background:#5DCAA5;color:#07100d;border:0;border-radius:8px;padding:11px 18px;font:inherit;font-size:15px;font-weight:800;cursor:pointer;transition:filter .2s}
 .submit-button:hover{filter:brightness(1.08)}
@@ -137,41 +142,40 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
   <a href="/staff">Operations Guide</a>
 <a href="/staff/dashboard">Production Board</a>
 <a href="/staff/inventory">Inventory</a>
-<a href="/staff/qc" class="active">Shift Logs</a>
+<a href="/staff/qc" class="active">Team Logs</a>
 </div>
 
 <main class="content">
   <div class="header-row">
     <div>
-      <h1>Shift Logs</h1>
+      <h1>Team Logs</h1>
       <div class="subtitle">QC &middot; Press Operations &middot; Messaging</div>
     </div>
     <div class="status-line" id="refreshStatus">Loading...</div>
   </div>
 
-  <!-- SHIFT WARS -->
+  <!-- PRESS TOTALS -->
   <div class="shift-wars" id="shiftWars">
-    <div class="sw-title">The Press Room — Records Pressed This Week</div>
+    <div class="sw-title">The Press Room — Team Records Pressed</div>
     <div class="sw-body">
       <div class="sw-side day">
-        <div class="sw-label day">☀ Day Crew</div>
-        <div class="sw-total day" id="swDayTotal">—</div>
+        <div class="sw-label day">Today</div>
+        <div class="sw-total team" id="swTodayTotal">—</div>
         <div class="sw-sub">records pressed</div>
       </div>
       <div class="sw-vs">
-        <div class="sw-divider"></div>
-        <div class="sw-vs-text">VS</div>
-        <div class="sw-divider"></div>
-        <div style="text-align:center;margin-top:8px" id="swLeader"></div>
+        <div class="sw-label" style="color:#5DCAA5">This Week</div>
+        <div class="sw-total team" id="swWeekTotal">—</div>
+        <div class="sw-sub">records pressed</div>
       </div>
       <div class="sw-side night">
-        <div class="sw-label night">🌙 Night Crew</div>
-        <div class="sw-total night" id="swNightTotal">—</div>
+        <div class="sw-label night">This Month</div>
+        <div class="sw-total team" id="swMonthTotal">—</div>
         <div class="sw-sub">records pressed</div>
       </div>
     </div>
     <div class="sw-board">
-      <div class="sw-board-title">Individual Leaderboard — All Time</div>
+      <div class="sw-board-title">Individual Totals — All Time</div>
       <div class="sw-rows" id="swLeaderboard"><span style="font-family:monospace;font-size:12px;color:#6a6858">Loading...</span></div>
     </div>
   </div>
@@ -180,26 +184,15 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
 
     <!-- LEFT COL ROW 1: QC Entry Form -->
     <section class="section" style="grid-column:1;grid-row:1">
-      <div class="section-title"><span class="dot"></span> QC Shift Log — New Entry</div>
+      <div class="section-title"><span class="dot"></span> QC Team Log — New Entry</div>
       <form id="qcForm" class="form-grid">
         <div class="field">
           <label for="workerName">Worker</label>
-          <select id="workerName" required>
-            <option value="Sarah">Sarah (QC Director)</option>
-            <option value="August">August</option>
-            <option value="Mun">Mun</option>
-            <option value="Jen">Jen</option>
-            <option value="Anker">Anker</option>
-            <option value="__add_new__">+ Add new...</option>
-          </select>
-        </div>
-        <div class="field">
-          <div class="label">Shift</div>
-          <div class="segmented" data-toggle="qcShift">
-            <button type="button" class="day" data-value="day">Day</button>
-            <button type="button" class="night" data-value="night">Night</button>
+          <div class="select-actions">
+            <select id="workerName" required></select>
+            <button class="small-button add" type="button" data-add-list="workers">Add New</button>
+            <button class="small-button remove" type="button" data-remove-list="workers" data-select-id="workerName">Remove</button>
           </div>
-          <div class="hint" id="qcShiftHint"></div>
         </div>
         <div class="field">
           <label for="entryDate">Date</label>
@@ -237,22 +230,16 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
       </form>
     </section>
 
-    <!-- LEFT COL ROW 2: Press Operation Shift Log -->
+    <!-- LEFT COL ROW 2: Press Operation Log -->
     <section class="section press-section" style="grid-column:1;grid-row:2">
-      <div class="section-title"><span class="dot orange"></span> Press Operation Shift Log — New Entry</div>
+      <div class="section-title"><span class="dot orange"></span> Press Operation Log — New Entry</div>
       <form id="pressForm" class="form-grid">
         <div class="field">
           <label for="operatorName">Operator</label>
-          <select id="operatorName" required>
-            <option value="Joshua">Joshua</option>
-            <option value="__add_new__">+ Add new...</option>
-          </select>
-        </div>
-        <div class="field">
-          <div class="label">Shift</div>
-          <div class="segmented" data-toggle="pressShift">
-            <button type="button" class="day" data-value="day">Day</button>
-            <button type="button" class="night" data-value="night">Night</button>
+          <div class="select-actions">
+            <select id="operatorName" required></select>
+            <button class="small-button add" type="button" data-add-list="operators">Add New</button>
+            <button class="small-button remove" type="button" data-remove-list="operators" data-select-id="operatorName">Remove</button>
           </div>
         </div>
         <div class="field">
@@ -262,26 +249,21 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
         <div class="field">
           <label for="pressId">Press</label>
           <select id="pressId">
-            <option value="Viryl 1">Viryl 1</option>
-            <option value="Viryl 2">Viryl 2</option>
-            <option value="Finebilt 1">Finebilt 1</option>
-            <option value="Finebilt 2">Finebilt 2</option>
+            <option value="Viryl Warmtone">Viryl Warmtone</option>
+            <option value="Finebilt">Finebilt</option>
           </select>
         </div>
         <div class="field">
-          <label for="pressJobRef">Artist &amp; Matrix ID</label>
-          <input id="pressJobRef" type="text" placeholder="Artist, matrix ID">
+          <label for="pressArtist">Artist</label>
+          <input id="pressArtist" type="text" placeholder="Artist" required>
+        </div>
+        <div class="field">
+          <label for="pressMatrix">Matrix ID</label>
+          <input id="pressMatrix" type="text" placeholder="Matrix ID" required>
         </div>
         <div class="field">
           <label for="compound">Compound</label>
-          <select id="compound">
-            <option value="">— Select —</option>
-            <option value="MBR1">MBR1</option>
-            <option value="WLK">WLK</option>
-            <option value="OLN">OLN</option>
-            <option value="CL1">CL1</option>
-            <option value="Other">Other</option>
-          </select>
+          <input id="compound" type="text" placeholder="Compound">
         </div>
         <div class="field">
           <label for="recordsPressed">Records Pressed</label>
@@ -323,15 +305,7 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
       </div>
       <div class="field" style="margin-top:12px">
         <label for="stickyBy">From</label>
-        <select id="stickyBy">
-          <option value="Sarah">Sarah</option>
-          <option value="Joshua">Joshua</option>
-          <option value="August">August</option>
-          <option value="Mun">Mun</option>
-          <option value="Jen">Jen</option>
-          <option value="Anker">Anker</option>
-          <option value="__add_new__">+ Add new...</option>
-        </select>
+        <select id="stickyBy"></select>
       </div>
       <button class="submit-button" type="button" id="saveSticky" style="margin-top:14px">Post Message</button>
     </section>
@@ -342,29 +316,16 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
 
       <!-- Tab switcher -->
       <div class="log-tabs">
-        <button class="log-tab active" data-feed="qc">Shift Logs</button>
+        <button class="log-tab active" data-feed="qc">QC Logs</button>
         <button class="log-tab press-tab" data-feed="press">Press Log</button>
       </div>
 
       <!-- QC filters -->
       <div id="qcFilters" class="filter-bar">
         <div class="field">
-          <div class="label">Shift</div>
-          <div class="segmented" data-toggle="filterShift">
-            <button type="button" class="active" data-value="all">All</button>
-            <button type="button" class="day" data-value="day">Day</button>
-            <button type="button" class="night" data-value="night">Night</button>
-          </div>
-        </div>
-        <div class="field">
           <label for="workerFilter">Worker</label>
           <select id="workerFilter">
             <option value="all">All workers</option>
-            <option value="Sarah">Sarah</option>
-            <option value="August">August</option>
-            <option value="Mun">Mun</option>
-            <option value="Jen">Jen</option>
-            <option value="Anker">Anker</option>
           </select>
         </div>
       </div>
@@ -372,21 +333,11 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
       <!-- Press filters -->
       <div id="pressFilters" class="filter-bar" style="display:none">
         <div class="field">
-          <div class="label">Shift</div>
-          <div class="segmented" data-toggle="filterPressShift">
-            <button type="button" class="active" data-value="all">All</button>
-            <button type="button" class="day" data-value="day">Day</button>
-            <button type="button" class="night" data-value="night">Night</button>
-          </div>
-        </div>
-        <div class="field">
           <label for="pressFilter">Press</label>
           <select id="pressFilter">
             <option value="all">All presses</option>
-            <option value="Viryl 1">Viryl 1</option>
-            <option value="Viryl 2">Viryl 2</option>
-            <option value="Finebilt 1">Finebilt 1</option>
-            <option value="Finebilt 2">Finebilt 2</option>
+            <option value="Viryl Warmtone">Viryl Warmtone</option>
+            <option value="Finebilt">Finebilt</option>
           </select>
         </div>
       </div>
@@ -417,15 +368,15 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
 <script>
 (function() {
   const state = {
-    qcShift: 'day',
-    pressShift: 'day',
-    filterShift: 'all',
-    filterPressShift: 'all',
     stickyTarget: 'qc',
     activeFeed: 'qc',
     qcEntries: [],
     pressEntries: [],
     stickyMessages: { qc: null, leadership: null },
+    options: {
+      workers: ['Sarah', 'August', 'Mun', 'Jen', 'Anker'],
+      operators: ['Blake', 'Stormy', 'John', 'Sarah'],
+    },
   };
 
   function esc(v) {
@@ -454,12 +405,39 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
     const p = d.split('-').map(Number), now = new Date();
     return new Date(p[0],p[1]-1,p[2],now.getHours(),now.getMinutes(),now.getSeconds()).toISOString();
   }
+  function optionHtml(name) {
+    return `<option value="${esc(name)}">${esc(name === 'Sarah' ? 'Sarah' : name)}</option>`;
+  }
+  function renderPeopleOptions() {
+    document.getElementById('workerName').innerHTML = state.options.workers.map(optionHtml).join('');
+    document.getElementById('workerFilter').innerHTML = '<option value="all">All workers</option>' + state.options.workers.map(optionHtml).join('');
+    document.getElementById('operatorName').innerHTML = state.options.operators.map(optionHtml).join('');
+    const stickyNames = [...new Set([...state.options.workers, ...state.options.operators])];
+    document.getElementById('stickyBy').innerHTML = stickyNames.map(optionHtml).join('');
+  }
+  async function saveOptions() {
+    const response = await fetch('/api/qc/options', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state.options),
+    });
+    if (!response.ok) throw new Error('Could not save staff list');
+  }
+  async function loadOptions() {
+    try {
+      const response = await fetch('/api/qc/options', { cache: 'no-store' });
+      const data = await response.json();
+      if (data.options) state.options = data.options;
+    } catch(e) {
+      console.error(e);
+    }
+    renderPeopleOptions();
+  }
 
   // ── Render QC Feed ──
   function renderQcFeed() {
     const feed = document.getElementById('feed');
     const entries = state.qcEntries.filter(e => {
-      if (state.filterShift !== 'all' && e.shift !== state.filterShift) return false;
       const w = document.getElementById('workerFilter').value;
       if (w !== 'all' && e.worker_name !== w) return false;
       return true;
@@ -472,7 +450,7 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
       const nId = `note-${e.id}`;
       return `<article class="entry-card">
         <div class="entry-head">
-          <div class="worker">${esc(e.worker_name)}${e.is_director?'<span class="badge" style="border-color:#5DCAA5;color:#5DCAA5;background:#0a1a15">QC Dir</span>':''}<span class="badge ${esc(e.shift)}">${esc(e.shift)}</span></div>
+          <div class="worker">${esc(e.worker_name)}${e.is_director?'<span class="badge" style="border-color:#5DCAA5;color:#5DCAA5;background:#0a1a15">QC Dir</span>':''}</div>
           <div class="meta">${fmtDT(e.created_at)}</div>
         </div>
         <div class="entry-body">
@@ -495,7 +473,6 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
   function renderPressFeed() {
     const feed = document.getElementById('feed');
     const entries = state.pressEntries.filter(e => {
-      if (state.filterPressShift !== 'all' && e.shift !== state.filterPressShift) return false;
       const p = document.getElementById('pressFilter').value;
       if (p !== 'all' && e.press_id !== p) return false;
       return true;
@@ -507,7 +484,7 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
       const nId = `pnote-${e.id}`;
       return `<article class="entry-card press-card">
         <div class="entry-head">
-          <div class="worker">${esc(e.operator_name)}<span class="badge ${esc(e.shift)}">${esc(e.shift)}</span>${e.press_id?`<span class="badge press">${esc(e.press_id)}</span>`:''}</div>
+          <div class="worker">${esc(e.operator_name)}${e.press_id?`<span class="badge press">${esc(e.press_id)}</span>`:''}</div>
           <div class="meta">${fmtDT(e.created_at)}</div>
         </div>
         <div class="entry-body">
@@ -592,17 +569,6 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
   });
 
   // ── Toggle listeners ──
-  document.querySelectorAll('[data-toggle="qcShift"] button').forEach(b =>
-    b.addEventListener('click', () => {
-      setToggle('qcShift', b.dataset.value);
-      document.getElementById('qcShiftHint').textContent = state.qcShift === 'day' ? 'Day 6am–6pm' : 'Night 6pm–6am';
-    }));
-  document.querySelectorAll('[data-toggle="pressShift"] button').forEach(b =>
-    b.addEventListener('click', () => setToggle('pressShift', b.dataset.value)));
-  document.querySelectorAll('[data-toggle="filterShift"] button').forEach(b =>
-    b.addEventListener('click', () => { setToggle('filterShift', b.dataset.value); renderFeed(); }));
-  document.querySelectorAll('[data-toggle="filterPressShift"] button').forEach(b =>
-    b.addEventListener('click', () => { setToggle('filterPressShift', b.dataset.value); renderFeed(); }));
   document.querySelectorAll('[data-toggle="stickyTarget"] button').forEach(b =>
     b.addEventListener('click', () => {
       setToggle('stickyTarget', b.dataset.value);
@@ -647,7 +613,6 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           worker_name: document.getElementById('workerName').value,
-          shift: state.qcShift,
           job_ref: document.getElementById('jobRef').value,
           task_types: finalTasks,
           duration_hours: document.getElementById('durationHours').value || null,
@@ -670,15 +635,21 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
   document.getElementById('pressForm').addEventListener('submit', async e => {
     e.preventDefault();
     const btn = document.getElementById('pressSubmit');
+    const artist = document.getElementById('pressArtist').value.trim();
+    const matrix = document.getElementById('pressMatrix').value.trim();
+    if (!artist || !matrix) {
+      alert('Artist and Matrix ID are both required before saving a press entry.');
+      return;
+    }
     btn.disabled = true; btn.textContent = 'Submitting...';
     try {
       const r = await fetch('/api/press/entries', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           operator_name: document.getElementById('operatorName').value,
-          shift: state.pressShift,
           press_id: document.getElementById('pressId').value,
-          job_ref: document.getElementById('pressJobRef').value,
+          artist,
+          matrix_id: matrix,
           compound: document.getElementById('compound').value || null,
           records_pressed: document.getElementById('recordsPressed').value || null,
           duration_hours: document.getElementById('pressDuration').value || null,
@@ -718,59 +689,57 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
     finally { btn.disabled = false; btn.textContent = 'Post Message'; }
   });
 
-  // ── Add new worker ──
-  function handleAddNew(selId, allSelIds) {
-    const sel = document.getElementById(selId);
-    if (!sel) return;
-    sel.addEventListener('change', function() {
-      if (this.value !== '__add_new__') return;
-      const name = prompt('Enter new worker name:');
-      if (!name?.trim()) { this.value = this.options[0].value; return; }
+  // ── Saved worker/operator lists ──
+  document.querySelectorAll('[data-add-list]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const listName = button.dataset.addList;
+      const label = listName === 'operators' ? 'operator' : 'worker';
+      const name = prompt(`Enter new ${label} name:`);
+      if (!name?.trim()) return;
       const trimmed = name.trim();
-      allSelIds.forEach(id => {
-        const s = document.getElementById(id);
-        if (!s) return;
-        if (!Array.from(s.options).some(o => o.value === trimmed)) {
-          const opt = document.createElement('option');
-          opt.value = trimmed; opt.textContent = trimmed;
-          s.insertBefore(opt, s.querySelector('option[value="__add_new__"]'));
-        }
-        s.value = trimmed;
-      });
+      if (!state.options[listName].includes(trimmed)) {
+        state.options[listName].push(trimmed);
+      }
+      renderPeopleOptions();
+      const selectId = listName === 'operators' ? 'operatorName' : 'workerName';
+      document.getElementById(selectId).value = trimmed;
+      try { await saveOptions(); }
+      catch(e) { alert('Could not save staff list.'); console.error(e); }
     });
-  }
-  handleAddNew('workerName', ['workerName','stickyBy']);
-  handleAddNew('operatorName', ['operatorName']);
-  handleAddNew('stickyBy', ['stickyBy','workerName']);
+  });
+  document.querySelectorAll('[data-remove-list]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const listName = button.dataset.removeList;
+      const select = document.getElementById(button.dataset.selectId);
+      const selected = select?.value;
+      if (!selected) return;
+      if (!confirm(`Remove ${selected} from this list?`)) return;
+      state.options[listName] = state.options[listName].filter(name => name !== selected);
+      if (!state.options[listName].length) {
+        alert('Keep at least one name in the list.');
+        state.options[listName].push(selected);
+        return;
+      }
+      renderPeopleOptions();
+      try { await saveOptions(); }
+      catch(e) { alert('Could not save staff list.'); console.error(e); }
+    });
+  });
 
   function initDefaults() {
     const today = todayStr();
     document.getElementById('entryDate').value = today;
     document.getElementById('pressDate').value = today;
-    const now = new Date();
-    const shift = (now.getHours() >= 6 && now.getHours() < 18) ? 'day' : 'night';
-    setToggle('qcShift', shift);
-    setToggle('pressShift', shift);
-    document.getElementById('qcShiftHint').textContent = shift === 'day' ? 'Auto-suggested Day 6am–6pm' : 'Auto-suggested Night 6pm–6am';
-    setToggle('filterShift', 'all');
-    setToggle('filterPressShift', 'all');
   }
 
-  async function fetchShiftWars() {
+  async function fetchPressTotals() {
     try {
       const r = await fetch('/api/press/stats', { cache:'no-store' });
       const d = await r.json();
       if (!d.ok) return;
-      document.getElementById('swDayTotal').textContent = d.dayTotal.toLocaleString();
-      document.getElementById('swNightTotal').textContent = d.nightTotal.toLocaleString();
-      const leaderEl = document.getElementById('swLeader');
-      if (d.leader === 'day') {
-        leaderEl.innerHTML = '<span class="sw-leader day">☀ Day leads</span>';
-      } else if (d.leader === 'night') {
-        leaderEl.innerHTML = '<span class="sw-leader night">🌙 Night leads</span>';
-      } else {
-        leaderEl.innerHTML = '<span class="sw-leader tied">All tied up</span>';
-      }
+      document.getElementById('swTodayTotal').textContent = Number(d.todayTotal || 0).toLocaleString();
+      document.getElementById('swWeekTotal').textContent = Number(d.weekTotal || 0).toLocaleString();
+      document.getElementById('swMonthTotal').textContent = Number(d.monthTotal || 0).toLocaleString();
       const ranks = ['gold','silver','bronze'];
       const medals = ['🥇','🥈','🥉'];
       document.getElementById('swLeaderboard').innerHTML = d.leaderboard.length
@@ -784,11 +753,15 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
     } catch(e) { console.error(e); }
   }
 
-  initDefaults();
-  fetchQcEntries();
-  fetchPressEntries();
-  fetchAllMessages();
-  fetchShiftWars();
+  async function init() {
+    await loadOptions();
+    initDefaults();
+    fetchQcEntries();
+    fetchPressEntries();
+    fetchAllMessages();
+    fetchPressTotals();
+  }
+  init();
 })();
 </script>
 </body>

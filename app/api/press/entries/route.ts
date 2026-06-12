@@ -5,6 +5,8 @@ type PressEntryBody = {
   operator_name?: string
   shift?: string
   press_id?: string
+  artist?: string
+  matrix_id?: string
   job_ref?: string
   records_pressed?: number | string | null
   duration_hours?: number | string | null
@@ -14,8 +16,6 @@ type PressEntryBody = {
   notes?: string | null
   created_at?: string
 }
-
-const VALID_SHIFTS = new Set(['day', 'night'])
 
 export async function GET() {
   try {
@@ -42,10 +42,16 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as PressEntryBody
     const operatorName = body.operator_name?.trim()
-    const shift = body.shift?.toLowerCase()
+    const shift = body.shift?.toLowerCase() || 'day'
+    const artist = body.artist?.trim()
+    const matrixId = body.matrix_id?.trim()
 
-    if (!operatorName || !shift || !VALID_SHIFTS.has(shift)) {
+    if (!operatorName) {
       return NextResponse.json({ error: 'Missing or invalid required fields' }, { status: 400 })
+    }
+
+    if (!artist || !matrixId) {
+      return NextResponse.json({ error: 'Artist and Matrix ID are required' }, { status: 400 })
     }
 
     const recordsPressed = body.records_pressed === '' || body.records_pressed == null
@@ -64,7 +70,7 @@ export async function POST(request: NextRequest) {
         operator_name: operatorName,
         shift,
         press_id: body.press_id?.trim() || null,
-        job_ref: body.job_ref?.trim() || null,
+        job_ref: `${artist} — ${matrixId}`,
         records_pressed: recordsPressed,
         duration_hours: durationHours,
         compound: body.compound?.trim() || null,

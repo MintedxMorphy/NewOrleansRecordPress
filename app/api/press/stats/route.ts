@@ -15,22 +15,37 @@ function getWeekBounds() {
   return { monday, sunday }
 }
 
+function getDayBounds() {
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(start)
+  end.setHours(23, 59, 59, 999)
+  return { start, end }
+}
+
+function getMonthBounds() {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+  return { start, end }
+}
+
 export async function GET() {
   try {
     const supabase = await createClient()
     const { monday, sunday } = getWeekBounds()
+    const day = getDayBounds()
+    const month = getMonthBounds()
 
-    // This week's entries
-    const { data: weekEntries, error: weekErr } = await supabase
+    const { data: periodEntries, error: periodErr } = await supabase
       .from('press_log')
-      .select('shift, operator_name, records_pressed')
-      .gte('created_at', monday.toISOString())
-      .lte('created_at', sunday.toISOString())
+      .select('operator_name, records_pressed, created_at')
+      .gte('created_at', month.start.toISOString())
+      .lte('created_at', month.end.toISOString())
       .not('records_pressed', 'is', null)
 
-    if (weekErr) throw weekErr
+    if (periodErr) throw periodErr
 
-    // All-time entries for individual leaderboard
     const { data: allEntries, error: allErr } = await supabase
       .from('press_log')
       .select('operator_name, records_pressed')
@@ -38,16 +53,21 @@ export async function GET() {
 
     if (allErr) throw allErr
 
-    // Day vs Night this week
-    const dayTotal = (weekEntries ?? [])
-      .filter(e => e.shift === 'day')
+    const entries = periodEntries ?? []
+    const todayTotal = entries
+      .filter(e => {
+        const created = new Date(e.created_at)
+        return created >= day.start && created <= day.end
+      })
       .reduce((s, e) => s + (e.records_pressed ?? 0), 0)
-
-    const nightTotal = (weekEntries ?? [])
-      .filter(e => e.shift === 'night')
+    const weekTotal = entries
+      .filter(e => {
+        const created = new Date(e.created_at)
+        return created >= monday && created <= sunday
+      })
       .reduce((s, e) => s + (e.records_pressed ?? 0), 0)
+    const monthTotal = entries.reduce((s, e) => s + (e.records_pressed ?? 0), 0)
 
-    // Individual leaderboard (all-time)
     const operatorTotals: Record<string, number> = {}
     for (const e of allEntries ?? []) {
       if (!e.operator_name) continue
@@ -60,9 +80,9 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       weekOf: monday.toISOString().split('T')[0],
-      dayTotal,
-      nightTotal,
-      leader: dayTotal > nightTotal ? 'day' : nightTotal > dayTotal ? 'night' : 'tied',
+      todayTotal,
+      weekTotal,
+      monthTotal,
       leaderboard,
     })
   } catch (e: any) {

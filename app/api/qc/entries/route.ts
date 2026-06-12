@@ -13,8 +13,6 @@ type QcEntryBody = {
   created_at?: string
 }
 
-const VALID_SHIFTS = new Set(['day', 'night'])
-
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -41,9 +39,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as QcEntryBody
     const workerName = body.worker_name?.trim()
-    const shift = body.shift?.toLowerCase()
+    const shift = body.shift?.toLowerCase() || 'day'
 
-    if (!workerName || !shift || !VALID_SHIFTS.has(shift)) {
+    if (!workerName) {
       return NextResponse.json({ error: 'Missing or invalid required fields' }, { status: 400 })
     }
 
