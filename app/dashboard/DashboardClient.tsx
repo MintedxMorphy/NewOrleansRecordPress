@@ -110,7 +110,8 @@ const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2
 const RUSH_MARKER = '[Rush Order]';
 const STAGE_SPAN_MARKER_RE = /\[Stage\s+Span:\s*([^\]]+)\]/i;
 const STAGE_SPAN_MARKER_GLOBAL_RE = /\[Stage\s+Span:\s*[^\]]+\]/gi;
-const SPAN_ROW_HEIGHT = 390;
+const SPAN_GAP = 10;
+const SPAN_DEFAULT_HEIGHT = 300;
 
 function value(job: Job, keys: string[]) {
   for (const key of keys) {
@@ -258,43 +259,43 @@ type SpanLayoutEntry = {
   job: Job;
   startIndex: number;
   endIndex: number;
-  row: number;
+  height: number;
+  top: number;
 };
 
-function spansOverlap(a: Pick<SpanLayoutEntry, 'startIndex' | 'endIndex'>, b: Pick<SpanLayoutEntry, 'startIndex' | 'endIndex'>) {
-  return a.startIndex <= b.endIndex && b.startIndex <= a.endIndex;
-}
-
-function layoutStretchedJobs(jobs: Job[]) {
-  const rows: SpanLayoutEntry[][] = [];
+function layoutStretchedJobs(jobs: Job[], measuredHeights: Record<string, number> = {}) {
+  const columnBottoms = STATIONS.map(() => 0);
 
   return stretchedJobs(jobs).map(job => {
     const span = stageSpanForJob(job);
+    const key = jobKey(job);
     const entry: SpanLayoutEntry = {
       job,
       startIndex: STATIONS.indexOf(span[0]),
       endIndex: STATIONS.indexOf(span[span.length - 1]),
-      row: 0,
+      height: measuredHeights[key] || SPAN_DEFAULT_HEIGHT,
+      top: 0,
     };
 
     if (entry.startIndex < 0 || entry.endIndex < 0) return entry;
 
-    const row = rows.findIndex(rowEntries => !rowEntries.some(rowEntry => spansOverlap(rowEntry, entry)));
-    entry.row = row >= 0 ? row : rows.length;
-    rows[entry.row] = rows[entry.row] || [];
-    rows[entry.row].push(entry);
+    const occupiedColumns = columnBottoms.slice(entry.startIndex, entry.endIndex + 1);
+    entry.top = occupiedColumns.length ? Math.max(...occupiedColumns) : 0;
+    for (let index = entry.startIndex; index <= entry.endIndex; index += 1) {
+      columnBottoms[index] = entry.top + entry.height + SPAN_GAP;
+    }
 
     return entry;
   }).filter(entry => entry.startIndex >= 0 && entry.endIndex >= 0);
 }
 
-function reservedSpanRowsForStation(layout: SpanLayoutEntry[], station: Station) {
+function reservedSpanHeightForStation(layout: SpanLayoutEntry[], station: Station) {
   const stationIndex = STATIONS.indexOf(station);
-  const rows = layout
+  const bottoms = layout
     .filter(entry => stationIndex >= entry.startIndex && stationIndex <= entry.endIndex)
-    .map(entry => entry.row);
+    .map(entry => entry.top + entry.height + SPAN_GAP);
 
-  return rows.length ? Math.max(...rows) + 1 : 0;
+  return bottoms.length ? Math.max(...bottoms) + 4 : 0;
 }
 
 function searchableJobText(job: Job) {
@@ -768,7 +769,17 @@ function Pipeline({
 }) {
   const [mounted, setMounted] = useState(false);
   const [confirmCompleteJob, setConfirmCompleteJob] = useState<Job | null>(null);
+  const [spanHeights, setSpanHeights] = useState<Record<string, number>>({});
   useEffect(() => setMounted(true), []);
+
+  const measureSpanCard = (key: string, node: HTMLDivElement | null) => {
+    if (!node) return;
+    const height = Math.ceil(node.getBoundingClientRect().height);
+    if (!height) return;
+    setSpanHeights(current => (
+      Math.abs((current[key] || 0) - height) > 2 ? { ...current, [key]: height } : current
+    ));
+  };
 
   const saveMovedJob = async (job: Job, stage: Station, order: number) => {
     const response = await persistJobPosition(job, stage, order);
@@ -927,7 +938,10 @@ function Pipeline({
     return <div style={{ color: COLORS.muted, padding: '24px' }}>Loading board...</div>;
   }
 
-  const spanLayout = isMobile ? [] : layoutStretchedJobs(visibleJobs);
+  const spanLayout = isMobile ? [] : layoutStretchedJobs(visibleJobs, spanHeights);
+  const spanLayerHeight = spanLayout.length
+    ? Math.max(...spanLayout.map(entry => entry.top + entry.height + SPAN_GAP))
+    : 0;
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>
@@ -944,8 +958,8 @@ function Pipeline({
             style={{
               display: 'grid',
               gap: '10px',
-              gridAutoRows: `${SPAN_ROW_HEIGHT - 10}px`,
               gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+              height: `${spanLayerHeight}px`,
               left: 0,
               pointerEvents: 'none',
               position: 'absolute',
@@ -955,15 +969,18 @@ function Pipeline({
             }}
           >
             {spanLayout.map(entry => {
-              const { job, startIndex, endIndex, row } = entry;
+              const { job, startIndex, endIndex, top } = entry;
+              const key = jobKey(job);
               return (
                 <div
-                  key={`span-${jobKey(job)}`}
+                  key={`span-${key}`}
+                  ref={node => measureSpanCard(key, node)}
                   style={{
                     gridColumn: `${startIndex + 1} / ${endIndex + 2}`,
-                    gridRow: `${row + 1}`,
+                    gridRow: '1',
                     minWidth: 0,
                     pointerEvents: 'auto',
+                    transform: `translateY(${top}px)`,
                   }}
                 >
                   <JobCard
@@ -982,7 +999,7 @@ function Pipeline({
           const meta = STATION_META[station];
           const list = stationJobs(visibleJobs, station).filter(job => isMobile || stageSpanForJob(job).length < 2);
           const isNowPressing = station === 'now_pressing';
-          const reservedSpanRows = isMobile ? 0 : reservedSpanRowsForStation(spanLayout, station);
+          const reservedSpanHeight = isMobile ? 0 : reservedSpanHeightForStation(spanLayout, station);
 
           return (
             <section
@@ -1048,7 +1065,7 @@ function Pipeline({
                       background: snapshot.isDraggingOver ? `${meta.color}14` : 'transparent',
                       borderRadius: '8px',
                       minHeight: isMobile ? '72px' : '540px',
-                      paddingTop: reservedSpanRows ? `${reservedSpanRows * SPAN_ROW_HEIGHT + 14}px` : undefined,
+                      paddingTop: reservedSpanHeight ? `${reservedSpanHeight}px` : undefined,
                       transition: 'background 0.15s',
                     }}
                   >
