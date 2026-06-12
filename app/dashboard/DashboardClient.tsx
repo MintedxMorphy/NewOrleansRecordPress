@@ -6,8 +6,6 @@ import {
   BadgeCheck,
   Boxes,
   Bug,
-  ChevronLeft,
-  ChevronRight,
   ClipboardList,
   Disc3,
   Layers3,
@@ -110,8 +108,10 @@ const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2
 const RUSH_MARKER = '[Rush Order]';
 const STAGE_SPAN_MARKER_RE = /\[Stage\s+Span:\s*([^\]]+)\]/i;
 const STAGE_SPAN_MARKER_GLOBAL_RE = /\[Stage\s+Span:\s*[^\]]+\]/gi;
+const STRETCHED_DROPPABLE_ID = '__stretched_jobs__';
 const SPAN_GAP = 10;
-const SPAN_DEFAULT_HEIGHT = 300;
+const SPAN_DEFAULT_HEIGHT = 240;
+const NORMAL_ROW_HEIGHT = 430;
 
 function value(job: Job, keys: string[]) {
   for (const key of keys) {
@@ -259,43 +259,108 @@ type SpanLayoutEntry = {
   job: Job;
   startIndex: number;
   endIndex: number;
-  height: number;
+  row: number;
   top: number;
 };
 
-function layoutStretchedJobs(jobs: Job[], measuredHeights: Record<string, number> = {}) {
-  const columnBottoms = STATIONS.map(() => 0);
+function layoutStretchedJobs(jobs: Job[]) {
+  const occupiedRows: boolean[][] = [];
+  const normalStationHasJobs = STATIONS.map(station =>
+    stationJobs(jobs, station).some(job => stageSpanForJob(job).length < 2)
+  );
 
-  return stretchedJobs(jobs).map(job => {
+  const entries = stretchedJobs(jobs).map(job => {
     const span = stageSpanForJob(job);
-    const key = jobKey(job);
+    const startIndex = STATIONS.indexOf(span[0]);
+    const endIndex = STATIONS.indexOf(span[span.length - 1]);
+
+    if (startIndex < 0 || endIndex < 0) {
+      return { job, startIndex, endIndex, row: 0, top: 0 };
+    }
+
+    let row = 0;
+
+    while (
+      occupiedRows[row]?.slice(startIndex, endIndex + 1).some(Boolean)
+    ) {
+      row += 1;
+    }
+
+    if (!occupiedRows[row]) occupiedRows[row] = STATIONS.map(() => false);
+    for (let index = startIndex; index <= endIndex; index += 1) {
+      occupiedRows[row][index] = true;
+    }
+
     const entry: SpanLayoutEntry = {
       job,
-      startIndex: STATIONS.indexOf(span[0]),
-      endIndex: STATIONS.indexOf(span[span.length - 1]),
-      height: measuredHeights[key] || SPAN_DEFAULT_HEIGHT,
+      startIndex,
+      endIndex,
+      row,
       top: 0,
     };
 
-    if (entry.startIndex < 0 || entry.endIndex < 0) return entry;
-
-    const occupiedColumns = columnBottoms.slice(entry.startIndex, entry.endIndex + 1);
-    entry.top = occupiedColumns.length ? Math.max(...occupiedColumns) : 0;
-    for (let index = entry.startIndex; index <= entry.endIndex; index += 1) {
-      columnBottoms[index] = entry.top + entry.height + SPAN_GAP;
-    }
-
     return entry;
   }).filter(entry => entry.startIndex >= 0 && entry.endIndex >= 0);
+
+  const heightForStationRow = (stationIndex: number, row: number) => {
+    if (entries.some(entry => (
+      entry.row === row && stationIndex >= entry.startIndex && stationIndex <= entry.endIndex
+    ))) {
+      return SPAN_DEFAULT_HEIGHT;
+    }
+
+    return normalStationHasJobs[stationIndex] ? NORMAL_ROW_HEIGHT : 0;
+  };
+
+  return entries.map(entry => {
+    const top = STATIONS
+      .slice(entry.startIndex, entry.endIndex + 1)
+      .map((_, offset) => {
+        const stationIndex = entry.startIndex + offset;
+        let stationTop = 0;
+        for (let row = 0; row < entry.row; row += 1) {
+          const rowHeight = heightForStationRow(stationIndex, row);
+          if (rowHeight > 0) stationTop += rowHeight + SPAN_GAP;
+        }
+        return stationTop;
+      })
+      .reduce((max, stationTop) => Math.max(max, stationTop), 0);
+
+    return { ...entry, top };
+  });
 }
 
 function reservedSpanHeightForStation(layout: SpanLayoutEntry[], station: Station) {
   const stationIndex = STATIONS.indexOf(station);
-  const bottoms = layout
+  const occupiedRows = new Set(layout
     .filter(entry => stationIndex >= entry.startIndex && stationIndex <= entry.endIndex)
-    .map(entry => entry.top + entry.height + SPAN_GAP);
+    .map(entry => entry.row));
 
-  return bottoms.length ? Math.max(...bottoms) + 4 : 0;
+  let reservedRows = 0;
+  while (occupiedRows.has(reservedRows)) {
+    reservedRows += 1;
+  }
+
+  return reservedRows ? reservedRows * (SPAN_DEFAULT_HEIGHT + SPAN_GAP) + 4 : 0;
+}
+
+function shiftedSpanForStage(job: Job, targetStage: Station) {
+  const span = stageSpanForJob(job);
+  if (span.length < 2) return span;
+
+  const currentStage = stationOf(job);
+  if (currentStage === 'completed') return span;
+
+  const width = span.length;
+  const targetIndex = STATIONS.indexOf(targetStage);
+  const primaryIndex = STATIONS.indexOf(currentStage as Station);
+  const startIndex = STATIONS.indexOf(span[0]);
+  if (targetIndex < 0 || primaryIndex < 0 || startIndex < 0) return span;
+
+  const primaryOffset = primaryIndex - startIndex;
+  const maxStart = STATIONS.length - width;
+  const nextStart = Math.min(maxStart, Math.max(0, targetIndex - primaryOffset));
+  return STATIONS.slice(nextStart, nextStart + width) as Station[];
 }
 
 function searchableJobText(job: Job) {
@@ -380,7 +445,7 @@ function persistReorder(updates: Job[]) {
   });
 }
 
-function persistJobPosition(job: Job, stage: Station, order: number) {
+function persistJobPosition(job: Job, stage: DashboardStage, order: number) {
   return fetch(`/api/jobs/${encodeURIComponent(jobKey(job))}/stage`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -448,7 +513,6 @@ function JobCard({
   job,
   onOpen,
   onComplete,
-  onSpanShift,
   dragHandleProps,
   compact = false,
   queueRank,
@@ -457,7 +521,6 @@ function JobCard({
   job: Job;
   onOpen: () => void;
   onComplete: () => void;
-  onSpanShift?: (direction: -1 | 1) => void;
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
   compact?: boolean;
   queueRank?: number;
@@ -496,8 +559,6 @@ function JobCard({
   const canComplete = station === 'shipping';
   const completeColor = COLORS.red;
   const isStretched = Boolean(stretch && stretch.columns > 1);
-  const canShiftLeft = isStretched && stageSpan.length > 1 && STATIONS.indexOf(stageSpan[0]) > 0;
-  const canShiftRight = isStretched && stageSpan.length > 1 && STATIONS.indexOf(stageSpan[stageSpan.length - 1]) < STATIONS.length - 1;
 
   return (
     <div
@@ -553,49 +614,7 @@ function JobCard({
         </div>
       )}
 
-      {isStretched && onSpanShift && (
-        <div style={{
-          display: 'flex',
-          gap: '6px',
-          position: 'absolute',
-          right: '8px',
-          top: '8px',
-          zIndex: 4,
-        }}>
-          {([
-            { direction: -1 as const, enabled: canShiftLeft, label: 'Move span left', Icon: ChevronLeft },
-            { direction: 1 as const, enabled: canShiftRight, label: 'Move span right', Icon: ChevronRight },
-          ]).map(({ direction, enabled, label, Icon }) => (
-            <button
-              key={direction}
-              type="button"
-              aria-label={label}
-              disabled={!enabled}
-              onClick={event => {
-                event.stopPropagation();
-                if (enabled) onSpanShift(direction);
-              }}
-              style={{
-                alignItems: 'center',
-                background: enabled ? `${meta.color}22` : COLORS.elevated,
-                border: `1px solid ${enabled ? `${meta.color}88` : COLORS.border}`,
-                borderRadius: '6px',
-                color: enabled ? meta.color : COLORS.faint,
-                cursor: enabled ? 'pointer' : 'not-allowed',
-                display: 'flex',
-                height: '28px',
-                justifyContent: 'center',
-                padding: 0,
-                width: '28px',
-              }}
-            >
-              <Icon size={17} strokeWidth={2.6} />
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div style={{ paddingRight: queueRank || isStretched ? '72px' : undefined }}>
+      <div style={{ paddingRight: queueRank ? '42px' : undefined }}>
         <div>
           <div style={{ color: COLORS.text, fontSize: compact ? '20px' : '18px', fontWeight: 850, lineHeight: 1.18 }}>
             {customer.length > (compact ? 96 : 72) ? `${customer.slice(0, compact ? 96 : 72)}...` : customer}
@@ -769,19 +788,9 @@ function Pipeline({
 }) {
   const [mounted, setMounted] = useState(false);
   const [confirmCompleteJob, setConfirmCompleteJob] = useState<Job | null>(null);
-  const [spanHeights, setSpanHeights] = useState<Record<string, number>>({});
   useEffect(() => setMounted(true), []);
 
-  const measureSpanCard = (key: string, node: HTMLDivElement | null) => {
-    if (!node) return;
-    const height = Math.ceil(node.getBoundingClientRect().height);
-    if (!height) return;
-    setSpanHeights(current => (
-      Math.abs((current[key] || 0) - height) > 2 ? { ...current, [key]: height } : current
-    ));
-  };
-
-  const saveMovedJob = async (job: Job, stage: Station, order: number) => {
+  const saveMovedJob = async (job: Job, stage: DashboardStage, order: number) => {
     const response = await persistJobPosition(job, stage, order);
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -799,26 +808,54 @@ function Pipeline({
   const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
 
-    const fromStation = result.source.droppableId as Station;
-    const toStation = result.destination.droppableId as Station;
+    const fromId = result.source.droppableId;
+    const toId = result.destination.droppableId;
+    const fromStretched = fromId === STRETCHED_DROPPABLE_ID;
+    const toStretched = toId === STRETCHED_DROPPABLE_ID;
     const activeJobs = jobs.filter(job => stationOf(job) !== 'completed');
     const visibleActiveJobs = visibleJobs.filter(job => stationOf(job) !== 'completed');
     const hiddenJobs = jobs.filter(job => stationOf(job) === 'completed');
-    const sourceList = stationJobs(visibleActiveJobs, fromStation);
-    const destinationList = fromStation === toStation ? sourceList : stationJobs(visibleActiveJobs, toStation);
+    const activeSpanKeys = new Set(
+      (isMobile ? [] : layoutStretchedJobs(visibleJobs))
+        .map(entry => jobKey(entry.job))
+        .filter(Boolean)
+    );
+    const visibleColumnJobs = (station: Station) => (
+      stationJobs(visibleActiveJobs, station).filter(job => isMobile || !activeSpanKeys.has(jobKey(job)))
+    );
+    const sourceList = fromStretched ? stretchedJobs(visibleActiveJobs) : visibleColumnJobs(fromId as Station);
+    const destinationList = fromId === toId
+      ? sourceList
+      : toStretched
+        ? stretchedJobs(visibleActiveJobs)
+        : visibleColumnJobs(toId as Station);
     const [moved] = sourceList.splice(result.source.index, 1);
 
     if (!moved) return;
 
-    const movedNext = { ...moved, stage: toStation };
+    if (toStretched && !fromStretched) return;
 
-    if (fromStation === toStation) {
+    const targetStage = toStretched ? stationOf(moved) : (toId as Station);
+    const rawDashNotes = value(moved, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
+    const preservedSpan = fromStretched && !toStretched
+      ? shiftedSpanForStage(moved, targetStage as Station)
+      : undefined;
+    const nextDashNotes = preservedSpan
+      ? dashNotesWithDashboardMarkers(rawDashNotes, visibleDashNotes(rawDashNotes), { stageSpanOverride: preservedSpan })
+      : undefined;
+    const movedNext = {
+      ...moved,
+      stage: targetStage,
+      ...(nextDashNotes !== undefined ? { dash_notes: nextDashNotes, 'Dash Notes': nextDashNotes } : {}),
+    };
+
+    if (fromId === toId) {
       sourceList.splice(result.destination.index, 0, movedNext);
     } else {
       destinationList.splice(result.destination.index, 0, movedNext);
     }
 
-    const destinationAfterMove = fromStation === toStation ? sourceList : destinationList;
+    const destinationAfterMove = fromId === toId ? sourceList : destinationList;
     const movedOrder = orderForInsertion(destinationAfterMove, result.destination.index);
     const movedPersisted = { ...movedNext, dashboard_order: String(movedOrder) };
     const rebuilt = activeJobs.map(job => {
@@ -833,10 +870,16 @@ function Pipeline({
     onError('');
 
     try {
-      await saveMovedJob(movedPersisted, toStation, movedOrder);
+      await saveMovedJob(movedPersisted, targetStage, movedOrder);
+      if (nextDashNotes !== undefined) {
+        const notesResponse = await persistDashNotes(movedPersisted, nextDashNotes);
+        if (!notesResponse.ok) {
+          const body = await notesResponse.json().catch(() => ({}));
+          throw new Error(body.error || `Airtable stretch save failed (${notesResponse.status})`);
+        }
+      }
     } catch (error) {
-      onJobsChange(jobs);
-      onError(error instanceof Error ? error.message : String(error));
+      onError(`Move shown locally, but Airtable save failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -867,81 +910,14 @@ function Pipeline({
     }
   };
 
-  const shiftStageSpan = async (job: Job, direction: -1 | 1) => {
-    const currentStage = stationOf(job);
-    if (currentStage === 'completed') return;
-
-    const span = stageSpanForJob(job);
-    if (span.length < 2) return;
-
-    const startIndex = STATIONS.indexOf(span[0]);
-    const endIndex = STATIONS.indexOf(span[span.length - 1]);
-    const primaryIndex = STATIONS.indexOf(currentStage as Station);
-    const nextStartIndex = startIndex + direction;
-    const nextEndIndex = endIndex + direction;
-    const nextPrimaryIndex = primaryIndex + direction;
-
-    if (
-      startIndex < 0 ||
-      endIndex < 0 ||
-      primaryIndex < 0 ||
-      nextStartIndex < 0 ||
-      nextEndIndex >= STATIONS.length ||
-      nextPrimaryIndex < 0 ||
-      nextPrimaryIndex >= STATIONS.length
-    ) {
-      return;
-    }
-
-    const key = jobKey(job);
-    const nextSpan = STATIONS.slice(nextStartIndex, nextEndIndex + 1) as Station[];
-    const nextStage = STATIONS[nextPrimaryIndex];
-    const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
-    const nextDashNotes = dashNotesWithDashboardMarkers(rawDashNotes, visibleDashNotes(rawDashNotes), {
-      stageSpanOverride: nextSpan,
-    });
-    const order = dashboardOrder(job);
-    const nextJob = {
-      ...job,
-      stage: nextStage,
-      dashboard_order: String(order),
-      dash_notes: nextDashNotes,
-      'Dash Notes': nextDashNotes,
-    };
-
-    const nextJobs = jobs.map(candidate => (
-      jobKey(candidate) === key ? nextJob : candidate
-    ));
-
-    onJobsChange(nextJobs);
-    onError('');
-
-    try {
-      const positionResponse = await persistJobPosition(nextJob, nextStage, order);
-      if (!positionResponse.ok) {
-        const body = await positionResponse.json().catch(() => ({}));
-        throw new Error(body.error || `Airtable stage save failed (${positionResponse.status})`);
-      }
-
-      const notesResponse = await persistDashNotes(nextJob, nextDashNotes);
-      if (!notesResponse.ok) {
-        const body = await notesResponse.json().catch(() => ({}));
-        throw new Error(body.error || `Airtable stretch save failed (${notesResponse.status})`);
-      }
-    } catch (error) {
-      onJobsChange(jobs);
-      onError(error instanceof Error ? error.message : String(error));
-    }
-  };
-
   if (!mounted) {
     return <div style={{ color: COLORS.muted, padding: '24px' }}>Loading board...</div>;
   }
 
-  const spanLayout = isMobile ? [] : layoutStretchedJobs(visibleJobs, spanHeights);
+  const spanLayout = isMobile ? [] : layoutStretchedJobs(visibleJobs);
   const renderedSpanKeys = new Set(spanLayout.map(entry => jobKey(entry.job)).filter(Boolean));
   const spanLayerHeight = spanLayout.length
-    ? Math.max(...spanLayout.map(entry => entry.top + entry.height + SPAN_GAP))
+    ? Math.max(...spanLayout.map(entry => entry.top + SPAN_DEFAULT_HEIGHT + SPAN_GAP))
     : 0;
 
   return (
@@ -954,47 +930,60 @@ function Pipeline({
         position: 'relative',
       }}>
         {!isMobile && spanLayout.length > 0 && (
-          <div
-            aria-label="Stretched production jobs"
-            style={{
-              display: 'grid',
-              gap: '10px',
-              gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-              height: `${spanLayerHeight}px`,
-              left: 0,
-              pointerEvents: 'none',
-              position: 'absolute',
-              right: 0,
-              top: '96px',
-              zIndex: 20,
-            }}
-          >
-            {spanLayout.map(entry => {
-              const { job, startIndex, endIndex, top } = entry;
-              const key = jobKey(job);
-              return (
-                <div
-                  key={`span-${key}`}
-                  ref={node => measureSpanCard(key, node)}
-                  style={{
-                    gridColumn: `${startIndex + 1} / ${endIndex + 2}`,
-                    gridRow: '1',
-                    minWidth: 0,
-                    pointerEvents: 'auto',
-                    transform: `translateY(${top}px)`,
-                  }}
-                >
-                  <JobCard
-                    job={job}
-                    onOpen={() => onJobOpen(job)}
-                    onComplete={() => setConfirmCompleteJob(job)}
-                    onSpanShift={direction => shiftStageSpan(job, direction)}
-                    stretch={stretchForJob(job, isMobile)}
-                  />
-                </div>
-              );
-            })}
-          </div>
+          <Droppable droppableId={STRETCHED_DROPPABLE_ID}>
+            {provided => (
+              <div
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+                aria-label="Stretched production jobs"
+                style={{
+                  display: 'grid',
+                  gap: '10px',
+                  gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+                  height: `${spanLayerHeight}px`,
+                  left: 0,
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  right: 0,
+                  top: '96px',
+                  zIndex: 20,
+                }}>
+                {spanLayout.map((entry, index) => {
+                  const { job, startIndex, endIndex, row } = entry;
+                  const key = jobKey(job);
+                  const stretch = stretchForJob(job, isMobile);
+                  return (
+                    <Draggable key={`span-${key}`} draggableId={`span-${key}`} index={index}>
+                      {(dragProvided, dragSnapshot) => (
+                        <div
+                          ref={dragProvided.innerRef}
+                          {...dragProvided.draggableProps}
+                          style={{
+                            ...dragProvided.draggableProps.style,
+                            gridColumn: `${startIndex + 1} / ${endIndex + 2}`,
+                            gridRow: `${row + 1}`,
+                            minWidth: 0,
+                            opacity: dragSnapshot.isDragging ? 0.88 : 1,
+                            pointerEvents: 'auto',
+                          }}
+                          data-job-key={key}
+                        >
+                          <JobCard
+                            job={job}
+                            onOpen={() => onJobOpen(job)}
+                            onComplete={() => setConfirmCompleteJob(job)}
+                            dragHandleProps={dragProvided.dragHandleProps}
+                            stretch={stretch}
+                          />
+                        </div>
+                      )}
+                    </Draggable>
+                  );
+                })}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
         )}
         {STATIONS.map(station => {
           const meta = STATION_META[station];
