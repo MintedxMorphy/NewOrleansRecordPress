@@ -108,7 +108,7 @@ const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2
 const RUSH_MARKER = '[Rush Order]';
 const STAGE_SPAN_MARKER_RE = /\[Stage\s+Span:\s*([^\]]+)\]/i;
 const STAGE_SPAN_MARKER_GLOBAL_RE = /\[Stage\s+Span:\s*[^\]]+\]/gi;
-const SPAN_ROW_HEIGHT = 260;
+const SPAN_ROW_HEIGHT = 390;
 
 function value(job: Job, keys: string[]) {
   for (const key of keys) {
@@ -250,6 +250,49 @@ function stretchForJob(job: Job, isMobile: boolean) {
 
 function stretchedJobs(jobs: Job[]) {
   return sortJobs(jobs.filter(job => stationOf(job) !== 'completed' && stageSpanForJob(job).length > 1));
+}
+
+type SpanLayoutEntry = {
+  job: Job;
+  startIndex: number;
+  endIndex: number;
+  row: number;
+};
+
+function spansOverlap(a: Pick<SpanLayoutEntry, 'startIndex' | 'endIndex'>, b: Pick<SpanLayoutEntry, 'startIndex' | 'endIndex'>) {
+  return a.startIndex <= b.endIndex && b.startIndex <= a.endIndex;
+}
+
+function layoutStretchedJobs(jobs: Job[]) {
+  const rows: SpanLayoutEntry[][] = [];
+
+  return stretchedJobs(jobs).map(job => {
+    const span = stageSpanForJob(job);
+    const entry: SpanLayoutEntry = {
+      job,
+      startIndex: STATIONS.indexOf(span[0]),
+      endIndex: STATIONS.indexOf(span[span.length - 1]),
+      row: 0,
+    };
+
+    if (entry.startIndex < 0 || entry.endIndex < 0) return entry;
+
+    const row = rows.findIndex(rowEntries => !rowEntries.some(rowEntry => spansOverlap(rowEntry, entry)));
+    entry.row = row >= 0 ? row : rows.length;
+    rows[entry.row] = rows[entry.row] || [];
+    rows[entry.row].push(entry);
+
+    return entry;
+  }).filter(entry => entry.startIndex >= 0 && entry.endIndex >= 0);
+}
+
+function reservedSpanRowsForStation(layout: SpanLayoutEntry[], station: Station) {
+  const stationIndex = STATIONS.indexOf(station);
+  const rows = layout
+    .filter(entry => stationIndex >= entry.startIndex && stationIndex <= entry.endIndex)
+    .map(entry => entry.row);
+
+  return rows.length ? Math.max(...rows) + 1 : 0;
 }
 
 function searchableJobText(job: Job) {
@@ -761,8 +804,7 @@ function Pipeline({
     return <div style={{ color: COLORS.muted, padding: '24px' }}>Loading board...</div>;
   }
 
-  const spanEntries = isMobile ? [] : stretchedJobs(visibleJobs);
-  const spanRailHeight = spanEntries.length ? spanEntries.length * SPAN_ROW_HEIGHT + 14 : 0;
+  const spanLayout = isMobile ? [] : layoutStretchedJobs(visibleJobs);
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>
@@ -773,7 +815,7 @@ function Pipeline({
         paddingBottom: '12px',
         position: 'relative',
       }}>
-        {!isMobile && spanEntries.length > 0 && (
+        {!isMobile && spanLayout.length > 0 && (
           <div
             aria-label="Stretched production jobs"
             style={{
@@ -789,17 +831,14 @@ function Pipeline({
               zIndex: 20,
             }}
           >
-            {spanEntries.map((job, index) => {
-              const span = stageSpanForJob(job);
-              const startIndex = STATIONS.indexOf(span[0]);
-              const endIndex = STATIONS.indexOf(span[span.length - 1]);
-              if (startIndex < 0 || endIndex < 0) return null;
+            {spanLayout.map(entry => {
+              const { job, startIndex, endIndex, row } = entry;
               return (
                 <div
                   key={`span-${jobKey(job)}`}
                   style={{
                     gridColumn: `${startIndex + 1} / ${endIndex + 2}`,
-                    gridRow: `${index + 1}`,
+                    gridRow: `${row + 1}`,
                     minWidth: 0,
                     pointerEvents: 'auto',
                   }}
@@ -819,6 +858,7 @@ function Pipeline({
           const meta = STATION_META[station];
           const list = stationJobs(visibleJobs, station).filter(job => isMobile || stageSpanForJob(job).length < 2);
           const isNowPressing = station === 'now_pressing';
+          const reservedSpanRows = isMobile ? 0 : reservedSpanRowsForStation(spanLayout, station);
 
           return (
             <section
@@ -884,7 +924,7 @@ function Pipeline({
                       background: snapshot.isDraggingOver ? `${meta.color}14` : 'transparent',
                       borderRadius: '8px',
                       minHeight: isMobile ? '72px' : '540px',
-                      paddingTop: !isMobile && spanRailHeight ? `${spanRailHeight}px` : undefined,
+                      paddingTop: reservedSpanRows ? `${reservedSpanRows * SPAN_ROW_HEIGHT + 14}px` : undefined,
                       transition: 'background 0.15s',
                     }}
                   >
