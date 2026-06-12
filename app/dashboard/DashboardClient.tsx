@@ -6,6 +6,8 @@ import {
   BadgeCheck,
   Boxes,
   Bug,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Disc3,
   Layers3,
@@ -385,6 +387,14 @@ function persistJobPosition(job: Job, stage: Station, order: number) {
   });
 }
 
+function persistDashNotes(job: Job, dashNotes: string) {
+  return fetch(`/api/jobs/${encodeURIComponent(jobKey(job))}/dash-notes`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dash_notes: dashNotes }),
+  });
+}
+
 function orderForInsertion(list: Job[], index: number) {
   const previous = index > 0 ? dashboardOrder(list[index - 1]) : undefined;
   const next = index < list.length - 1 ? dashboardOrder(list[index + 1]) : undefined;
@@ -437,6 +447,7 @@ function JobCard({
   job,
   onOpen,
   onComplete,
+  onSpanShift,
   dragHandleProps,
   compact = false,
   queueRank,
@@ -445,6 +456,7 @@ function JobCard({
   job: Job;
   onOpen: () => void;
   onComplete: () => void;
+  onSpanShift?: (direction: -1 | 1) => void;
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
   compact?: boolean;
   queueRank?: number;
@@ -483,6 +495,8 @@ function JobCard({
   const canComplete = station === 'shipping';
   const completeColor = COLORS.red;
   const isStretched = Boolean(stretch && stretch.columns > 1);
+  const canShiftLeft = isStretched && stageSpan.length > 1 && STATIONS.indexOf(stageSpan[0]) > 0;
+  const canShiftRight = isStretched && stageSpan.length > 1 && STATIONS.indexOf(stageSpan[stageSpan.length - 1]) < STATIONS.length - 1;
 
   return (
     <div
@@ -538,7 +552,49 @@ function JobCard({
         </div>
       )}
 
-      <div style={{ paddingRight: queueRank ? '34px' : undefined }}>
+      {isStretched && onSpanShift && (
+        <div style={{
+          display: 'flex',
+          gap: '6px',
+          position: 'absolute',
+          right: '8px',
+          top: '8px',
+          zIndex: 4,
+        }}>
+          {([
+            { direction: -1 as const, enabled: canShiftLeft, label: 'Move span left', Icon: ChevronLeft },
+            { direction: 1 as const, enabled: canShiftRight, label: 'Move span right', Icon: ChevronRight },
+          ]).map(({ direction, enabled, label, Icon }) => (
+            <button
+              key={direction}
+              type="button"
+              aria-label={label}
+              disabled={!enabled}
+              onClick={event => {
+                event.stopPropagation();
+                if (enabled) onSpanShift(direction);
+              }}
+              style={{
+                alignItems: 'center',
+                background: enabled ? `${meta.color}22` : COLORS.elevated,
+                border: `1px solid ${enabled ? `${meta.color}88` : COLORS.border}`,
+                borderRadius: '6px',
+                color: enabled ? meta.color : COLORS.faint,
+                cursor: enabled ? 'pointer' : 'not-allowed',
+                display: 'flex',
+                height: '28px',
+                justifyContent: 'center',
+                padding: 0,
+                width: '28px',
+              }}
+            >
+              <Icon size={17} strokeWidth={2.6} />
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ paddingRight: queueRank || isStretched ? '72px' : undefined }}>
         <div>
           <div style={{ color: COLORS.text, fontSize: compact ? '20px' : '18px', fontWeight: 850, lineHeight: 1.18 }}>
             {customer.length > (compact ? 96 : 72) ? `${customer.slice(0, compact ? 96 : 72)}...` : customer}
@@ -800,6 +856,73 @@ function Pipeline({
     }
   };
 
+  const shiftStageSpan = async (job: Job, direction: -1 | 1) => {
+    const currentStage = stationOf(job);
+    if (currentStage === 'completed') return;
+
+    const span = stageSpanForJob(job);
+    if (span.length < 2) return;
+
+    const startIndex = STATIONS.indexOf(span[0]);
+    const endIndex = STATIONS.indexOf(span[span.length - 1]);
+    const primaryIndex = STATIONS.indexOf(currentStage as Station);
+    const nextStartIndex = startIndex + direction;
+    const nextEndIndex = endIndex + direction;
+    const nextPrimaryIndex = primaryIndex + direction;
+
+    if (
+      startIndex < 0 ||
+      endIndex < 0 ||
+      primaryIndex < 0 ||
+      nextStartIndex < 0 ||
+      nextEndIndex >= STATIONS.length ||
+      nextPrimaryIndex < 0 ||
+      nextPrimaryIndex >= STATIONS.length
+    ) {
+      return;
+    }
+
+    const key = jobKey(job);
+    const nextSpan = STATIONS.slice(nextStartIndex, nextEndIndex + 1) as Station[];
+    const nextStage = STATIONS[nextPrimaryIndex];
+    const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
+    const nextDashNotes = dashNotesWithDashboardMarkers(rawDashNotes, visibleDashNotes(rawDashNotes), {
+      stageSpanOverride: nextSpan,
+    });
+    const order = dashboardOrder(job);
+    const nextJob = {
+      ...job,
+      stage: nextStage,
+      dashboard_order: String(order),
+      dash_notes: nextDashNotes,
+      'Dash Notes': nextDashNotes,
+    };
+
+    const nextJobs = jobs.map(candidate => (
+      jobKey(candidate) === key ? nextJob : candidate
+    ));
+
+    onJobsChange(nextJobs);
+    onError('');
+
+    try {
+      const positionResponse = await persistJobPosition(nextJob, nextStage, order);
+      if (!positionResponse.ok) {
+        const body = await positionResponse.json().catch(() => ({}));
+        throw new Error(body.error || `Airtable stage save failed (${positionResponse.status})`);
+      }
+
+      const notesResponse = await persistDashNotes(nextJob, nextDashNotes);
+      if (!notesResponse.ok) {
+        const body = await notesResponse.json().catch(() => ({}));
+        throw new Error(body.error || `Airtable stretch save failed (${notesResponse.status})`);
+      }
+    } catch (error) {
+      onJobsChange(jobs);
+      onError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   if (!mounted) {
     return <div style={{ color: COLORS.muted, padding: '24px' }}>Loading board...</div>;
   }
@@ -847,6 +970,7 @@ function Pipeline({
                     job={job}
                     onOpen={() => onJobOpen(job)}
                     onComplete={() => setConfirmCompleteJob(job)}
+                    onSpanShift={direction => shiftStageSpan(job, direction)}
                     stretch={stretchForJob(job, isMobile)}
                   />
                 </div>
