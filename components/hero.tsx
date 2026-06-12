@@ -155,10 +155,10 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
 
       <div className="absolute left-5 top-20 z-20 sm:left-6 sm:top-24 lg:left-10 lg:top-[104px]">
         <Image
-          src="/images/norp-old-logo-white-transparent.png"
+          src="/images/norp-logo-white-transparent.png"
           alt="New Orleans Record Press"
-          width={811}
-          height={487}
+          width={774}
+          height={291}
           className="h-auto w-[132px] sm:w-[158px] md:w-[218px] lg:w-[255px]"
           priority
         />
@@ -166,7 +166,7 @@ export function Hero({ imageSrc, imageMood = "classic", videoSrc, videoMood = "w
 
       <div className="relative z-10 flex min-h-[100svh] w-full items-center px-5 pb-14 pt-24 sm:px-6 sm:pb-16 sm:pt-32 lg:px-0 lg:pt-28">
         <div className="mx-0 flex max-w-[22rem] flex-col items-start gap-5 sm:max-w-3xl sm:gap-6 md:mx-auto lg:mx-0 lg:ml-10">
-          <div aria-hidden="true" className="mt-4 h-[80px] w-[132px] sm:h-[95px] sm:w-[158px] md:h-[131px] md:w-[218px] lg:mt-6 lg:h-[153px] lg:w-[255px]" />
+          <div aria-hidden="true" className="mt-4 h-[50px] w-[132px] sm:h-[59px] sm:w-[158px] md:h-[82px] md:w-[218px] lg:mt-6 lg:h-[96px] lg:w-[255px]" />
           
           {/* Headline */}
           <h1 className="max-w-[20rem] text-[2.45rem] font-bold uppercase leading-[1.02] text-[#f3ca03] sm:max-w-lg sm:text-5xl sm:leading-tight md:text-6xl">
