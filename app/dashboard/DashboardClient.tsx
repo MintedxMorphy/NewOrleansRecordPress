@@ -939,6 +939,7 @@ function Pipeline({
   }
 
   const spanLayout = isMobile ? [] : layoutStretchedJobs(visibleJobs, spanHeights);
+  const renderedSpanKeys = new Set(spanLayout.map(entry => jobKey(entry.job)).filter(Boolean));
   const spanLayerHeight = spanLayout.length
     ? Math.max(...spanLayout.map(entry => entry.top + entry.height + SPAN_GAP))
     : 0;
@@ -997,7 +998,7 @@ function Pipeline({
         )}
         {STATIONS.map(station => {
           const meta = STATION_META[station];
-          const list = stationJobs(visibleJobs, station).filter(job => isMobile || stageSpanForJob(job).length < 2);
+          const list = stationJobs(visibleJobs, station).filter(job => isMobile || !renderedSpanKeys.has(jobKey(job)));
           const isNowPressing = station === 'now_pressing';
           const reservedSpanHeight = isMobile ? 0 : reservedSpanHeightForStation(spanLayout, station);
 
