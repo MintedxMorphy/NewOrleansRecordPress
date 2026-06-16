@@ -263,7 +263,7 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
   function itemCard(item) {
     const isLow = lowStock(item);
     const title = item.artist || item.item || 'Unlabeled inventory item';
-    const quantity = item.quantityLabel || `${fmt(item.quantity)} ${item.unit || ''}`;
+    const quantity = item.quantityLabel || '';
     const showBar = item.section === 'compound' && Number(item.quantity) > 0 && currentData && currentData.pvcCapacityLbs;
 
     return `
@@ -273,7 +273,7 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
             <div class="item-name">${esc(title)}</div>
             ${item.matrix ? `<div class="item-matrix">${esc(item.matrix)}</div>` : ''}
           </div>
-          <div class="qty">${esc(quantity)}</div>
+          ${quantity ? `<div class="qty">${esc(quantity)}</div>` : ''}
         </div>
         ${showBar ? `<div class="bar"><div class="bar-fill" style="width:${pct(item.quantity, currentData.pvcCapacityLbs)}%"></div></div>` : ''}
         <div class="meta">

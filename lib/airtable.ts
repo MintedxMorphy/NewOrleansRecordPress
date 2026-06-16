@@ -1001,6 +1001,10 @@ const INVENTORY_FIELD_ALIASES = {
   artist: ['Artist', 'Customer', 'Customer Name', 'Client', 'Project', 'Project Name', 'Title'],
   matrix: ['Matrix', 'MATRIX', 'Matrix ID', 'Catalog Number', 'Catalog #', 'Job ID', 'Job Id', 'Order Number', 'ORDER NUMBER'],
   quantity: [
+    'Current Inventory',
+    'Current inventory',
+    'Current',
+    'Inventory',
     'Quantity',
     'Qty',
     'QTY',
@@ -1028,9 +1032,10 @@ const INVENTORY_FIELD_ALIASES = {
     'Sets',
     'Pairs',
   ],
-  unit: ['Unit', 'Units', 'UOM', 'Measure'],
-  location: ['Location', 'location', 'Warehouse Location', 'Warehouse', 'Bin', 'Rack', 'Shelf', 'Zone', 'Aisle'],
-  status: ['Status', 'Inventory Status', 'On Order', 'Order Status'],
+  unit: ['Unit', 'UOM', 'Measure'],
+  location: ['Location', 'location', 'Warehouse Location', 'Warehouse', 'Bin', 'Rack', 'Shelf', 'Zone', 'Aisle', 'Box 1', 'Box Number', 'Box'],
+  status: ['Status', 'Inventory Status', 'Order Status'],
+  onOrder: ['On Order', 'On order', 'Ordered', 'Incoming'],
   reorderPoint: ['Reorder Point', 'Reorder', 'Min', 'Minimum', 'Par', 'Low Stock'],
   max: ['Max', 'Maximum', 'Capacity', 'Target Stock'],
   notes: ['Notes', 'Note', 'Details', 'Comments'],
@@ -1074,9 +1079,9 @@ function inventoryNumber(value: unknown) {
 
 function inventoryQuantityLabel(value: unknown, unit: string) {
   const raw = stringValue(value).trim();
-  if (!raw || isAirtableRecordId(raw)) return `0 ${unit || 'units'}`;
+  if (!raw || isAirtableRecordId(raw)) return '';
   const numeric = inventoryNumber(value);
-  if (numeric > 0) return `${numeric.toLocaleString()} ${unit || 'units'}`;
+  if (numeric > 0) return unit ? `${numeric.toLocaleString()} ${unit}` : numeric.toLocaleString();
   return raw;
 }
 
@@ -1085,7 +1090,7 @@ function normalizeInventoryUnit(value: unknown, tableName: string, item: string)
   if (explicit) return explicit;
   const text = `${tableName} ${item}`.toLowerCase();
   if (text.includes('pvc') || text.includes('compound')) return 'lbs';
-  return 'units';
+  return '';
 }
 
 function jobReferenceFromRecord(record: AirtableRecord) {
@@ -1139,6 +1144,28 @@ function inventoryRecordBelongsToSection(sectionKey: AirtableInventoryItem['sect
   }
 
   return true;
+}
+
+function inventoryDetails(fields: Record<string, unknown>, tableName: string) {
+  const details = [
+    field(fields, ['Type', 'Category', 'Item Type']),
+  ];
+  const onOrder = field(fields, INVENTORY_FIELD_ALIASES.onOrder);
+  if (onOrder && onOrder !== '0') details.push(`On order: ${onOrder}`);
+
+  return details.filter(Boolean);
+}
+
+function inventoryLocation(fields: Record<string, unknown>, tableName: string) {
+  const location = field(fields, INVENTORY_FIELD_ALIASES.location);
+  if (!location) return 'Unassigned';
+
+  const tableText = tableName.toLowerCase();
+  if ((tableText.includes('stamper') || tableText.includes('test press')) && /^\d+$/.test(location)) {
+    return `Box ${location}`;
+  }
+
+  return location;
 }
 
 function compoundInventoryFields(fields: Record<string, unknown>) {
@@ -1250,6 +1277,8 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
     const item = inventoryDisplayName({ item: rawItem, artist, matrix, matched });
     const rawQuantity = rawField(record.fields, INVENTORY_FIELD_ALIASES.quantity);
     const unit = normalizeInventoryUnit(rawField(record.fields, INVENTORY_FIELD_ALIASES.unit), table.name, item);
+    const quantityLabel = inventoryQuantityLabel(rawQuantity, unit);
+    const quantity = quantityLabel ? inventoryNumber(rawQuantity) : 0;
 
     return {
       id: `${record.id}-${section.key}`,
@@ -1260,15 +1289,15 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
       item,
       artist,
       matrix: matrix || matched?.matrix || '',
-      quantity: inventoryNumber(rawQuantity),
-      quantityLabel: inventoryQuantityLabel(rawQuantity, unit),
+      quantity,
+      quantityLabel,
       unit,
-      location: field(record.fields, INVENTORY_FIELD_ALIASES.location) || 'Unassigned',
+      location: inventoryLocation(record.fields, table.name),
       status: field(record.fields, INVENTORY_FIELD_ALIASES.status),
       reorderPoint: parseQuantity(rawField(record.fields, INVENTORY_FIELD_ALIASES.reorderPoint)),
       max: parseQuantity(rawField(record.fields, INVENTORY_FIELD_ALIASES.max)),
       notes: field(record.fields, INVENTORY_FIELD_ALIASES.notes),
-      details: [field(record.fields, ['Type', 'Category', 'Item Type'])].filter(Boolean),
+      details: inventoryDetails(record.fields, table.name),
       updatedAt: field(record.fields, INVENTORY_FIELD_ALIASES.updatedAt),
     };
   })).filter(item => item.item || item.quantity || item.location !== 'Unassigned');
