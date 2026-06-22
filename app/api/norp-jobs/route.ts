@@ -89,7 +89,7 @@ function dedupeJobs<T extends Record<string, any>>(jobs: T[]) {
 export async function GET() {
   try {
     const source = isAirtableConfigured() ? 'airtable' : 'google_sheet';
-    const baseJobs = source === 'airtable' ? await getAirtableJobs() : await getNORPJobs();
+    const baseJobs = source === 'airtable' ? await getAirtableJobs({ syncCompleted: true }) : await getNORPJobs();
     let jobs = baseJobs;
     try {
       jobs = await applyProductionLogInferences(baseJobs);

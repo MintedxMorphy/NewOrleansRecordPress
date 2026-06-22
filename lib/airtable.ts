@@ -334,6 +334,15 @@ function stripRunMarkers(notes: unknown) {
     .trim();
 }
 
+function stripDashboardMarkers(notes: unknown) {
+  return stripRunMarkers(notes)
+    .replace(/\[Rush\s+Order\]/gi, '')
+    .replace(/\[Stage\s+Span:[^\]]+\]/gi, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function withRunMarker(notes: unknown, run: number, total: number) {
   const cleaned = stripRunMarkers(notes);
   return [runMarker(run, total), cleaned].filter(Boolean).join(cleaned ? '\n' : '');
@@ -565,8 +574,9 @@ function mapRecordToJob(record: AirtableRecord): NORPJob & { airtable_record_id:
   };
 }
 
-export async function getAirtableJobs(): Promise<(NORPJob & { airtable_record_id: string; dashboard_order: string })[]> {
+export async function getAirtableJobs(options: { syncCompleted?: boolean } = {}): Promise<(NORPJob & { airtable_record_id: string; dashboard_order: string })[]> {
   const jobs: (NORPJob & { airtable_record_id: string; dashboard_order: string })[] = [];
+  const completedProductionRecords: AirtableRecord[] = [];
   let offset: string | undefined;
 
   // Airtable is the dashboard source of truth at read time. Some upstream
@@ -590,10 +600,23 @@ export async function getAirtableJobs(): Promise<(NORPJob & { airtable_record_id
 
     for (const record of data.records || []) {
       const job = mapRecordToJob(record);
-      if (job.customer || job.matrix || job.order_number) jobs.push(job);
+      if (!(job.customer || job.matrix || job.order_number)) continue;
+      if (normalizeStage(job.stage) === 'completed') {
+        completedProductionRecords.push(record);
+        continue;
+      }
+      jobs.push(job);
     }
     offset = data.offset;
   } while (offset);
+
+  if (options.syncCompleted && completedProductionRecords.length) {
+    try {
+      await syncCompletedAirtableRecords(completedProductionRecords);
+    } catch (error) {
+      console.error('[airtable] completed production row sync failed:', error);
+    }
+  }
 
   return jobs;
 }
@@ -783,13 +806,14 @@ async function findMatchingCompletedRecord(record: AirtableRecord, completed: Ai
   return data.records?.[0];
 }
 
-export async function completeAirtableJob(jobId: string) {
-  const recordId = await findAirtableRecordId(jobId);
-  if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
-
+async function completeAirtableRecord(
+  recordId: string,
+  existingRecord?: AirtableRecord,
+  existingTables?: AirtableTableMeta[],
+) {
   const [record, tables] = await Promise.all([
-    getAirtableRecord(recordId),
-    getAirtableTablesMeta(),
+    existingRecord ? Promise.resolve(existingRecord) : getAirtableRecord(recordId),
+    existingTables ? Promise.resolve(existingTables) : getAirtableTablesMeta(),
   ]);
 
   const production = resolveAirtableTable(tables, airtableJobsTable());
@@ -819,7 +843,7 @@ export async function completeAirtableJob(jobId: string) {
       };
       const completedDashNotesField = resolveAirtableField(completed, FIELD_ALIASES.dash_notes);
       if (completedDashNotesField && isWritableField(completedDashNotesField)) {
-        completedFieldsToUpdate[completedDashNotesField.name] = stripRunMarkers(matchingCompleted.fields[completedDashNotesField.name]);
+        completedFieldsToUpdate[completedDashNotesField.name] = stripDashboardMarkers(matchingCompleted.fields[completedDashNotesField.name]);
       }
 
       const updateCompletedRes = await airtableFetch(tableUrl(`/${encodeURIComponent(matchingCompleted.id)}`, completed.name), {
@@ -858,7 +882,7 @@ export async function completeAirtableJob(jobId: string) {
   const fields = completedFieldsFromRecord(record, production, completed);
   const completedDashNotesField = resolveAirtableField(completed, FIELD_ALIASES.dash_notes);
   if (completedDashNotesField && fields[completedDashNotesField.name] !== undefined) {
-    fields[completedDashNotesField.name] = stripRunMarkers(fields[completedDashNotesField.name]);
+    fields[completedDashNotesField.name] = stripDashboardMarkers(fields[completedDashNotesField.name]);
   }
 
   const created = await createCompletedRecord(completed, fields);
@@ -874,6 +898,25 @@ export async function completeAirtableJob(jobId: string) {
   }
 
   return { completedRecordId: created.id, deletedRecordId: recordId };
+}
+
+async function syncCompletedAirtableRecords(records: AirtableRecord[]) {
+  const tables = await getAirtableTablesMeta();
+
+  for (const record of records) {
+    try {
+      await completeAirtableRecord(record.id, record, tables);
+    } catch (error) {
+      console.error('[airtable] completed production row sync failed:', record.id, error);
+    }
+  }
+}
+
+export async function completeAirtableJob(jobId: string) {
+  const recordId = await findAirtableRecordId(jobId);
+  if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
+
+  return completeAirtableRecord(recordId);
 }
 
 export async function updateAirtableJobStage(jobId: string, stage: string) {
