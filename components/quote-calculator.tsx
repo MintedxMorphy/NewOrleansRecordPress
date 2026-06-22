@@ -209,9 +209,7 @@ export function QuoteCalculator() {
     { value: "haveLacquer", label: "I have a lacquer" },
   ]
   const projectTypeOptions = [
-    { value: "12-standard", label: '12" LP - Standard (150g)' },
     { value: "12-heavy", label: '12" LP - Heavy (180g)' },
-    { value: "double-12-standard", label: '2x12" 2xLP - Standard (150g)' },
     { value: "double-12-heavy", label: '2x12" 2xLP - Heavy (180g)' },
     { value: "7-standard", label: '7" EP - Standard' },
   ]
@@ -279,7 +277,7 @@ export function QuoteCalculator() {
 
   // Form state
   const [masterFormat, setMasterFormat] = useState("audioFiles")
-  const [projectType, setProjectType] = useState("12-standard")
+  const [projectType, setProjectType] = useState("12-heavy")
   const [quantity, setQuantity] = useState(300)
   const [colorStyle, setColorStyle] = useState("black")
   const [testPressings, setTestPressings] = useState(5)
