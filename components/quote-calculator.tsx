@@ -3,96 +3,250 @@
 import { useState, useMemo } from "react"
 import { Calculator, ChevronDown, Info, Save, Send } from "lucide-react"
 
-// Pricing data (simplified for demo - would typically come from API/database)
+// Legacy NORP production quote pricing ported from neworleansrecordpress.com.
 const PRICING = {
-  lacquer: {
-    audioFiles: 150,
-    haveLacquer: 0,
+  lacquer: 479,
+  electroplating: {
+    single12: 418,
+    single7: 303,
+    additional12: 207.90,
+    additional7: 154,
   },
-  electroplating: 350,
-  setupFee: 200,
-  testPressing: {
-    perUnit: 15,
-  },
+  testPresses: 165,
+  testPressesAdditional: 6.60,
+  setupFee: 154,
+  setupFeeColor: 110,
+  assemblyActionFee: 0.132,
   pressing: {
-    "12-standard": { base: 2.50, label: '12" Standard (150g)' },
-    "12-heavy": { base: 3.00, label: '12" Heavy (180g)' },
-    "double-12-standard": { base: 4.50, label: '2x12" Standard (150g)' },
-    "double-12-heavy": { base: 5.50, label: '2x12" Heavy (180g)' },
-    "7-standard": { base: 1.75, label: '7" Standard' },
-  },
-  colorStyle: {
-    black: 0,
-    random: 0,
-    solid: 0.25,
-    translucent: 0.35,
-    marble: 0.50,
-    smoke: 0.45,
-    splatter: 0.75,
+    heavyweight: {
+      black: 2.86,
+      random: 2.86,
+      solid: 3.30,
+      translucent: 3.30,
+      marble: 4.246,
+      smoke: 4.246,
+      splatter: 4.95,
+    },
+    sevenInch: {
+      black: 1.595,
+      random: 1.595,
+      solid: 1.98,
+      translucent: 1.98,
+      marble: 2.31,
+      smoke: 2.31,
+      splatter: 4.95,
+    },
   },
   centerLabels: {
-    printed: 0.15,
-    blank: 0,
-    customerSupplied: 0,
+    blank: 0.165,
+    printed: {
+      qty100: 248,
+      qty250: 248,
+      qty500: 275,
+      qty1000: 385,
+    },
+    printed7: {
+      qty100: 303,
+      qty250: 303,
+      qty500: 303,
+      qty1000: 385,
+    },
   },
   innerSleeves: {
-    none: 0,
-    whitePaper: 0.10,
-    heavyWhitePaper: 0.15,
-    blackPaper: 0.18,
-    brownPaper: 0.12,
-    whitePoly: 0.25,
-    blackPoly: 0.28,
-    printed1Color: 0.45,
-    printedFullColor: 0.75,
+    twelveInch: {
+      whitePaper: 0.22,
+      heavyWhitePaper: 0.385,
+      whitePoly: 0.55,
+      blackPaper: 0.44,
+      blackPoly: 0.77,
+      brownPaper: 0.275,
+    },
+    sevenInch: {
+      whitePaper: 0.22,
+      blackPaper: 0.55,
+      brownPaper: 0.33,
+    },
+    printed1Color: {
+      qty100: 297,
+      qty250: 468,
+      qty500: 704,
+      qty1000: 572,
+      qty2000: 847,
+      qty5000: 1630,
+      qty10000: 2950,
+    },
+    printedFullColor: {
+      qty100: 297,
+      qty250: 468,
+      qty500: 704,
+      qty1000: 1045,
+      qty2000: 1400,
+      qty5000: 2535,
+      qty10000: 4785,
+    },
   },
   inserts: {
-    none: 0,
-    "2panel": 0.35,
-    "4panel": 0.55,
+    "2panel": {
+      qty100: 165,
+      qty250: 264,
+      qty500: 363,
+      qty1000: 649,
+      qty2000: 1055,
+      qty5000: 1380,
+      qty10000: 2750,
+      qty20000: 5515,
+      qty30000: 7985,
+    },
+    "4panel": {
+      qty100: 275,
+      qty200: 385,
+      qty250: 440,
+      qty300: 495,
+      qty500: 730,
+      qty1000: 1045,
+      qty2000: 1585,
+      qty5000: 2180,
+      qty10000: 4355,
+      qty20000: 8710,
+      qty30000: 13070,
+    },
   },
   jackets: {
-    none: 0,
-    fullColorSingle: 1.25,
-    "1colorSingle": 0.85,
-    fullColorWide: 1.45,
-    "1colorWide": 1.05,
-    gatefold: 2.25,
-    screenPrinted1: 1.50,
-    screenPrinted2: 1.85,
-    screenPrinted3: 2.15,
-    screenPrinted4: 2.45,
-    blankWhite: 0.65,
-    blankBlack: 0.70,
-    blankChipboard: 0.55,
+    blank: 1.925,
+    fullColorSingle: {
+      qty100: 380,
+      qty200: 545,
+      qty250: 660,
+      qty300: 715,
+      qty500: 765,
+      qty1000: 990,
+      qty2000: 1620,
+      qty3000: 2260,
+      qty5000: 3355,
+      qty7500: 4860,
+      qty10000: 6380,
+    },
+    fullColorSingle7: {
+      qty100: 605,
+      qty200: 605,
+      qty250: 605,
+      qty300: 660,
+      qty500: 660,
+      qty1000: 770,
+      qty2000: 1430,
+    },
+    oneColorSingle: {
+      qty100: 380,
+      qty200: 545,
+      qty250: 660,
+      qty300: 715,
+      qty500: 765,
+      qty1000: 880,
+      qty2000: 1240,
+      qty3000: 1790,
+      qty5000: 2835,
+      qty7500: 3960,
+      qty10000: 5500,
+    },
+    oneColorSingle7: {
+      qty100: 363,
+      qty200: 363,
+      qty250: 363,
+      qty300: 418,
+      qty500: 418,
+      qty1000: 495,
+      qty2000: 935,
+    },
+    fullColorWide: {
+      qty100: 545,
+      qty200: 600,
+      qty250: 825,
+      qty300: 880,
+      qty500: 935,
+      qty1000: 1320,
+      qty2000: 2280,
+      qty3000: 3250,
+      qty5000: 5005,
+      qty7500: 7335,
+      qty10000: 9680,
+    },
+    oneColorWide: {
+      qty100: 545,
+      qty200: 600,
+      qty250: 825,
+      qty300: 880,
+      qty500: 935,
+      qty1000: 1265,
+      qty2000: 2035,
+      qty3000: 2980,
+      qty5000: 4815,
+      qty7500: 7135,
+      qty10000: 9415,
+    },
+    gatefold: {
+      qty100: 2200,
+      qty200: 2200,
+      qty250: 2200,
+      qty300: 2200,
+      qty500: 2200,
+      qty1000: 2750,
+      qty2000: 3300,
+      qty3000: 4730,
+      qty5000: 7150,
+      qty7500: 9900,
+      qty10000: 12650,
+    },
   },
   jacketUpgrades: {
-    uvGloss: 0.15,
-    matte: 0.12,
-    reverseBoard: 0.20,
-    heavyJacket: 0.25,
+    uvGloss: 55,
+    matte: 55,
+    reverseBoard: 165,
+    heavySinglePocket: 330,
+    heavyGatefold: 385,
   },
   outerSleeves: {
     none: 0,
-    standardNoFlap: 0.08,
-    standardWithFlap: 0.12,
-    crystalClear: 0.18,
+    standardNoFlap: 0.22,
+    standardWithFlap: 0.264,
+    crystalClear: 0.264,
   },
-  shrinkwrap: 0.15,
+  shrinkwrap: 0.264,
   upcBarcodes: {
     none: 0,
     providing: 0,
-    embedded: 25,
-    sticker: 35,
-  },
-  assembly: {
-    standard: 0.25,
-    none: 0,
+    embedded: 55,
+    sticker: {
+      qty100: 138,
+      qty250: 138,
+      qty500: 138,
+      qty1000: 220,
+      qty2000: 413,
+      qty5000: 1240,
+      qty10000: 2450,
+      qty20000: 4840,
+      qty30000: 7150,
+    },
   },
   extras: {
-    downloadCards: 0.35,
-    marketingSticker2: 0.15,
-    marketingSticker25x3: 0.20,
+    downloadCards: {
+      qty100: 193,
+      qty250: 248,
+      qty500: 275,
+      qty1000: 385,
+      qty2000: 605,
+      qty5000: 1320,
+    },
+    marketingSticker: {
+      qty100: 110,
+      qty250: 138,
+      qty500: 165,
+      qty1000: 193,
+      qty2000: 330,
+      qty5000: 550,
+      qty10000: 990,
+      qty20000: 1340,
+      qty30000: 1650,
+    },
   },
 }
 
@@ -203,6 +357,48 @@ function optionLabel(options: { value: string; label: string }[], value: string)
   return options.find(option => option.value === value)?.label || value
 }
 
+type PriceTable = Record<string, number>
+
+function tierPrice(table: PriceTable, quantity: number) {
+  const tiers = [
+    [100, "qty100"],
+    [200, "qty200"],
+    [250, "qty250"],
+    [300, "qty300"],
+    [500, "qty500"],
+    [1000, "qty1000"],
+    [2000, "qty2000"],
+    [3000, "qty3000"],
+    [5000, "qty5000"],
+    [7500, "qty7500"],
+    [10000, "qty10000"],
+    [20000, "qty20000"],
+    [30000, "qty30000"],
+  ] as const
+
+  for (const [limit, key] of tiers) {
+    if (quantity <= limit && table[key] !== undefined) return table[key]
+  }
+
+  const available = tiers
+    .map(([, key]) => table[key])
+    .filter((value): value is number => typeof value === "number" && value > 0)
+
+  return available.length ? available[available.length - 1] : 0
+}
+
+function usesColorSetup(colorStyle: string) {
+  return !["black", "random"].includes(colorStyle)
+}
+
+function isDoubleProject(projectType: string) {
+  return projectType === "double-12-heavy"
+}
+
+function isSevenInchProject(projectType: string) {
+  return projectType === "7-standard"
+}
+
 export function QuoteCalculator() {
   const masterFormatOptions = [
     { value: "audioFiles", label: "I'm submitting audio files" },
@@ -309,47 +505,118 @@ export function QuoteCalculator() {
   // Calculate totals
   const estimate = useMemo(() => {
     const qty = Math.max(100, quantity)
-    
-    // Fixed costs
-    const lacquerCost = masterFormat === "audioFiles" ? PRICING.lacquer.audioFiles : 0
-    const electroplatingCost = PRICING.electroplating
-    const setupCost = PRICING.setupFee
-    const testPressingCost = testPressings * PRICING.testPressing.perUnit
-    
-    // Per-unit costs
-    const pressingBase = PRICING.pressing[projectType as keyof typeof PRICING.pressing]?.base || 2.50
-    const colorCost = PRICING.colorStyle[colorStyle as keyof typeof PRICING.colorStyle] || 0
-    const labelCost = PRICING.centerLabels[centerLabels as keyof typeof PRICING.centerLabels] || 0
-    const innerCost = PRICING.innerSleeves[innerSleeves as keyof typeof PRICING.innerSleeves] || 0
-    const insertCost = PRICING.inserts[inserts as keyof typeof PRICING.inserts] || 0
-    const jacketCost = PRICING.jackets[jackets as keyof typeof PRICING.jackets] || 0
-    const outerCost = PRICING.outerSleeves[outerSleeves as keyof typeof PRICING.outerSleeves] || 0
-    const shrinkCost = shrinkwrap ? PRICING.shrinkwrap : 0
-    const assemblyCost = PRICING.assembly[assembly as keyof typeof PRICING.assembly] || 0
-    
-    // Jacket upgrades
+    const isDouble = isDoubleProject(projectType)
+    const isSevenInch = isSevenInchProject(projectType)
+    const doubleMultiplier = isDouble ? 2 : 1
+
+    const lacquerCost = (masterFormat === "audioFiles" ? PRICING.lacquer : 0) * doubleMultiplier
+    const additionalStampers = qty > 750 ? Math.ceil((qty - 750) / 1000) : 0
+    const electroplatingBase = isSevenInch
+      ? PRICING.electroplating.single7 + additionalStampers * PRICING.electroplating.additional7
+      : PRICING.electroplating.single12 + additionalStampers * PRICING.electroplating.additional12
+    const electroplatingCost = electroplatingBase * doubleMultiplier
+    const baseTestPressingCost = testPressings < 6
+      ? PRICING.testPresses
+      : PRICING.testPresses + PRICING.testPressesAdditional * (testPressings - 5)
+    const testPressingCost = baseTestPressingCost * doubleMultiplier
+    const setupCost = (PRICING.setupFee + (usesColorSetup(colorStyle) ? PRICING.setupFeeColor : 0)) * doubleMultiplier
+
+    const pressingTable = isSevenInch ? PRICING.pressing.sevenInch : PRICING.pressing.heavyweight
+    const pressingBase = pressingTable[colorStyle as keyof typeof pressingTable] ?? pressingTable.black
+    const pressingTotal = qty * pressingBase * doubleMultiplier
+
+    let labelTotal = 0
+    if (centerLabels === "blank") {
+      labelTotal = qty * PRICING.centerLabels.blank
+    } else if (centerLabels === "printed") {
+      labelTotal = qty > 1000
+        ? qty * 1.3 * 0.15 * 1.3
+        : tierPrice(isSevenInch ? PRICING.centerLabels.printed7 : PRICING.centerLabels.printed, qty)
+    }
+    labelTotal *= doubleMultiplier
+
+    let innerTotal = 0
+    if (innerSleeves === "printed1Color") {
+      innerTotal = tierPrice(PRICING.innerSleeves.printed1Color, qty)
+    } else if (innerSleeves === "printedFullColor") {
+      innerTotal = tierPrice(PRICING.innerSleeves.printedFullColor, qty)
+    } else if (innerSleeves !== "none") {
+      const sleeveTable = isSevenInch ? PRICING.innerSleeves.sevenInch : PRICING.innerSleeves.twelveInch
+      innerTotal = (sleeveTable[innerSleeves as keyof typeof sleeveTable] || 0) * qty
+    }
+    innerTotal *= doubleMultiplier
+
+    const insertTotal = inserts === "none" ? 0 : tierPrice(PRICING.inserts[inserts as keyof typeof PRICING.inserts], qty)
+
+    let jacketBaseTotal = 0
+    let isGroupJacket = false
+    if (["blankWhite", "blankBlack", "blankChipboard"].includes(jackets)) {
+      jacketBaseTotal = PRICING.jackets.blank * qty
+    } else if (jackets === "fullColorSingle") {
+      isGroupJacket = true
+      jacketBaseTotal = tierPrice(isSevenInch ? PRICING.jackets.fullColorSingle7 : PRICING.jackets.fullColorSingle, qty)
+    } else if (jackets === "1colorSingle" || jackets.startsWith("screenPrinted")) {
+      isGroupJacket = true
+      jacketBaseTotal = tierPrice(isSevenInch ? PRICING.jackets.oneColorSingle7 : PRICING.jackets.oneColorSingle, qty)
+    } else if (jackets === "fullColorWide") {
+      isGroupJacket = true
+      jacketBaseTotal = tierPrice(PRICING.jackets.fullColorWide, qty)
+    } else if (jackets === "1colorWide") {
+      isGroupJacket = true
+      jacketBaseTotal = tierPrice(PRICING.jackets.oneColorWide, qty)
+    } else if (jackets === "gatefold") {
+      isGroupJacket = true
+      jacketBaseTotal = tierPrice(PRICING.jackets.gatefold, qty)
+    }
+
     let jacketUpgradeCost = 0
-    if (uvGloss) jacketUpgradeCost += PRICING.jacketUpgrades.uvGloss
-    if (matte) jacketUpgradeCost += PRICING.jacketUpgrades.matte
-    if (reverseBoard) jacketUpgradeCost += PRICING.jacketUpgrades.reverseBoard
-    if (heavyJacket) jacketUpgradeCost += PRICING.jacketUpgrades.heavyJacket
-    
-    // Extras per unit
-    let extrasCost = 0
-    if (downloadCards) extrasCost += PRICING.extras.downloadCards
-    if (marketingSticker2) extrasCost += PRICING.extras.marketingSticker2
-    if (marketingSticker25x3) extrasCost += PRICING.extras.marketingSticker25x3
-    
-    // UPC (fixed cost)
-    const upcCost = PRICING.upcBarcodes[upcBarcodes as keyof typeof PRICING.upcBarcodes] || 0
-    
-    // Calculate totals
-    const perUnitCost = pressingBase + colorCost + labelCost + innerCost + insertCost + jacketCost + jacketUpgradeCost + outerCost + shrinkCost + assemblyCost + extrasCost
+    if (isGroupJacket && qty > 100 && !isSevenInch) {
+      if (uvGloss) jacketUpgradeCost += Math.ceil(qty / 500) * PRICING.jacketUpgrades.uvGloss
+      if (matte) jacketUpgradeCost += Math.ceil(qty / 500) * PRICING.jacketUpgrades.matte
+      if (reverseBoard) jacketUpgradeCost += Math.ceil(qty / 500) * PRICING.jacketUpgrades.reverseBoard
+      if (heavyJacket) {
+        jacketUpgradeCost += Math.ceil(qty / 1000) * (
+          jackets === "gatefold"
+            ? PRICING.jacketUpgrades.heavyGatefold
+            : PRICING.jacketUpgrades.heavySinglePocket
+        )
+      }
+    }
+    const jacketTotal = jacketBaseTotal + jacketUpgradeCost
+
+    const outerSleevesTotal = (PRICING.outerSleeves[outerSleeves as keyof typeof PRICING.outerSleeves] || 0) * qty
+    const shrinkwrapTotal = shrinkwrap ? PRICING.shrinkwrap * qty : 0
+    const outerTotal = outerSleevesTotal + shrinkwrapTotal
+
+    const upcCost = upcBarcodes === "embedded"
+      ? PRICING.upcBarcodes.embedded
+      : upcBarcodes === "sticker"
+        ? tierPrice(PRICING.upcBarcodes.sticker, qty)
+        : 0
+
+    const downloadCardsTotal = downloadCards ? tierPrice(PRICING.extras.downloadCards, qty) : 0
+    const marketingSticker2Total = marketingSticker2 ? tierPrice(PRICING.extras.marketingSticker, qty) : 0
+    const marketingSticker25x3Total = marketingSticker25x3 ? tierPrice(PRICING.extras.marketingSticker, qty) : 0
+    const extrasTotal = downloadCardsTotal + marketingSticker2Total + marketingSticker25x3Total
+
+    let assemblyCount = 0
+    if (assembly === "standard") {
+      if (outerSleevesTotal > 0) assemblyCount += 1
+      if (jacketTotal > 0) assemblyCount += 1
+      if (insertTotal > 0) assemblyCount += 1
+      if (upcBarcodes === "sticker") assemblyCount += 1
+      if (downloadCards) assemblyCount += 1
+      if (marketingSticker2) assemblyCount += 1
+      if (marketingSticker25x3) assemblyCount += 1
+      if (isDouble) assemblyCount += 1
+    }
+    const assemblyCost = PRICING.assemblyActionFee * assemblyCount * qty
+
     const fixedCosts = lacquerCost + electroplatingCost + setupCost + testPressingCost + upcCost
-    const pressingTotal = qty * perUnitCost
-    const grandTotal = fixedCosts + pressingTotal
+    const variableTotal = pressingTotal + labelTotal + innerTotal + insertTotal + jacketTotal + outerTotal + assemblyCost + extrasTotal
+    const grandTotal = fixedCosts + variableTotal
     const unitPrice = grandTotal / qty
-    
+
     return {
       quantity: qty,
       fixedCosts: {
@@ -362,18 +629,19 @@ export function QuoteCalculator() {
       },
       perUnit: {
         pressing: pressingBase,
-        color: colorCost,
-        labels: labelCost,
-        innerSleeves: innerCost,
-        inserts: insertCost,
-        jackets: jacketCost + jacketUpgradeCost,
-        outerSleeves: outerCost,
-        shrinkwrap: shrinkCost,
-        assembly: assemblyCost,
-        extras: extrasCost,
-        total: perUnitCost,
+        color: 0,
+        labels: labelTotal / qty,
+        innerSleeves: innerTotal / qty,
+        inserts: insertTotal / qty,
+        jackets: jacketTotal / qty,
+        outerSleeves: outerTotal / qty,
+        shrinkwrap: shrinkwrapTotal / qty,
+        assembly: assemblyCost / qty,
+        extras: extrasTotal / qty,
+        total: variableTotal / qty,
       },
       pressingTotal,
+      jacketUpgradeCost,
       grandTotal,
       unitPrice,
     }
@@ -465,7 +733,7 @@ export function QuoteCalculator() {
             innerCost: estimate.perUnit.innerSleeves * estimate.quantity,
             insertCost: estimate.perUnit.inserts * estimate.quantity,
             jacketCost: estimate.perUnit.jackets * estimate.quantity,
-            jacketUpgradeCost: 0,
+            jacketUpgradeCost: estimate.jacketUpgradeCost,
             outerCost: estimate.perUnit.outerSleeves * estimate.quantity,
             assemblyCost: estimate.perUnit.assembly * estimate.quantity,
           },
