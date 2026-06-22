@@ -207,10 +207,9 @@ const PRICING = {
   outerSleeves: {
     none: 0,
     standardNoFlap: 0.22,
-    standardWithFlap: 0.264,
     crystalClear: 0.264,
+    shrinkwrap: 0.264,
   },
-  shrinkwrap: 0.264,
   upcBarcodes: {
     none: 0,
     providing: 0,
@@ -399,6 +398,11 @@ function isSevenInchProject(projectType: string) {
   return projectType === "7-standard"
 }
 
+type PressingVariation = {
+  quantity: number
+  colorStyle: string
+}
+
 export function QuoteCalculator() {
   const masterFormatOptions = [
     { value: "audioFiles", label: "I'm submitting audio files" },
@@ -457,8 +461,8 @@ export function QuoteCalculator() {
   const outerSleeveOptions = [
     { value: "none", label: "None" },
     { value: "standardNoFlap", label: "Standard - No Flap" },
-    { value: "standardWithFlap", label: "Standard - With Flap" },
-    { value: "crystalClear", label: "Crystal Clear - Resealable" },
+    { value: "crystalClear", label: "Crystal Clear - Resealable Flap" },
+    { value: "shrinkwrap", label: "Shrinkwrap" },
   ]
   const upcBarcodeOptions = [
     { value: "none", label: "None / Don't Need" },
@@ -474,15 +478,17 @@ export function QuoteCalculator() {
   // Form state
   const [masterFormat, setMasterFormat] = useState("audioFiles")
   const [projectType, setProjectType] = useState("12-heavy")
-  const [quantity, setQuantity] = useState(300)
-  const [colorStyle, setColorStyle] = useState("black")
+  const [variations, setVariations] = useState<PressingVariation[]>([
+    { quantity: 300, colorStyle: "black" },
+    { quantity: 0, colorStyle: "black" },
+    { quantity: 0, colorStyle: "black" },
+  ])
   const [testPressings, setTestPressings] = useState(5)
   const [centerLabels, setCenterLabels] = useState("printed")
   const [innerSleeves, setInnerSleeves] = useState("whitePaper")
   const [inserts, setInserts] = useState("none")
   const [jackets, setJackets] = useState("fullColorSingle")
-  const [outerSleeves, setOuterSleeves] = useState("standardWithFlap")
-  const [shrinkwrap, setShrinkwrap] = useState(true)
+  const [outerSleeves, setOuterSleeves] = useState("shrinkwrap")
   const [upcBarcodes, setUpcBarcodes] = useState("none")
   const [assembly, setAssembly] = useState("standard")
   
@@ -502,9 +508,74 @@ export function QuoteCalculator() {
   const [submittingAction, setSubmittingAction] = useState<"save_quote" | "start_order" | null>(null)
   const [submitMessage, setSubmitMessage] = useState("")
 
+  const updateVariation = (index: number, patch: Partial<PressingVariation>) => {
+    setVariations(current => current.map((variation, variationIndex) => (
+      variationIndex === index ? { ...variation, ...patch } : variation
+    )))
+  }
+
+  const applyPreset = (preset: "standard" | "double" | "whitelabel") => {
+    setMasterFormat("audioFiles")
+    setTestPressings(5)
+    setUpcBarcodes("none")
+    setDownloadCards(false)
+    setMarketingSticker2(false)
+    setMarketingSticker25x3(false)
+    setUvGloss(false)
+    setMatte(false)
+    setReverseBoard(false)
+    setHeavyJacket(false)
+
+    if (preset === "standard") {
+      setProjectType("12-heavy")
+      setVariations([
+        { quantity: 500, colorStyle: "black" },
+        { quantity: 0, colorStyle: "black" },
+        { quantity: 0, colorStyle: "black" },
+      ])
+      setCenterLabels("printed")
+      setInnerSleeves("whitePaper")
+      setInserts("2panel")
+      setJackets("fullColorSingle")
+      setOuterSleeves("shrinkwrap")
+      setAssembly("standard")
+      return
+    }
+
+    if (preset === "double") {
+      setProjectType("double-12-heavy")
+      setVariations([
+        { quantity: 500, colorStyle: "solid" },
+        { quantity: 0, colorStyle: "black" },
+        { quantity: 0, colorStyle: "black" },
+      ])
+      setCenterLabels("printed")
+      setInnerSleeves("whitePaper")
+      setInserts("none")
+      setJackets("gatefold")
+      setOuterSleeves("shrinkwrap")
+      setAssembly("standard")
+      return
+    }
+
+    setProjectType("12-heavy")
+    setVariations([
+      { quantity: 100, colorStyle: "black" },
+      { quantity: 0, colorStyle: "black" },
+      { quantity: 0, colorStyle: "black" },
+    ])
+    setCenterLabels("blank")
+    setInnerSleeves("whitePaper")
+    setInserts("none")
+    setJackets("none")
+    setOuterSleeves("none")
+    setAssembly("none")
+  }
+
   // Calculate totals
   const estimate = useMemo(() => {
-    const qty = Math.max(100, quantity)
+    const activeVariations = variations.filter(variation => variation.quantity > 0)
+    const qty = Math.max(1, activeVariations.reduce((sum, variation) => sum + variation.quantity, 0))
     const isDouble = isDoubleProject(projectType)
     const isSevenInch = isSevenInchProject(projectType)
     const doubleMultiplier = isDouble ? 2 : 1
@@ -519,11 +590,18 @@ export function QuoteCalculator() {
       ? PRICING.testPresses
       : PRICING.testPresses + PRICING.testPressesAdditional * (testPressings - 5)
     const testPressingCost = baseTestPressingCost * doubleMultiplier
-    const setupCost = (PRICING.setupFee + (usesColorSetup(colorStyle) ? PRICING.setupFeeColor : 0)) * doubleMultiplier
+    const setupCost = variations.reduce((sum, variation, index) => {
+      if (variation.quantity <= 0) return sum
+      const baseSetup = index === 0 ? PRICING.setupFee : 0
+      return sum + baseSetup + (usesColorSetup(variation.colorStyle) ? PRICING.setupFeeColor : 0)
+    }, 0) * doubleMultiplier
 
     const pressingTable = isSevenInch ? PRICING.pressing.sevenInch : PRICING.pressing.heavyweight
-    const pressingBase = pressingTable[colorStyle as keyof typeof pressingTable] ?? pressingTable.black
-    const pressingTotal = qty * pressingBase * doubleMultiplier
+    const pressingTotal = activeVariations.reduce((sum, variation) => {
+      const variationPrice = pressingTable[variation.colorStyle as keyof typeof pressingTable] ?? pressingTable.black
+      return sum + variation.quantity * variationPrice
+    }, 0) * doubleMultiplier
+    const pressingBase = pressingTotal / qty
 
     let labelTotal = 0
     if (centerLabels === "blank") {
@@ -585,8 +663,8 @@ export function QuoteCalculator() {
     const jacketTotal = jacketBaseTotal + jacketUpgradeCost
 
     const outerSleevesTotal = (PRICING.outerSleeves[outerSleeves as keyof typeof PRICING.outerSleeves] || 0) * qty
-    const shrinkwrapTotal = shrinkwrap ? PRICING.shrinkwrap * qty : 0
-    const outerTotal = outerSleevesTotal + shrinkwrapTotal
+    const shrinkwrapTotal = outerSleeves === "shrinkwrap" ? outerSleevesTotal : 0
+    const outerTotal = outerSleevesTotal
 
     const upcCost = upcBarcodes === "embedded"
       ? PRICING.upcBarcodes.embedded
@@ -601,7 +679,7 @@ export function QuoteCalculator() {
 
     let assemblyCount = 0
     if (assembly === "standard") {
-      if (outerSleevesTotal > 0) assemblyCount += 1
+      if (outerSleevesTotal > 0 && outerSleeves !== "shrinkwrap") assemblyCount += 1
       if (jacketTotal > 0) assemblyCount += 1
       if (insertTotal > 0) assemblyCount += 1
       if (upcBarcodes === "sticker") assemblyCount += 1
@@ -619,6 +697,7 @@ export function QuoteCalculator() {
 
     return {
       quantity: qty,
+      variations: activeVariations,
       fixedCosts: {
         lacquer: lacquerCost,
         electroplating: electroplatingCost,
@@ -646,9 +725,9 @@ export function QuoteCalculator() {
       unitPrice,
     }
   }, [
-    masterFormat, projectType, quantity, colorStyle, testPressings,
+    masterFormat, projectType, variations, testPressings,
     centerLabels, innerSleeves, inserts, jackets, outerSleeves,
-    shrinkwrap, upcBarcodes, assembly,
+    upcBarcodes, assembly,
     uvGloss, matte, reverseBoard, heavyJacket,
     downloadCards, marketingSticker2, marketingSticker25x3
   ])
@@ -686,6 +765,11 @@ export function QuoteCalculator() {
       marketingSticker2 && 'Marketing Sticker - 2" Circle',
       marketingSticker25x3 && 'Marketing Sticker - 2.5" x 3"',
     ].filter(Boolean).join(", ")
+    const variationsLabel = estimate.variations
+      .map((variation: PressingVariation, index: number) => (
+        `Variation ${index + 1}: ${variation.quantity.toLocaleString()} ${optionLabel(vinylColorOptions, variation.colorStyle)}`
+      ))
+      .join("; ")
 
     try {
       const response = await fetch("/api/quote/send", {
@@ -699,8 +783,10 @@ export function QuoteCalculator() {
           projectType,
           projectTypeLabel: optionLabel(projectTypeOptions, projectType),
           quantity: estimate.quantity,
-          vinylColor: colorStyle,
-          vinylColorLabel: optionLabel(vinylColorOptions, colorStyle),
+          variations: estimate.variations,
+          variationsLabel,
+          vinylColor: estimate.variations[0]?.colorStyle || "",
+          vinylColorLabel: variationsLabel || "None",
           testPressings,
           masterFormat,
           masterFormatLabel: optionLabel(masterFormatOptions, masterFormat),
@@ -716,7 +802,7 @@ export function QuoteCalculator() {
           jacketUpgradesLabel: jacketUpgradesLabel || "None",
           outerSleeves,
           outerSleevesLabel: optionLabel(outerSleeveOptions, outerSleeves),
-          shrinkwrap,
+          shrinkwrap: outerSleeves === "shrinkwrap",
           upcBarcodes,
           upcBarcodesLabel: optionLabel(upcBarcodeOptions, upcBarcodes),
           assembly,
@@ -789,26 +875,38 @@ export function QuoteCalculator() {
                 <span className="w-8 h-8 bg-primary text-primary-foreground flex items-center justify-center text-sm font-mono">2</span>
                 Pressing
               </h3>
-              <div className="grid sm:grid-cols-2 gap-6">
+              <div className="grid gap-3 mb-6 md:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => applyPreset("standard")}
+                  className="border border-border bg-secondary/70 p-4 text-left text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                >
+                  <span className="block font-bold text-foreground">Standard Package</span>
+                  500x 12&quot; 180g, printed labels, insert, jacket, shrinkwrap
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset("double")}
+                  className="border border-border bg-secondary/70 p-4 text-left text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                >
+                  <span className="block font-bold text-foreground">Color Double LP</span>
+                  500x 2x12&quot; 180g, color vinyl, gatefold, shrinkwrap
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset("whitelabel")}
+                  className="border border-border bg-secondary/70 p-4 text-left text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                >
+                  <span className="block font-bold text-foreground">DIY White Label</span>
+                  100x 12&quot; 180g, blank labels, white paper sleeves
+                </button>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-6 mb-6">
                 <Select
                   label="Project Type"
                   value={projectType}
                   onChange={setProjectType}
                   options={projectTypeOptions}
-                />
-                <NumberInput
-                  label="Quantity"
-                  value={quantity}
-                  onChange={setQuantity}
-                  min={100}
-                  step={50}
-                  tooltip="Minimum order is 100 units"
-                />
-                <Select
-                  label="Vinyl Color"
-                  value={colorStyle}
-                  onChange={setColorStyle}
-                  options={vinylColorOptions}
                 />
                 <NumberInput
                   label="Test Pressings"
@@ -817,6 +915,26 @@ export function QuoteCalculator() {
                   min={0}
                   tooltip="Recommended: 5 test pressings to approve before full run"
                 />
+              </div>
+              <div className="space-y-4">
+                {variations.map((variation, index) => (
+                  <div key={index} className="grid gap-4 border border-border bg-secondary/30 p-4 sm:grid-cols-2">
+                    <NumberInput
+                      label={`Variation ${index + 1} Quantity`}
+                      value={variation.quantity}
+                      onChange={(quantity) => updateVariation(index, { quantity })}
+                      min={index === 0 ? 1 : 0}
+                      step={50}
+                      tooltip={index === 0 ? "Legacy calculator treats the first variation as required." : "Set to 0 to ignore this variation."}
+                    />
+                    <Select
+                      label={`Variation ${index + 1} Color Style`}
+                      value={variation.colorStyle}
+                      onChange={(colorStyle) => updateVariation(index, { colorStyle })}
+                      options={vinylColorOptions}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -872,9 +990,6 @@ export function QuoteCalculator() {
                   onChange={setOuterSleeves}
                   options={outerSleeveOptions}
                 />
-                <div className="space-y-4">
-                  <Checkbox label="Shrinkwrap" checked={shrinkwrap} onChange={setShrinkwrap} />
-                </div>
               </div>
             </div>
 
@@ -921,6 +1036,17 @@ export function QuoteCalculator() {
                 <div className="flex justify-between items-center py-2 border-b border-border">
                   <span className="text-muted-foreground">Quantity</span>
                   <span className="font-mono font-bold">{estimate.quantity.toLocaleString()}</span>
+                </div>
+                <div className="space-y-1 border-b border-border py-2 text-sm">
+                  <span className="text-muted-foreground">Pressing Variations</span>
+                  {estimate.variations.map((variation: PressingVariation, index: number) => (
+                    <div key={index} className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Variation {index + 1}</span>
+                      <span className="text-right font-mono">
+                        {variation.quantity.toLocaleString()} {optionLabel(vinylColorOptions, variation.colorStyle)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
                 
                 <div className="py-2">
