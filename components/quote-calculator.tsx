@@ -1,263 +1,34 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Calculator, ChevronDown, Info, Save, Send } from "lucide-react"
+import {
+  calculateLegacyQuote,
+  heavyJacketUpgradeAllowed,
+  jacketUpgradesAllowed,
+  LEGACY_PROJECT_TYPES,
+  splatterAllowed,
+  type LegacyColorStyle,
+  type LegacyProjectType,
+  type LegacyQuoteInput,
+  type LegacyVariation,
+} from "@/lib/legacy-quote"
 
-// Legacy NORP production quote pricing ported from neworleansrecordpress.com.
-const PRICING = {
-  lacquer: 479,
-  electroplating: {
-    single12: 418,
-    single7: 303,
-    additional12: 207.90,
-    additional7: 154,
-  },
-  testPresses: 165,
-  testPressesAdditional: 6.60,
-  setupFee: 154,
-  setupFeeColor: 110,
-  assemblyActionFee: 0.132,
-  pressing: {
-    heavyweight: {
-      black: 2.86,
-      random: 2.86,
-      solid: 3.30,
-      translucent: 3.30,
-      marble: 4.246,
-      smoke: 4.246,
-      splatter: 4.95,
-    },
-    sevenInch: {
-      black: 1.595,
-      random: 1.595,
-      solid: 1.98,
-      translucent: 1.98,
-      marble: 2.31,
-      smoke: 2.31,
-      splatter: 4.95,
-    },
-  },
-  centerLabels: {
-    blank: 0.165,
-    printed: {
-      qty100: 248,
-      qty250: 248,
-      qty500: 275,
-      qty1000: 385,
-    },
-    printed7: {
-      qty100: 303,
-      qty250: 303,
-      qty500: 303,
-      qty1000: 385,
-    },
-  },
-  innerSleeves: {
-    twelveInch: {
-      whitePaper: 0.22,
-      heavyWhitePaper: 0.385,
-      whitePoly: 0.55,
-      blackPaper: 0.44,
-      blackPoly: 0.77,
-      brownPaper: 0.275,
-    },
-    sevenInch: {
-      whitePaper: 0.22,
-      blackPaper: 0.55,
-      brownPaper: 0.33,
-    },
-    printed1Color: {
-      qty100: 297,
-      qty250: 468,
-      qty500: 704,
-      qty1000: 572,
-      qty2000: 847,
-      qty5000: 1630,
-      qty10000: 2950,
-    },
-    printedFullColor: {
-      qty100: 297,
-      qty250: 468,
-      qty500: 704,
-      qty1000: 1045,
-      qty2000: 1400,
-      qty5000: 2535,
-      qty10000: 4785,
-    },
-  },
-  inserts: {
-    "2panel": {
-      qty100: 165,
-      qty250: 264,
-      qty500: 363,
-      qty1000: 649,
-      qty2000: 1055,
-      qty5000: 1380,
-      qty10000: 2750,
-      qty20000: 5515,
-      qty30000: 7985,
-    },
-    "4panel": {
-      qty100: 275,
-      qty200: 385,
-      qty250: 440,
-      qty300: 495,
-      qty500: 730,
-      qty1000: 1045,
-      qty2000: 1585,
-      qty5000: 2180,
-      qty10000: 4355,
-      qty20000: 8710,
-      qty30000: 13070,
-    },
-  },
-  jackets: {
-    blank: 1.925,
-    fullColorSingle: {
-      qty100: 380,
-      qty200: 545,
-      qty250: 660,
-      qty300: 715,
-      qty500: 765,
-      qty1000: 990,
-      qty2000: 1620,
-      qty3000: 2260,
-      qty5000: 3355,
-      qty7500: 4860,
-      qty10000: 6380,
-    },
-    fullColorSingle7: {
-      qty100: 605,
-      qty200: 605,
-      qty250: 605,
-      qty300: 660,
-      qty500: 660,
-      qty1000: 770,
-      qty2000: 1430,
-    },
-    oneColorSingle: {
-      qty100: 380,
-      qty200: 545,
-      qty250: 660,
-      qty300: 715,
-      qty500: 765,
-      qty1000: 880,
-      qty2000: 1240,
-      qty3000: 1790,
-      qty5000: 2835,
-      qty7500: 3960,
-      qty10000: 5500,
-    },
-    oneColorSingle7: {
-      qty100: 363,
-      qty200: 363,
-      qty250: 363,
-      qty300: 418,
-      qty500: 418,
-      qty1000: 495,
-      qty2000: 935,
-    },
-    fullColorWide: {
-      qty100: 545,
-      qty200: 600,
-      qty250: 825,
-      qty300: 880,
-      qty500: 935,
-      qty1000: 1320,
-      qty2000: 2280,
-      qty3000: 3250,
-      qty5000: 5005,
-      qty7500: 7335,
-      qty10000: 9680,
-    },
-    oneColorWide: {
-      qty100: 545,
-      qty200: 600,
-      qty250: 825,
-      qty300: 880,
-      qty500: 935,
-      qty1000: 1265,
-      qty2000: 2035,
-      qty3000: 2980,
-      qty5000: 4815,
-      qty7500: 7135,
-      qty10000: 9415,
-    },
-    gatefold: {
-      qty100: 2200,
-      qty200: 2200,
-      qty250: 2200,
-      qty300: 2200,
-      qty500: 2200,
-      qty1000: 2750,
-      qty2000: 3300,
-      qty3000: 4730,
-      qty5000: 7150,
-      qty7500: 9900,
-      qty10000: 12650,
-    },
-  },
-  jacketUpgrades: {
-    uvGloss: 55,
-    matte: 55,
-    reverseBoard: 165,
-    heavySinglePocket: 330,
-    heavyGatefold: 385,
-  },
-  outerSleeves: {
-    none: 0,
-    standardNoFlap: 0.22,
-    crystalClear: 0.264,
-    shrinkwrap: 0.264,
-  },
-  upcBarcodes: {
-    none: 0,
-    providing: 0,
-    embedded: 55,
-    sticker: {
-      qty100: 138,
-      qty250: 138,
-      qty500: 138,
-      qty1000: 220,
-      qty2000: 413,
-      qty5000: 1240,
-      qty10000: 2450,
-      qty20000: 4840,
-      qty30000: 7150,
-    },
-  },
-  extras: {
-    downloadCards: {
-      qty100: 193,
-      qty250: 248,
-      qty500: 275,
-      qty1000: 385,
-      qty2000: 605,
-      qty5000: 1320,
-    },
-    marketingSticker: {
-      qty100: 110,
-      qty250: 138,
-      qty500: 165,
-      qty1000: 193,
-      qty2000: 330,
-      qty5000: 550,
-      qty10000: 990,
-      qty20000: 1340,
-      qty30000: 1650,
-    },
-  },
-}
+type Option = { value: string; label: string }
 
-type SelectProps = {
+function Select({
+  label,
+  value,
+  onChange,
+  options,
+  tooltip,
+}: {
   label: string
   value: string
   onChange: (value: string) => void
-  options: { value: string; label: string }[]
+  options: Option[]
   tooltip?: string
-}
-
-function Select({ label, value, onChange, options, tooltip }: SelectProps) {
+}) {
   return (
     <div className="space-y-2">
       <label className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -274,29 +45,32 @@ function Select({ label, value, onChange, options, tooltip }: SelectProps) {
       <div className="relative">
         <select
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(event) => onChange(event.target.value)}
           className="w-full appearance-none bg-secondary text-foreground px-4 py-3 pr-10 border border-border focus:border-primary focus:outline-none transition-colors cursor-pointer"
         >
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
-        <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <ChevronDown
+          size={16}
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+        />
       </div>
     </div>
   )
 }
 
-function NumberInput({ 
-  label, 
-  value, 
-  onChange, 
+function NumberInput({
+  label,
+  value,
+  onChange,
   min = 0,
   step = 1,
-  tooltip 
-}: { 
+  tooltip,
+}: {
   label: string
   value: number
   onChange: (value: number) => void
@@ -320,7 +94,7 @@ function NumberInput({
       <input
         type="number"
         value={value}
-        onChange={(e) => onChange(Math.max(min, parseInt(e.target.value) || 0))}
+        onChange={(event) => onChange(Math.max(min, parseInt(event.target.value, 10) || 0))}
         min={min}
         step={step}
         className="w-full bg-secondary text-foreground px-4 py-3 border border-border focus:border-primary focus:outline-none transition-colors"
@@ -329,205 +103,268 @@ function NumberInput({
   )
 }
 
-function Checkbox({ 
-  label, 
-  checked, 
-  onChange 
-}: { 
+function Checkbox({
+  label,
+  checked,
+  onChange,
+  disabled = false,
+}: {
   label: string
   checked: boolean
   onChange: (checked: boolean) => void
+  disabled?: boolean
 }) {
   return (
-    <label className="flex items-center gap-3 cursor-pointer group">
-      <div className={`w-5 h-5 border-2 flex items-center justify-center transition-colors ${checked ? 'bg-primary border-primary' : 'border-border group-hover:border-primary'}`}>
+    <label className={`flex items-center gap-3 ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer group"}`}>
+      <div
+        className={`w-5 h-5 border-2 flex items-center justify-center transition-colors ${
+          checked ? "bg-primary border-primary" : "border-border group-hover:border-primary"
+        }`}
+      >
         {checked && (
           <svg className="w-3 h-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
             <path strokeLinecap="square" strokeLinejoin="miter" d="M5 13l4 4L19 7" />
           </svg>
         )}
       </div>
+      <input
+        type="checkbox"
+        className="sr-only"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
       <span className="text-sm text-foreground">{label}</span>
     </label>
   )
 }
 
-function optionLabel(options: { value: string; label: string }[], value: string) {
-  return options.find(option => option.value === value)?.label || value
+function optionLabel(options: Option[], value: string) {
+  return options.find((option) => option.value === value)?.label || value
 }
 
-type PriceTable = Record<string, number>
-
-function tierPrice(table: PriceTable, quantity: number) {
-  const tiers = [
-    [100, "qty100"],
-    [200, "qty200"],
-    [250, "qty250"],
-    [300, "qty300"],
-    [500, "qty500"],
-    [1000, "qty1000"],
-    [2000, "qty2000"],
-    [3000, "qty3000"],
-    [5000, "qty5000"],
-    [7500, "qty7500"],
-    [10000, "qty10000"],
-    [20000, "qty20000"],
-    [30000, "qty30000"],
-  ] as const
-
-  for (const [limit, key] of tiers) {
-    if (quantity <= limit && table[key] !== undefined) return table[key]
+function colorOptions(projectType: LegacyProjectType): Option[] {
+  const options: Option[] = [
+    { value: "black", label: "Black" },
+    { value: "random", label: "Random Color Special" },
+    { value: "solid", label: "Solid" },
+    { value: "translucent", label: "Translucent" },
+    { value: "marble", label: "Marble" },
+    { value: "smoke", label: "Smoke" },
+  ]
+  if (splatterAllowed(projectType)) {
+    options.push({ value: "splatter", label: "Splatter" })
   }
-
-  const available = tiers
-    .map(([, key]) => table[key])
-    .filter((value): value is number => typeof value === "number" && value > 0)
-
-  return available.length ? available[available.length - 1] : 0
+  return options
 }
 
-function usesColorSetup(colorStyle: string) {
-  return !["black", "random"].includes(colorStyle)
-}
+const CENTER_LABEL_OPTIONS: Option[] = [
+  { value: "printed", label: "Printed" },
+  { value: "blank", label: "Blank" },
+  { value: "customerSupplied", label: "Customer Supplied" },
+]
 
-function isDoubleProject(projectType: string) {
-  return projectType === "double-12-heavy"
-}
+const INNER_SLEEVE_OPTIONS: Option[] = [
+  { value: "whitePaper", label: "White Paper" },
+  { value: "heavyWhitePaper", label: "Heavy Duty White Paper" },
+  { value: "blackPaper", label: "Black Paper" },
+  { value: "brownPaper", label: "Brown Paper" },
+  { value: "whitePoly", label: "White Poly-Lined" },
+  { value: "blackPoly", label: "Black Poly-Lined" },
+  { value: "printed1Color", label: "Printed - 1-Color" },
+  { value: "printedFullColor", label: "Printed - Full Color" },
+]
 
-function isSevenInchProject(projectType: string) {
-  return projectType === "7-standard"
-}
+const INSERT_OPTIONS: Option[] = [
+  { value: "none", label: "None" },
+  { value: "2panel", label: "12 x 12 - 2-Panel" },
+  { value: "4panel", label: "24 x 12 - 4-Panel" },
+]
 
-type PressingVariation = {
-  quantity: number
-  colorStyle: string
-}
+const JACKET_OPTIONS: Option[] = [
+  { value: "none", label: "None" },
+  { value: "fullColorSingle", label: "Printed - Full Color - Single Pocket (Standard)" },
+  { value: "1colorSingle", label: "Printed - 1-Color - Single Pocket (Standard)" },
+  { value: "fullColorWide", label: "Printed - Full Color - Single Pocket (Wide Spine for 2xLP)" },
+  { value: "1colorWide", label: "Printed - 1-Color - Single Pocket (Wide Spine for 2xLP)" },
+  { value: "gatefold", label: "Printed - Full Color - Gatefold (Standard)" },
+  { value: "screenWhite1", label: "Screen-Printed - White or Chipboard 1-Color - Single Pocket" },
+  { value: "screenWhite2", label: "Screen-Printed - White or Chipboard 2-Color - Single Pocket" },
+  { value: "screenWhite3", label: "Screen-Printed - White or Chipboard 3-Color - Single Pocket" },
+  { value: "screenWhite4", label: "Screen-Printed - White or Chipboard 4-Color - Single Pocket" },
+  { value: "screenBlack1", label: "Screen-Printed - Black 1-Color - Single Pocket" },
+  { value: "screenBlack2", label: "Screen-Printed - Black 2-Color - Single Pocket" },
+  { value: "screenBlack3", label: "Screen-Printed - Black 3-Color - Single Pocket" },
+  { value: "screenBlack4", label: "Screen-Printed - Black 4-Color - Single Pocket" },
+  { value: "blankWhite", label: "Blank - White - Single Pocket" },
+  { value: "blankBlack", label: "Blank - Black - Single Pocket" },
+  { value: "blankChipboard", label: "Blank - Chipboard - Single Pocket" },
+]
+
+const OUTER_SLEEVE_OPTIONS: Option[] = [
+  { value: "none", label: "None" },
+  { value: "standardNoFlap", label: "Standard - No Flap (Polyethylene)" },
+  { value: "standardWithFlap", label: "Standard - With Flap (Polyethylene)" },
+  { value: "crystalClear", label: "Crystal Clear - Resealable Flap (Polypropylene)" },
+  { value: "shrinkwrap", label: "Shrinkwrap" },
+]
+
+const ASSEMBLY_OPTIONS: Option[] = [
+  { value: "standard", label: "Standard - NORP Assembles" },
+  { value: "none", label: "None - I'll Assemble Myself" },
+]
 
 export function QuoteCalculator() {
-  const masterFormatOptions = [
-    { value: "audioFiles", label: "I'm submitting audio files" },
-    { value: "haveLacquer", label: "I have a lacquer" },
-  ]
-  const projectTypeOptions = [
-    { value: "12-heavy", label: '12" LP - Heavy (180g)' },
-    { value: "double-12-heavy", label: '2x12" 2xLP - Heavy (180g)' },
-    { value: "7-standard", label: '7" EP - Standard' },
-  ]
-  const vinylColorOptions = [
-    { value: "black", label: "Black (Standard)" },
-    { value: "random", label: "Random Color (Free!)" },
-    { value: "solid", label: "Solid Color (+$0.25/unit)" },
-    { value: "translucent", label: "Translucent (+$0.35/unit)" },
-    { value: "marble", label: "Marble (+$0.50/unit)" },
-    { value: "smoke", label: "Smoke (+$0.45/unit)" },
-    { value: "splatter", label: "Splatter (+$0.75/unit)" },
-  ]
-  const centerLabelOptions = [
-    { value: "printed", label: "Printed Labels" },
-    { value: "blank", label: "Blank Labels" },
-    { value: "customerSupplied", label: "Customer Supplied" },
-  ]
-  const innerSleeveOptions = [
-    { value: "none", label: "None" },
-    { value: "whitePaper", label: "White Paper" },
-    { value: "heavyWhitePaper", label: "Heavy Duty White Paper" },
-    { value: "blackPaper", label: "Black Paper" },
-    { value: "brownPaper", label: "Brown Paper" },
-    { value: "whitePoly", label: "White Poly-Lined" },
-    { value: "blackPoly", label: "Black Poly-Lined" },
-    { value: "printed1Color", label: "Printed - 1 Color" },
-    { value: "printedFullColor", label: "Printed - Full Color" },
-  ]
-  const insertOptions = [
-    { value: "none", label: "None" },
-    { value: "2panel", label: '12" x 12" - 2 Panel' },
-    { value: "4panel", label: '24" x 12" - 4 Panel' },
-  ]
-  const jacketOptions = [
-    { value: "none", label: "None" },
-    { value: "fullColorSingle", label: "Full Color - Single Pocket" },
-    { value: "1colorSingle", label: "1 Color - Single Pocket" },
-    { value: "fullColorWide", label: "Full Color - Wide Spine (2xLP)" },
-    { value: "1colorWide", label: "1 Color - Wide Spine (2xLP)" },
-    { value: "gatefold", label: "Full Color - Gatefold" },
-    { value: "screenPrinted1", label: "Screen-Printed - 1 Color" },
-    { value: "screenPrinted2", label: "Screen-Printed - 2 Color" },
-    { value: "screenPrinted3", label: "Screen-Printed - 3 Color" },
-    { value: "screenPrinted4", label: "Screen-Printed - 4 Color" },
-    { value: "blankWhite", label: "Blank - White" },
-    { value: "blankBlack", label: "Blank - Black" },
-    { value: "blankChipboard", label: "Blank - Chipboard" },
-  ]
-  const outerSleeveOptions = [
-    { value: "none", label: "None" },
-    { value: "standardNoFlap", label: "Standard - No Flap" },
-    { value: "crystalClear", label: "Crystal Clear - Resealable Flap" },
-    { value: "shrinkwrap", label: "Shrinkwrap" },
-  ]
-  const upcBarcodeOptions = [
-    { value: "none", label: "None / Don't Need" },
-    { value: "providing", label: "I'm Providing Barcode" },
-    { value: "embedded", label: "Need Barcode - Embedded in Art" },
-    { value: "sticker", label: "Need Barcode - Sticker" },
-  ]
-  const assemblyOptions = [
-    { value: "standard", label: "NORP Assembles" },
-    { value: "none", label: "I'll Assemble Myself" },
-  ]
-
-  // Form state
-  const [masterFormat, setMasterFormat] = useState("audioFiles")
-  const [projectType, setProjectType] = useState("12-heavy")
-  const [variations, setVariations] = useState<PressingVariation[]>([
-    { quantity: 300, colorStyle: "black" },
+  const [masterFormat, setMasterFormat] = useState<LegacyQuoteInput["masterFormat"]>("audioFiles")
+  const [projectType, setProjectType] = useState<LegacyProjectType>("single")
+  const [variations, setVariations] = useState<LegacyVariation[]>([
+    { quantity: 500, colorStyle: "black" },
     { quantity: 0, colorStyle: "black" },
     { quantity: 0, colorStyle: "black" },
   ])
   const [testPressings, setTestPressings] = useState(5)
-  const [centerLabels, setCenterLabels] = useState("printed")
-  const [innerSleeves, setInnerSleeves] = useState("whitePaper")
-  const [inserts, setInserts] = useState("none")
+  const [centerLabels, setCenterLabels] = useState<LegacyQuoteInput["centerLabels"]>("printed")
+  const [innerSleeves, setInnerSleeves] = useState<LegacyQuoteInput["innerSleeves"]>("whitePaper")
+  const [inserts, setInserts] = useState<LegacyQuoteInput["inserts"]>("none")
   const [jackets, setJackets] = useState("fullColorSingle")
-  const [outerSleeves, setOuterSleeves] = useState("shrinkwrap")
-  const [upcBarcodes, setUpcBarcodes] = useState("none")
-  const [assembly, setAssembly] = useState("standard")
-  
-  // Jacket upgrades
+  const [outerSleeves, setOuterSleeves] = useState<LegacyQuoteInput["outerSleeves"]>("shrinkwrap")
+  const [assembly, setAssembly] = useState<LegacyQuoteInput["assembly"]>("standard")
   const [uvGloss, setUvGloss] = useState(false)
   const [matte, setMatte] = useState(false)
   const [reverseBoard, setReverseBoard] = useState(false)
   const [heavyJacket, setHeavyJacket] = useState(false)
-  
-  // Extras
+  const [upcEmbedded, setUpcEmbedded] = useState(false)
+  const [upcSticker, setUpcSticker] = useState(false)
   const [downloadCards, setDownloadCards] = useState(false)
-  const [marketingSticker2, setMarketingSticker2] = useState(false)
-  const [marketingSticker25x3, setMarketingSticker25x3] = useState(false)
+  const [marketingStickerCircle, setMarketingStickerCircle] = useState(false)
+  const [marketingStickerRectangle, setMarketingStickerRectangle] = useState(false)
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [submittingAction, setSubmittingAction] = useState<"save_quote" | "start_order" | null>(null)
   const [submitMessage, setSubmitMessage] = useState("")
 
-  const updateVariation = (index: number, patch: Partial<PressingVariation>) => {
-    setVariations(current => current.map((variation, variationIndex) => (
-      variationIndex === index ? { ...variation, ...patch } : variation
-    )))
+  const vinylColorOptions = useMemo(() => colorOptions(projectType), [projectType])
+  const totalQuantity = useMemo(
+    () => Math.max(1, variations.filter((variation) => variation.quantity > 0).reduce((sum, variation) => sum + variation.quantity, 0)),
+    [variations],
+  )
+  const isSevenInch = projectType === "seveninch"
+  const innerSleeveOptions = useMemo(
+    () =>
+      isSevenInch
+        ? INNER_SLEEVE_OPTIONS.filter((option) => ["whitePaper", "blackPaper", "brownPaper"].includes(option.value))
+        : INNER_SLEEVE_OPTIONS,
+    [isSevenInch],
+  )
+  const insertOptions = useMemo(
+    () => (isSevenInch ? INSERT_OPTIONS.filter((option) => option.value === "none") : INSERT_OPTIONS),
+    [isSevenInch],
+  )
+  const jacketOptions = useMemo(
+    () =>
+      isSevenInch
+        ? JACKET_OPTIONS.filter((option) =>
+            ["none", "fullColorSingle", "1colorSingle", "blankWhite", "blankBlack", "blankChipboard"].includes(option.value),
+          )
+        : JACKET_OPTIONS,
+    [isSevenInch],
+  )
+  const showJacketUpgrades = jacketUpgradesAllowed(projectType, totalQuantity, jackets)
+  const showHeavyJacketUpgrade = showJacketUpgrades && heavyJacketUpgradeAllowed(totalQuantity, jackets)
+
+  const quoteInput = useMemo<LegacyQuoteInput>(
+    () => ({
+      masterFormat,
+      projectType,
+      variations,
+      testPressings,
+      centerLabels,
+      innerSleeves,
+      inserts,
+      jackets,
+      outerSleeves,
+      upcEmbedded,
+      upcSticker,
+      assembly,
+      jacketUpgrades: { uvGloss, matte, reverseBoard, heavyJacket },
+      downloadCards,
+      marketingStickerCircle,
+      marketingStickerRectangle,
+    }),
+    [
+      masterFormat,
+      projectType,
+      variations,
+      testPressings,
+      centerLabels,
+      innerSleeves,
+      inserts,
+      jackets,
+      outerSleeves,
+      upcEmbedded,
+      upcSticker,
+      assembly,
+      uvGloss,
+      matte,
+      reverseBoard,
+      heavyJacket,
+      downloadCards,
+      marketingStickerCircle,
+      marketingStickerRectangle,
+    ],
+  )
+
+  const estimate = useMemo(() => calculateLegacyQuote(quoteInput), [quoteInput])
+
+  const updateVariation = (index: number, patch: Partial<LegacyVariation>) => {
+    setVariations((current) =>
+      current.map((variation, variationIndex) =>
+        variationIndex === index ? { ...variation, ...patch } : variation,
+      ),
+    )
+  }
+
+  const handleProjectTypeChange = (value: string) => {
+    const nextType = value as LegacyProjectType
+    setProjectType(nextType)
+    if (!splatterAllowed(nextType)) {
+      setVariations((current) =>
+        current.map((variation) =>
+          variation.colorStyle === "splatter" ? { ...variation, colorStyle: "black" } : variation,
+        ),
+      )
+    }
+    if (nextType === "seveninch") {
+      if (!["whitePaper", "blackPaper", "brownPaper"].includes(innerSleeves)) setInnerSleeves("whitePaper")
+      if (inserts !== "none") setInserts("none")
+      if (
+        !["none", "fullColorSingle", "1colorSingle", "blankWhite", "blankBlack", "blankChipboard"].includes(jackets)
+      ) {
+        setJackets("fullColorSingle")
+      }
+      setUvGloss(false)
+      setMatte(false)
+      setReverseBoard(false)
+      setHeavyJacket(false)
+    }
   }
 
   const applyPreset = (preset: "standard" | "double" | "whitelabel") => {
     setMasterFormat("audioFiles")
     setTestPressings(5)
-    setUpcBarcodes("none")
+    setUpcEmbedded(false)
+    setUpcSticker(false)
     setDownloadCards(false)
-    setMarketingSticker2(false)
-    setMarketingSticker25x3(false)
+    setMarketingStickerCircle(false)
+    setMarketingStickerRectangle(false)
     setUvGloss(false)
     setMatte(false)
     setReverseBoard(false)
     setHeavyJacket(false)
 
     if (preset === "standard") {
-      setProjectType("12-heavy")
+      setProjectType("single")
       setVariations([
         { quantity: 500, colorStyle: "black" },
         { quantity: 0, colorStyle: "black" },
@@ -543,7 +380,7 @@ export function QuoteCalculator() {
     }
 
     if (preset === "double") {
-      setProjectType("double-12-heavy")
+      setProjectType("double")
       setVariations([
         { quantity: 500, colorStyle: "solid" },
         { quantity: 0, colorStyle: "black" },
@@ -558,7 +395,7 @@ export function QuoteCalculator() {
       return
     }
 
-    setProjectType("12-heavy")
+    setProjectType("single")
     setVariations([
       { quantity: 100, colorStyle: "black" },
       { quantity: 0, colorStyle: "black" },
@@ -572,172 +409,23 @@ export function QuoteCalculator() {
     setAssembly("none")
   }
 
-  // Calculate totals
-  const estimate = useMemo(() => {
-    const activeVariations = variations.filter(variation => variation.quantity > 0)
-    const qty = Math.max(1, activeVariations.reduce((sum, variation) => sum + variation.quantity, 0))
-    const isDouble = isDoubleProject(projectType)
-    const isSevenInch = isSevenInchProject(projectType)
-    const doubleMultiplier = isDouble ? 2 : 1
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount)
 
-    const lacquerCost = (masterFormat === "audioFiles" ? PRICING.lacquer : 0) * doubleMultiplier
-    const additionalStampers = qty > 750 ? Math.ceil((qty - 750) / 1000) : 0
-    const electroplatingBase = isSevenInch
-      ? PRICING.electroplating.single7 + additionalStampers * PRICING.electroplating.additional7
-      : PRICING.electroplating.single12 + additionalStampers * PRICING.electroplating.additional12
-    const electroplatingCost = electroplatingBase * doubleMultiplier
-    const baseTestPressingCost = testPressings < 6
-      ? PRICING.testPresses
-      : PRICING.testPresses + PRICING.testPressesAdditional * (testPressings - 5)
-    const testPressingCost = baseTestPressingCost * doubleMultiplier
-    const setupCost = variations.reduce((sum, variation, index) => {
-      if (variation.quantity <= 0) return sum
-      const baseSetup = index === 0 ? PRICING.setupFee : 0
-      return sum + baseSetup + (usesColorSetup(variation.colorStyle) ? PRICING.setupFeeColor : 0)
-    }, 0) * doubleMultiplier
-
-    const pressingTable = isSevenInch ? PRICING.pressing.sevenInch : PRICING.pressing.heavyweight
-    const pressingTotal = activeVariations.reduce((sum, variation) => {
-      const variationPrice = pressingTable[variation.colorStyle as keyof typeof pressingTable] ?? pressingTable.black
-      return sum + variation.quantity * variationPrice
-    }, 0) * doubleMultiplier
-    const pressingBase = pressingTotal / qty
-
-    let labelTotal = 0
-    if (centerLabels === "blank") {
-      labelTotal = qty * PRICING.centerLabels.blank
-    } else if (centerLabels === "printed") {
-      labelTotal = qty > 1000
-        ? qty * 1.3 * 0.15 * 1.3
-        : tierPrice(isSevenInch ? PRICING.centerLabels.printed7 : PRICING.centerLabels.printed, qty)
-    }
-    labelTotal *= doubleMultiplier
-
-    let innerTotal = 0
-    if (innerSleeves === "printed1Color") {
-      innerTotal = tierPrice(PRICING.innerSleeves.printed1Color, qty)
-    } else if (innerSleeves === "printedFullColor") {
-      innerTotal = tierPrice(PRICING.innerSleeves.printedFullColor, qty)
-    } else if (innerSleeves !== "none") {
-      const sleeveTable = isSevenInch ? PRICING.innerSleeves.sevenInch : PRICING.innerSleeves.twelveInch
-      innerTotal = (sleeveTable[innerSleeves as keyof typeof sleeveTable] || 0) * qty
-    }
-    innerTotal *= doubleMultiplier
-
-    const insertTotal = inserts === "none" ? 0 : tierPrice(PRICING.inserts[inserts as keyof typeof PRICING.inserts], qty)
-
-    let jacketBaseTotal = 0
-    let isGroupJacket = false
-    if (["blankWhite", "blankBlack", "blankChipboard"].includes(jackets)) {
-      jacketBaseTotal = PRICING.jackets.blank * qty
-    } else if (jackets === "fullColorSingle") {
-      isGroupJacket = true
-      jacketBaseTotal = tierPrice(isSevenInch ? PRICING.jackets.fullColorSingle7 : PRICING.jackets.fullColorSingle, qty)
-    } else if (jackets === "1colorSingle" || jackets.startsWith("screenPrinted")) {
-      isGroupJacket = true
-      jacketBaseTotal = tierPrice(isSevenInch ? PRICING.jackets.oneColorSingle7 : PRICING.jackets.oneColorSingle, qty)
-    } else if (jackets === "fullColorWide") {
-      isGroupJacket = true
-      jacketBaseTotal = tierPrice(PRICING.jackets.fullColorWide, qty)
-    } else if (jackets === "1colorWide") {
-      isGroupJacket = true
-      jacketBaseTotal = tierPrice(PRICING.jackets.oneColorWide, qty)
-    } else if (jackets === "gatefold") {
-      isGroupJacket = true
-      jacketBaseTotal = tierPrice(PRICING.jackets.gatefold, qty)
-    }
-
-    let jacketUpgradeCost = 0
-    if (isGroupJacket && qty > 100 && !isSevenInch) {
-      if (uvGloss) jacketUpgradeCost += Math.ceil(qty / 500) * PRICING.jacketUpgrades.uvGloss
-      if (matte) jacketUpgradeCost += Math.ceil(qty / 500) * PRICING.jacketUpgrades.matte
-      if (reverseBoard) jacketUpgradeCost += Math.ceil(qty / 500) * PRICING.jacketUpgrades.reverseBoard
-      if (heavyJacket) {
-        jacketUpgradeCost += Math.ceil(qty / 1000) * (
-          jackets === "gatefold"
-            ? PRICING.jacketUpgrades.heavyGatefold
-            : PRICING.jacketUpgrades.heavySinglePocket
-        )
-      }
-    }
-    const jacketTotal = jacketBaseTotal + jacketUpgradeCost
-
-    const outerSleevesTotal = (PRICING.outerSleeves[outerSleeves as keyof typeof PRICING.outerSleeves] || 0) * qty
-    const shrinkwrapTotal = outerSleeves === "shrinkwrap" ? outerSleevesTotal : 0
-    const outerTotal = outerSleevesTotal
-
-    const upcCost = upcBarcodes === "embedded"
-      ? PRICING.upcBarcodes.embedded
-      : upcBarcodes === "sticker"
-        ? tierPrice(PRICING.upcBarcodes.sticker, qty)
-        : 0
-
-    const downloadCardsTotal = downloadCards ? tierPrice(PRICING.extras.downloadCards, qty) : 0
-    const marketingSticker2Total = marketingSticker2 ? tierPrice(PRICING.extras.marketingSticker, qty) : 0
-    const marketingSticker25x3Total = marketingSticker25x3 ? tierPrice(PRICING.extras.marketingSticker, qty) : 0
-    const extrasTotal = downloadCardsTotal + marketingSticker2Total + marketingSticker25x3Total
-
-    let assemblyCount = 0
-    if (assembly === "standard") {
-      if (outerSleevesTotal > 0 && outerSleeves !== "shrinkwrap") assemblyCount += 1
-      if (jacketTotal > 0) assemblyCount += 1
-      if (insertTotal > 0) assemblyCount += 1
-      if (upcBarcodes === "sticker") assemblyCount += 1
-      if (downloadCards) assemblyCount += 1
-      if (marketingSticker2) assemblyCount += 1
-      if (marketingSticker25x3) assemblyCount += 1
-      if (isDouble) assemblyCount += 1
-    }
-    const assemblyCost = PRICING.assemblyActionFee * assemblyCount * qty
-
-    const fixedCosts = lacquerCost + electroplatingCost + setupCost + testPressingCost + upcCost
-    const variableTotal = pressingTotal + labelTotal + innerTotal + insertTotal + jacketTotal + outerTotal + assemblyCost + extrasTotal
-    const grandTotal = fixedCosts + variableTotal
-    const unitPrice = grandTotal / qty
-
-    return {
-      quantity: qty,
-      variations: activeVariations,
-      fixedCosts: {
-        lacquer: lacquerCost,
-        electroplating: electroplatingCost,
-        setup: setupCost,
-        testPressings: testPressingCost,
-        upc: upcCost,
-        total: fixedCosts,
-      },
-      perUnit: {
-        pressing: pressingBase,
-        color: 0,
-        labels: labelTotal / qty,
-        innerSleeves: innerTotal / qty,
-        inserts: insertTotal / qty,
-        jackets: jacketTotal / qty,
-        outerSleeves: outerTotal / qty,
-        shrinkwrap: shrinkwrapTotal / qty,
-        assembly: assemblyCost / qty,
-        extras: extrasTotal / qty,
-        total: variableTotal / qty,
-      },
-      pressingTotal,
-      jacketUpgradeCost,
-      grandTotal,
-      unitPrice,
-    }
-  }, [
-    masterFormat, projectType, variations, testPressings,
-    centerLabels, innerSleeves, inserts, jackets, outerSleeves,
-    upcBarcodes, assembly,
-    uvGloss, matte, reverseBoard, heavyJacket,
-    downloadCards, marketingSticker2, marketingSticker25x3
-  ])
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount)
-  }
+  const lineItems = [
+    { label: "Lacquer", amount: estimate.lacquer },
+    { label: "Electroplating", amount: estimate.electroplating },
+    { label: "Setup Fee", amount: estimate.setupFee },
+    { label: "Test Pressings", amount: estimate.testPressings },
+    { label: "Pressing", amount: estimate.pressing },
+    { label: "Center Labels", amount: estimate.centerLabels },
+    { label: "Inner Sleeves", amount: estimate.innerSleeves },
+    { label: "Inserts", amount: estimate.inserts },
+    { label: "Jackets", amount: estimate.jackets },
+    { label: "Outer Sleeves", amount: estimate.outerSleeves },
+    { label: "Extras", amount: estimate.extras },
+    { label: "Assembly Fees", amount: estimate.assemblyFees },
+  ]
 
   const submitQuote = async (action: "save_quote" | "start_order") => {
     if (!name.trim() || !email.trim()) {
@@ -748,27 +436,31 @@ export function QuoteCalculator() {
     setSubmittingAction(action)
     setSubmitMessage("")
 
-    const jacketUpgrades = {
-      uvGloss,
-      matte,
-      reverseBoard,
-      heavyJacket,
-    }
     const jacketUpgradesLabel = [
       uvGloss && "UV Gloss Coating",
       matte && "Matte Coating",
       reverseBoard && "Reverse Board",
-      heavyJacket && "24pt Heavy Jacket",
-    ].filter(Boolean).join(", ")
+      heavyJacket && "24pt. Heavy Jacket",
+    ]
+      .filter(Boolean)
+      .join(", ")
+
     const extrasLabel = [
+      upcEmbedded && "UPC Barcode - Embedded",
+      upcSticker && "UPC Barcode - Stickers",
       downloadCards && "Download Cards",
-      marketingSticker2 && 'Marketing Sticker - 2" Circle',
-      marketingSticker25x3 && 'Marketing Sticker - 2.5" x 3"',
-    ].filter(Boolean).join(", ")
-    const variationsLabel = estimate.variations
-      .map((variation: PressingVariation, index: number) => (
-        `Variation ${index + 1}: ${variation.quantity.toLocaleString()} ${optionLabel(vinylColorOptions, variation.colorStyle)}`
-      ))
+      marketingStickerCircle && 'Marketing Sticker - 2" Circle',
+      marketingStickerRectangle && 'Marketing Sticker - 2.5" x 3" Rectangle',
+    ]
+      .filter(Boolean)
+      .join(", ")
+
+    const variationsLabel = variations
+      .filter((variation) => variation.quantity > 0)
+      .map(
+        (variation, index) =>
+          `Variation ${index + 1}: ${variation.quantity.toLocaleString()} ${optionLabel(vinylColorOptions, variation.colorStyle)}`,
+      )
       .join("; ")
 
     try {
@@ -781,50 +473,69 @@ export function QuoteCalculator() {
           email: email.trim(),
           phone: phone.trim(),
           projectType,
-          projectTypeLabel: optionLabel(projectTypeOptions, projectType),
+          projectTypeLabel: optionLabel([...LEGACY_PROJECT_TYPES], projectType),
           quantity: estimate.quantity,
-          variations: estimate.variations,
+          variations: variations.filter((variation) => variation.quantity > 0),
           variationsLabel,
-          vinylColor: estimate.variations[0]?.colorStyle || "",
+          vinylColor: variations[0]?.colorStyle || "",
           vinylColorLabel: variationsLabel || "None",
           testPressings,
           masterFormat,
-          masterFormatLabel: optionLabel(masterFormatOptions, masterFormat),
+          masterFormatLabel: optionLabel(
+            [
+              { value: "audioFiles", label: "I'm submitting audio files" },
+              { value: "haveLacquer", label: "I have a lacquer" },
+            ],
+            masterFormat,
+          ),
           centerLabels,
-          centerLabelsLabel: optionLabel(centerLabelOptions, centerLabels),
+          centerLabelsLabel: optionLabel(CENTER_LABEL_OPTIONS, centerLabels),
           innerSleeves,
-          innerSleevesLabel: optionLabel(innerSleeveOptions, innerSleeves),
+          innerSleevesLabel: optionLabel(INNER_SLEEVE_OPTIONS, innerSleeves),
           inserts,
-          insertsLabel: optionLabel(insertOptions, inserts),
+          insertsLabel: optionLabel(INSERT_OPTIONS, inserts),
           jackets,
-          jacketsLabel: optionLabel(jacketOptions, jackets),
-          jacketUpgrades,
+          jacketsLabel: optionLabel(JACKET_OPTIONS, jackets),
+          jacketUpgrades: { uvGloss, matte, reverseBoard, heavyJacket },
           jacketUpgradesLabel: jacketUpgradesLabel || "None",
           outerSleeves,
-          outerSleevesLabel: optionLabel(outerSleeveOptions, outerSleeves),
+          outerSleevesLabel: optionLabel(OUTER_SLEEVE_OPTIONS, outerSleeves),
           shrinkwrap: outerSleeves === "shrinkwrap",
-          upcBarcodes,
-          upcBarcodesLabel: optionLabel(upcBarcodeOptions, upcBarcodes),
+          upcBarcodes: upcEmbedded ? "embedded" : upcSticker ? "sticker" : "none",
+          upcBarcodesLabel: extrasLabel.includes("UPC") ? extrasLabel : "None / Don't Need",
           assembly,
-          assemblyLabel: optionLabel(assemblyOptions, assembly),
+          assemblyLabel: optionLabel(ASSEMBLY_OPTIONS, assembly),
           extrasLabel: extrasLabel || "None",
           estimate: {
-            ...estimate,
-            lacquerCost: estimate.fixedCosts.lacquer,
-            electroplatingCost: estimate.fixedCosts.electroplating,
-            setupCost: estimate.fixedCosts.setup,
-            testPressingCost: estimate.fixedCosts.testPressings,
-            pressingCost: estimate.pressingTotal,
-            labelCost: estimate.perUnit.labels * estimate.quantity,
-            innerCost: estimate.perUnit.innerSleeves * estimate.quantity,
-            insertCost: estimate.perUnit.inserts * estimate.quantity,
-            jacketCost: estimate.perUnit.jackets * estimate.quantity,
-            jacketUpgradeCost: estimate.jacketUpgradeCost,
-            outerCost: estimate.perUnit.outerSleeves * estimate.quantity,
-            assemblyCost: estimate.perUnit.assembly * estimate.quantity,
+            quantity: estimate.quantity,
+            grandTotal: estimate.total,
+            unitPrice: estimate.unitPrice,
+            lacquerCost: estimate.lacquer,
+            electroplatingCost: estimate.electroplating,
+            setupCost: estimate.setupFee,
+            testPressingCost: estimate.testPressings,
+            pressingCost: estimate.pressing,
+            labelCost: estimate.centerLabels,
+            innerCost: estimate.innerSleeves,
+            insertCost: estimate.inserts,
+            jacketCost: estimate.jackets,
+            outerCost: estimate.outerSleeves,
+            assemblyCost: estimate.assemblyFees,
+            fixedCosts: {
+              lacquer: estimate.lacquer,
+              electroplating: estimate.electroplating,
+              setup: estimate.setupFee,
+              testPressings: estimate.testPressings,
+              upc: estimate.extras,
+              total: estimate.lacquer + estimate.electroplating + estimate.setupFee + estimate.testPressings,
+            },
+            perUnit: {
+              total: estimate.unitPrice,
+            },
           },
         }),
       })
+
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || "Quote submission failed")
       setSubmitMessage(action === "start_order" ? "Order started. We got it." : "Quote saved and emailed.")
@@ -839,42 +550,38 @@ export function QuoteCalculator() {
     <section id="quote" className="py-24 md:py-32 bg-background">
       <div className="max-w-7xl mx-auto px-6">
         <div className="text-center mb-16">
-          <p className="text-primary font-mono text-sm uppercase tracking-[0.3em] mb-4">
-            Instant Pricing
-          </p>
-          <h2 className="text-4xl md:text-5xl font-bold uppercase tracking-tight mb-6">
-            Quote Calculator
-          </h2>
+          <p className="text-primary font-mono text-sm uppercase tracking-[0.3em] mb-4">Instant Pricing</p>
+          <h2 className="text-4xl md:text-5xl font-bold uppercase tracking-tight mb-6">Quote Calculator</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Configure your vinyl pressing project and get an instant estimate. 
-            Minimum order quantity is 100 units.
+            Choose your pressing options and view an instant quote in real-time. Minimum order quantity is 100 units.
           </p>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Form Section */}
           <div className="lg:col-span-2 space-y-8">
-            {/* Lacquer & Mastering */}
             <div className="bg-card border border-border p-6 md:p-8">
               <h3 className="text-lg font-bold uppercase tracking-wider mb-6 flex items-center gap-3">
                 <span className="w-8 h-8 bg-primary text-primary-foreground flex items-center justify-center text-sm font-mono">1</span>
-                Mastering
+                Lacquer
               </h3>
               <Select
                 label="Master Format"
                 value={masterFormat}
-                onChange={setMasterFormat}
+                onChange={(value) => setMasterFormat(value as LegacyQuoteInput["masterFormat"])}
                 tooltip="If you have your own lacquer, we can skip cutting."
-                options={masterFormatOptions}
+                options={[
+                  { value: "audioFiles", label: "I'm submitting audio files" },
+                  { value: "haveLacquer", label: "I have a lacquer" },
+                ]}
               />
             </div>
 
-            {/* Pressing Options */}
             <div className="bg-card border border-border p-6 md:p-8">
               <h3 className="text-lg font-bold uppercase tracking-wider mb-6 flex items-center gap-3">
                 <span className="w-8 h-8 bg-primary text-primary-foreground flex items-center justify-center text-sm font-mono">2</span>
                 Pressing
               </h3>
+
               <div className="grid gap-3 mb-6 md:grid-cols-3">
                 <button
                   type="button"
@@ -882,7 +589,7 @@ export function QuoteCalculator() {
                   className="border border-border bg-secondary/70 p-4 text-left text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
                 >
                   <span className="block font-bold text-foreground">Standard Package</span>
-                  500x 12&quot; 180g, printed labels, insert, jacket, shrinkwrap
+                  500x 12&quot; Black or Random Color 150g, printed labels, insert, jacket, shrinkwrap
                 </button>
                 <button
                   type="button"
@@ -890,7 +597,7 @@ export function QuoteCalculator() {
                   className="border border-border bg-secondary/70 p-4 text-left text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
                 >
                   <span className="block font-bold text-foreground">Color Double LP</span>
-                  500x 2x12&quot; 180g, color vinyl, gatefold, shrinkwrap
+                  500x 2x12&quot; Solid or Translucent 150g, gatefold, shrinkwrap
                 </button>
                 <button
                   type="button"
@@ -898,39 +605,43 @@ export function QuoteCalculator() {
                   className="border border-border bg-secondary/70 p-4 text-left text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
                 >
                   <span className="block font-bold text-foreground">DIY White Label</span>
-                  100x 12&quot; 180g, blank labels, white paper sleeves
+                  100x 12&quot; Black or Random Color 150g, blank labels, white paper sleeves
                 </button>
               </div>
+
               <div className="grid sm:grid-cols-2 gap-6 mb-6">
                 <Select
                   label="Project Type"
                   value={projectType}
-                  onChange={setProjectType}
-                  options={projectTypeOptions}
+                  onChange={handleProjectTypeChange}
+                  options={[...LEGACY_PROJECT_TYPES]}
                 />
                 <NumberInput
-                  label="Test Pressings"
+                  label="Test Pressing Quantity"
                   value={testPressings}
                   onChange={setTestPressings}
                   min={0}
                   tooltip="Recommended: 5 test pressings to approve before full run"
                 />
               </div>
+
               <div className="space-y-4">
                 {variations.map((variation, index) => (
                   <div key={index} className="grid gap-4 border border-border bg-secondary/30 p-4 sm:grid-cols-2">
                     <NumberInput
-                      label={`Variation ${index + 1} Quantity`}
+                      label={`Quantity${index === 0 ? "" : ` (Variation ${index + 1})`}`}
                       value={variation.quantity}
                       onChange={(quantity) => updateVariation(index, { quantity })}
                       min={index === 0 ? 1 : 0}
                       step={50}
-                      tooltip={index === 0 ? "Legacy calculator treats the first variation as required." : "Set to 0 to ignore this variation."}
+                      tooltip={index === 0 ? "First variation is required." : "Set to 0 to ignore this variation."}
                     />
                     <Select
-                      label={`Variation ${index + 1} Color Style`}
+                      label={`Color Style${index === 0 ? "" : ` (Variation ${index + 1})`}`}
                       value={variation.colorStyle}
-                      onChange={(colorStyle) => updateVariation(index, { colorStyle })}
+                      onChange={(colorStyle) =>
+                        updateVariation(index, { colorStyle: colorStyle as LegacyColorStyle })
+                      }
                       options={vinylColorOptions}
                     />
                   </div>
@@ -938,7 +649,6 @@ export function QuoteCalculator() {
               </div>
             </div>
 
-            {/* Packaging */}
             <div className="bg-card border border-border p-6 md:p-8">
               <h3 className="text-lg font-bold uppercase tracking-wider mb-6 flex items-center gap-3">
                 <span className="w-8 h-8 bg-primary text-primary-foreground flex items-center justify-center text-sm font-mono">3</span>
@@ -948,83 +658,109 @@ export function QuoteCalculator() {
                 <Select
                   label="Center Labels"
                   value={centerLabels}
-                  onChange={setCenterLabels}
-                  options={centerLabelOptions}
+                  onChange={(value) => setCenterLabels(value as LegacyQuoteInput["centerLabels"])}
+                  options={CENTER_LABEL_OPTIONS}
                 />
                 <Select
                   label="Inner Sleeves"
                   value={innerSleeves}
-                  onChange={setInnerSleeves}
+                  onChange={(value) => setInnerSleeves(value as LegacyQuoteInput["innerSleeves"])}
                   options={innerSleeveOptions}
                 />
                 <Select
                   label="Inserts"
                   value={inserts}
-                  onChange={setInserts}
+                  onChange={(value) => setInserts(value as LegacyQuoteInput["inserts"])}
                   options={insertOptions}
                 />
-                <Select
-                  label="Jackets"
-                  value={jackets}
-                  onChange={setJackets}
-                  options={jacketOptions}
-                />
+                <Select label="Jackets" value={jackets} onChange={setJackets} options={jacketOptions} />
               </div>
-              
-              {jackets !== "none" && (
+
+              {showJacketUpgrades && (
                 <div className="border-t border-border pt-6 mb-6">
-                  <p className="text-sm font-medium text-foreground mb-4">Jacket Upgrades</p>
+                  <p className="text-sm font-medium text-foreground mb-4">Jacket Upgrades (Check any that apply)</p>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Checkbox label="UV Gloss Coating" checked={uvGloss} onChange={setUvGloss} />
-                    <Checkbox label="Matte Coating" checked={matte} onChange={setMatte} />
+                    <Checkbox
+                      label="UV Gloss Coating"
+                      checked={uvGloss}
+                      onChange={(checked) => {
+                        setUvGloss(checked)
+                        if (checked) setMatte(false)
+                      }}
+                    />
+                    <Checkbox
+                      label="Matte Coating"
+                      checked={matte}
+                      onChange={(checked) => {
+                        setMatte(checked)
+                        if (checked) setUvGloss(false)
+                      }}
+                    />
                     <Checkbox label="Reverse Board" checked={reverseBoard} onChange={setReverseBoard} />
-                    <Checkbox label="24pt Heavy Jacket" checked={heavyJacket} onChange={setHeavyJacket} />
+                    <Checkbox
+                      label="24pt. Heavy Jacket"
+                      checked={heavyJacket}
+                      onChange={setHeavyJacket}
+                      disabled={!showHeavyJacketUpgrade}
+                    />
                   </div>
                 </div>
               )}
 
-              <div className="grid sm:grid-cols-2 gap-6">
-                <Select
-                  label="Outer Sleeves"
-                  value={outerSleeves}
-                  onChange={setOuterSleeves}
-                  options={outerSleeveOptions}
-                />
-              </div>
+              <Select
+                label="Outer Sleeves"
+                value={outerSleeves}
+                onChange={(value) => setOuterSleeves(value as LegacyQuoteInput["outerSleeves"])}
+                options={OUTER_SLEEVE_OPTIONS}
+              />
             </div>
 
-            {/* Extras & Assembly */}
             <div className="bg-card border border-border p-6 md:p-8">
               <h3 className="text-lg font-bold uppercase tracking-wider mb-6 flex items-center gap-3">
                 <span className="w-8 h-8 bg-primary text-primary-foreground flex items-center justify-center text-sm font-mono">4</span>
                 Extras & Assembly
               </h3>
-              <div className="grid sm:grid-cols-2 gap-6 mb-6">
-                <Select
-                  label="UPC Barcodes"
-                  value={upcBarcodes}
-                  onChange={setUpcBarcodes}
-                  options={upcBarcodeOptions}
-                />
-                <Select
-                  label="Assembly"
-                  value={assembly}
-                  onChange={setAssembly}
-                  options={assemblyOptions}
-                />
-              </div>
-              <div className="border-t border-border pt-6">
-                <p className="text-sm font-medium text-foreground mb-4">Additional Extras</p>
+              <Select
+                label="Assembly Fees"
+                value={assembly}
+                onChange={(value) => setAssembly(value as LegacyQuoteInput["assembly"])}
+                options={ASSEMBLY_OPTIONS}
+              />
+              <div className="border-t border-border pt-6 mt-6">
+                <p className="text-sm font-medium text-foreground mb-4">Extras (Check any that apply)</p>
                 <div className="grid sm:grid-cols-2 gap-4">
+                  <Checkbox
+                    label="UPC Barcode - Embedded"
+                    checked={upcEmbedded}
+                    onChange={(checked) => {
+                      setUpcEmbedded(checked)
+                      if (checked) setUpcSticker(false)
+                    }}
+                  />
+                  <Checkbox
+                    label="UPC Barcode - Stickers"
+                    checked={upcSticker}
+                    onChange={(checked) => {
+                      setUpcSticker(checked)
+                      if (checked) setUpcEmbedded(false)
+                    }}
+                  />
                   <Checkbox label="Download Cards" checked={downloadCards} onChange={setDownloadCards} />
-                  <Checkbox label='Marketing Sticker - 2" Circle' checked={marketingSticker2} onChange={setMarketingSticker2} />
-                  <Checkbox label='Marketing Sticker - 2.5" x 3"' checked={marketingSticker25x3} onChange={setMarketingSticker25x3} />
+                  <Checkbox
+                    label='Marketing Sticker - 2" Circle'
+                    checked={marketingStickerCircle}
+                    onChange={setMarketingStickerCircle}
+                  />
+                  <Checkbox
+                    label='Marketing Sticker - 2.5" x 3" Rectangle'
+                    checked={marketingStickerRectangle}
+                    onChange={setMarketingStickerRectangle}
+                  />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Estimate Summary - Sticky */}
           <div className="lg:col-span-1">
             <div className="bg-card border border-border p-6 md:p-8 lg:sticky lg:top-24">
               <div className="flex items-center gap-3 mb-6">
@@ -1032,78 +768,34 @@ export function QuoteCalculator() {
                 <h3 className="text-lg font-bold uppercase tracking-wider">Project Estimate</h3>
               </div>
 
-              <div className="space-y-4 mb-6">
+              <div className="space-y-1 mb-6 text-sm">
                 <div className="flex justify-between items-center py-2 border-b border-border">
-                  <span className="text-muted-foreground">Quantity</span>
+                  <span className="text-muted-foreground uppercase tracking-wider text-xs">Quantity</span>
                   <span className="font-mono font-bold">{estimate.quantity.toLocaleString()}</span>
                 </div>
-                <div className="space-y-1 border-b border-border py-2 text-sm">
-                  <span className="text-muted-foreground">Pressing Variations</span>
-                  {estimate.variations.map((variation: PressingVariation, index: number) => (
-                    <div key={index} className="flex justify-between gap-4">
-                      <span className="text-muted-foreground">Variation {index + 1}</span>
-                      <span className="text-right font-mono">
-                        {variation.quantity.toLocaleString()} {optionLabel(vinylColorOptions, variation.colorStyle)}
-                      </span>
+                {lineItems.map((item) =>
+                  item.amount > 0 ? (
+                    <div key={item.label} className="flex justify-between gap-4 py-1.5">
+                      <span className="text-muted-foreground">{item.label}</span>
+                      <span className="font-mono">{formatCurrency(item.amount)}</span>
                     </div>
-                  ))}
-                </div>
-                
-                <div className="py-2">
-                  <p className="text-sm text-muted-foreground mb-2">Fixed Costs</p>
-                  <div className="space-y-1 text-sm">
-                    {estimate.fixedCosts.lacquer > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Lacquer Cutting</span>
-                        <span className="font-mono">{formatCurrency(estimate.fixedCosts.lacquer)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Electroplating</span>
-                      <span className="font-mono">{formatCurrency(estimate.fixedCosts.electroplating)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Setup Fee</span>
-                      <span className="font-mono">{formatCurrency(estimate.fixedCosts.setup)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Test Pressings</span>
-                      <span className="font-mono">{formatCurrency(estimate.fixedCosts.testPressings)}</span>
-                    </div>
-                    {estimate.fixedCosts.upc > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">UPC Barcode</span>
-                        <span className="font-mono">{formatCurrency(estimate.fixedCosts.upc)}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center py-2 border-t border-border">
-                  <span className="text-muted-foreground">Per Unit Cost</span>
-                  <span className="font-mono">{formatCurrency(estimate.perUnit.total)}</span>
-                </div>
-                
-                <div className="flex justify-between items-center py-2 border-t border-border">
-                  <span className="text-muted-foreground">Pressing Total</span>
-                  <span className="font-mono">{formatCurrency(estimate.pressingTotal)}</span>
-                </div>
+                  ) : null,
+                )}
               </div>
 
               <div className="bg-secondary p-4 mb-6">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-muted-foreground">Unit Price</span>
+                  <span className="text-sm text-muted-foreground uppercase tracking-wider">Unit Price</span>
                   <span className="font-mono text-lg">{formatCurrency(estimate.unitPrice)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="font-bold uppercase">Total Estimate</span>
-                  <span className="font-mono text-2xl text-primary font-bold">{formatCurrency(estimate.grandTotal)}</span>
+                  <span className="font-bold uppercase">Total</span>
+                  <span className="font-mono text-2xl text-primary font-bold">{formatCurrency(estimate.total)}</span>
                 </div>
               </div>
 
               <p className="text-xs text-muted-foreground mb-6">
-                * This is an estimate only. Final pricing may vary based on project specifics. 
-                Contact us for a detailed quote.
+                This is an estimate only. Final pricing may vary based on project specifics.
               </p>
 
               <div className="space-y-3 mb-6">
@@ -1147,9 +839,7 @@ export function QuoteCalculator() {
                   <Save size={16} />
                   {submittingAction === "save_quote" ? "Saving..." : "Save Quote"}
                 </button>
-                {submitMessage && (
-                  <p className="text-xs text-muted-foreground text-center">{submitMessage}</p>
-                )}
+                {submitMessage && <p className="text-xs text-muted-foreground text-center">{submitMessage}</p>}
               </div>
             </div>
           </div>
