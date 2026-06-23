@@ -12,8 +12,8 @@ import {
 import { FAQ_ITEMS, TEMPLATE_INTRO, TEMPLATE_SECTIONS } from "@/lib/resources-content"
 
 const SECTIONS = [
-  { id: "faq", label: "FAQ" },
   { id: "templates", label: "Templates" },
+  { id: "faq", label: "FAQ" },
 ] as const
 
 function FaqAnswer({ html }: { html: string }) {
@@ -49,7 +49,7 @@ function TemplateDownloadCard({ label, href }: { label: string; href: string }) 
 }
 
 export function ResourcesPage() {
-  const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("faq")
+  const [activeSection, setActiveSection] = useState<(typeof SECTIONS)[number]["id"]>("templates")
 
   useEffect(() => {
     const hash = window.location.hash.replace("#", "")
@@ -68,9 +68,9 @@ export function ResourcesPage() {
     <div className="max-w-7xl mx-auto px-6">
       <div className="text-center mb-12">
         <p className="text-primary font-mono text-sm uppercase tracking-[0.3em] mb-4">Resources</p>
-        <h1 className="text-4xl md:text-5xl font-bold uppercase tracking-tight mb-6">FAQ & Templates</h1>
+        <h1 className="text-4xl md:text-5xl font-bold uppercase tracking-tight mb-6">Templates & FAQ</h1>
         <p className="text-muted-foreground max-w-2xl mx-auto">
-          Frequently asked questions about pressing at NORP, plus artwork templates to guarantee your project prints at the highest quality.
+          Artwork templates to guarantee your project prints at the highest quality, plus frequently asked questions about pressing at NORP.
         </p>
       </div>
 
@@ -93,44 +93,7 @@ export function ResourcesPage() {
         </div>
       </div>
 
-      <section id="faq" className="scroll-mt-36 mb-24">
-        <div className="mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold uppercase tracking-tight">FAQ</h2>
-          <p className="mt-3 text-muted-foreground max-w-3xl">
-            Frequently asked questions about pressing at NORP.
-          </p>
-        </div>
-
-        <div className="border border-border bg-card">
-          <Accordion type="single" collapsible className="px-4 md:px-6">
-            {FAQ_ITEMS.map((item, index) => (
-              <AccordionItem key={item.question} value={`faq-${index}`}>
-                <AccordionTrigger className="text-base font-bold uppercase tracking-wide hover:no-underline hover:text-primary">
-                  {item.question}
-                </AccordionTrigger>
-                <AccordionContent>
-                  <FaqAnswer html={item.answerHtml} />
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </div>
-
-        <div className="mt-10 border border-border bg-secondary/40 p-6 md:p-8 text-center">
-          <p className="text-muted-foreground mb-4">
-            Have a question not answered above? Need some extra guidance on making your project a reality?
-          </p>
-          <a
-            href="mailto:info@neworleansrecordpress.com"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-colors"
-          >
-            <Mail size={16} />
-            Email Us
-          </a>
-        </div>
-      </section>
-
-      <section id="templates" className="scroll-mt-36 pb-8">
+      <section id="templates" className="scroll-mt-36 mb-24">
         <div className="mb-8">
           <h2 className="text-2xl md:text-3xl font-bold uppercase tracking-tight">Templates</h2>
           <p className="mt-3 text-muted-foreground max-w-3xl">
@@ -174,6 +137,43 @@ export function ResourcesPage() {
           >
             Get a Quote
           </Link>
+        </div>
+      </section>
+
+      <section id="faq" className="scroll-mt-36 pb-8">
+        <div className="mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold uppercase tracking-tight">FAQ</h2>
+          <p className="mt-3 text-muted-foreground max-w-3xl">
+            Frequently asked questions about pressing at NORP.
+          </p>
+        </div>
+
+        <div className="border border-border bg-card">
+          <Accordion type="single" collapsible className="px-4 md:px-6">
+            {FAQ_ITEMS.map((item, index) => (
+              <AccordionItem key={item.question} value={`faq-${index}`}>
+                <AccordionTrigger className="text-base font-bold uppercase tracking-wide hover:no-underline hover:text-primary">
+                  {item.question}
+                </AccordionTrigger>
+                <AccordionContent>
+                  <FaqAnswer html={item.answerHtml} />
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+
+        <div className="mt-10 border border-border bg-secondary/40 p-6 md:p-8 text-center">
+          <p className="text-muted-foreground mb-4">
+            Have a question not answered above? Need some extra guidance on making your project a reality?
+          </p>
+          <a
+            href="mailto:info@neworleansrecordpress.com"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-colors"
+          >
+            <Mail size={16} />
+            Email Us
+          </a>
         </div>
       </section>
     </div>
