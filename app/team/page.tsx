@@ -2,35 +2,17 @@ import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Header } from '@/components/header'
-import { readFileSync } from 'fs'
-import { join } from 'path'
+import { getTeamMembers } from '@/lib/team-data'
 
 export const metadata: Metadata = {
   title: 'Our Team | New Orleans Record Press',
   description: 'The people behind every groove. Meet the NORP team.',
 }
 
-interface TeamMember {
-  id: string
-  name: string
-  title: string
-  department: string
-  image: string
-}
-
-function getTeam(): TeamMember[] {
-  try {
-    const data = readFileSync(join(process.cwd(), 'app', 'team', 'team.json'), 'utf-8')
-    return JSON.parse(data)
-  } catch {
-    return []
-  }
-}
-
 export const dynamic = 'force-dynamic'
 
-export default function TeamPage() {
-  const members = getTeam()
+export default async function TeamPage() {
+  const members = await getTeamMembers()
 
   return (
     <div className="min-h-screen bg-background text-foreground">

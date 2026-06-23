@@ -562,6 +562,7 @@ function TeamTab({ password }: { password: string }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [newMember, setNewMember] = useState<Partial<TeamMember>>({ name: '', title: '', department: '', image: '' })
 
   const loadMembers = useCallback(() => {
@@ -573,7 +574,13 @@ function TeamTab({ password }: { password: string }) {
 
   useEffect(() => { loadMembers() }, [loadMembers])
 
-  async function saveAll(updated: TeamMember[]) {
+  function updateMember(id: string, field: keyof TeamMember, value: string) {
+    setMembers(prev => prev.map(member => (
+      member.id === id ? { ...member, [field]: value } : member
+    )))
+  }
+
+  async function saveAll(updated: TeamMember[] = members) {
     setSaving(true)
     setSaveMsg('')
     const res = await fetch('/api/team', {
@@ -583,8 +590,46 @@ function TeamTab({ password }: { password: string }) {
     })
     const data = await res.json()
     setSaving(false)
-    setSaveMsg(data.ok ? 'Saved!' : 'Error saving.')
-    setTimeout(() => setSaveMsg(''), 2500)
+    if (data.ok) {
+      setMembers(updated)
+      setSaveMsg('Saved!')
+    } else {
+      setSaveMsg(data.error || 'Error saving.')
+    }
+    setTimeout(() => setSaveMsg(''), 3000)
+  }
+
+  async function uploadPhoto(memberId: string, file: File) {
+    setUploadingId(memberId)
+    setSaveMsg('')
+    try {
+      const formData = new FormData()
+      formData.append('password', password)
+      formData.append('memberId', memberId)
+      formData.append('file', file)
+
+      const res = await fetch('/api/admin/team-upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        setSaveMsg(data.error || 'Upload failed.')
+        return
+      }
+
+      const updated = members.map(member => (
+        member.id === memberId ? { ...member, image: data.url as string } : member
+      ))
+      setMembers(updated)
+      await saveAll(updated)
+      setSaveMsg('Photo uploaded and saved!')
+    } catch {
+      setSaveMsg('Upload failed.')
+    } finally {
+      setUploadingId(null)
+      setTimeout(() => setSaveMsg(''), 3000)
+    }
   }
 
   function deleteMember(id: string) {
@@ -597,14 +642,14 @@ function TeamTab({ password }: { password: string }) {
   function addMember() {
     if (!newMember.name) return
     const id = newMember.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-    const m: TeamMember = {
+    const member: TeamMember = {
       id,
       name: newMember.name!,
       title: newMember.title || '',
       department: newMember.department || '',
       image: newMember.image || '',
     }
-    const updated = [...members, m]
+    const updated = [...members, member]
     setMembers(updated)
     saveAll(updated)
     setNewMember({ name: '', title: '', department: '', image: '' })
@@ -615,35 +660,103 @@ function TeamTab({ password }: { password: string }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, alignItems: 'center', marginBottom: 24 }}>
-        {saveMsg && <span style={{ color: saveMsg === 'Saved!' ? '#1A53FF' : '#ff6b6b', fontSize: 14 }}>{saveMsg}</span>}
-        {saving && <span style={{ color: '#888', fontSize: 14 }}>Saving...</span>}
+        {saveMsg && (
+          <span style={{ color: saveMsg.toLowerCase().includes('error') || saveMsg.toLowerCase().includes('failed') ? '#ff6b6b' : '#1A53FF', fontSize: 14 }}>
+            {saveMsg}
+          </span>
+        )}
+        <button onClick={() => saveAll()} disabled={saving} style={{ ...S.btnGreen, opacity: saving ? 0.7 : 1 }}>
+          {saving ? 'Saving…' : 'Save Team Changes'}
+        </button>
       </div>
 
-      <div style={S.card}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #2a2a2a' }}>
-              {['Name', 'Title', 'Department', 'Image URL', 'Actions'].map(h => (
-                <th key={h} style={{ padding: '12px 16px', textAlign: 'left', color: '#888', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontFamily: 'monospace' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {members.map((m, i) => (
-              <tr key={m.id} style={{ borderBottom: '1px solid #1a1a1a', background: i % 2 === 0 ? 'transparent' : '#0f0f0f' }}>
-                <td style={{ padding: '10px 16px', fontSize: 14, fontWeight: 600, color: '#F0ECE2' }}>{m.name}</td>
-                <td style={{ padding: '10px 16px', fontSize: 13, color: '#1A53FF' }}>{m.title}</td>
-                <td style={{ padding: '10px 16px', fontSize: 13, color: '#888' }}>{m.department}</td>
-                <td style={{ padding: '10px 16px', fontSize: 12, color: '#555', fontFamily: 'monospace', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {m.image || <span style={{ color: '#333' }}>—</span>}
-                </td>
-                <td style={{ padding: '10px 16px' }}>
-                  <button onClick={() => deleteMember(m.id)} style={S.btnDanger}>Remove</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ display: 'grid', gap: 16 }}>
+        {members.map(member => (
+          <div key={member.id} style={{ ...S.cardPad, marginBottom: 0 }}>
+            <div style={{ display: 'grid', gap: 16, gridTemplateColumns: '120px 1fr auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <div style={{
+                  width: 96,
+                  height: 96,
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  background: '#1a1a1a',
+                  border: '1px solid #2a2a2a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  {member.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={member.image} alt={member.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ color: '#555', fontSize: 24, fontWeight: 700 }}>
+                      {member.name.split(' ').map(part => part[0]).join('').slice(0, 2)}
+                    </span>
+                  )}
+                </div>
+                <label style={{ ...S.btnBlue, padding: '6px 10px', fontSize: 12, cursor: uploadingId === member.id ? 'wait' : 'pointer' }}>
+                  {uploadingId === member.id ? 'Uploading…' : 'Upload Photo'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    disabled={uploadingId === member.id}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      if (file) uploadPhoto(member.id, file)
+                      event.target.value = ''
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                <div>
+                  <label style={S.label}>Full Name</label>
+                  <input
+                    type="text"
+                    value={member.name}
+                    onChange={event => updateMember(member.id, 'name', event.target.value)}
+                    style={S.input}
+                  />
+                </div>
+                <div>
+                  <label style={S.label}>Title / Role</label>
+                  <input
+                    type="text"
+                    value={member.title}
+                    onChange={event => updateMember(member.id, 'title', event.target.value)}
+                    style={S.input}
+                  />
+                </div>
+                <div>
+                  <label style={S.label}>Department</label>
+                  <input
+                    type="text"
+                    value={member.department}
+                    onChange={event => updateMember(member.id, 'department', event.target.value)}
+                    style={S.input}
+                  />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={S.label}>Image URL</label>
+                  <input
+                    type="text"
+                    value={member.image}
+                    onChange={event => updateMember(member.id, 'image', event.target.value)}
+                    style={S.input}
+                    placeholder="/images/team/name.jpg or uploaded blob URL"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <button onClick={() => deleteMember(member.id)} style={S.btnDanger}>Remove</button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div style={S.cardPad}>
@@ -734,7 +847,7 @@ export default function AdminPage() {
               ? 'Track PVC compound, inner sleeves, and outer sleeves'
               : activeTab === 'shop'
               ? 'Manage products, stock, and pricing'
-              : 'Add or remove team members shown on the public /team page'}
+              : 'Edit team members and upload profile photos for the public /team page'}
           </p>
         </div>
 
