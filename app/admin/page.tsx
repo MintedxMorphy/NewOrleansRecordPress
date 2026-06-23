@@ -557,6 +557,44 @@ interface TeamMember {
   image: string
 }
 
+async function compressImageForUpload(file: File): Promise<File> {
+  if (file.type === 'image/gif') return file
+
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('Could not read image file'))
+    reader.readAsDataURL(file)
+  })
+
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('Could not load image file'))
+    img.src = dataUrl
+  })
+
+  const maxSize = 1600
+  const scale = Math.min(1, maxSize / Math.max(image.width, image.height))
+  const width = Math.max(1, Math.round(image.width * scale))
+  const height = Math.max(1, Math.round(image.height * scale))
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return file
+  ctx.drawImage(image, 0, 0, width, height)
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, 'image/jpeg', 0.88)
+  })
+  if (!blob) return file
+
+  const baseName = file.name.replace(/\.[^.]+$/, '') || 'photo'
+  return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' })
+}
+
 function TeamTab({ password }: { password: string }) {
   const [members, setMembers] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
@@ -603,10 +641,17 @@ function TeamTab({ password }: { password: string }) {
     setUploadingId(memberId)
     setSaveMsg('')
     try {
+      let uploadFile = file
+      try {
+        uploadFile = await compressImageForUpload(file)
+      } catch {
+        uploadFile = file
+      }
+
       const formData = new FormData()
       formData.append('password', password)
       formData.append('memberId', memberId)
-      formData.append('file', file)
+      formData.append('file', uploadFile)
 
       const res = await fetch('/api/admin/team-upload', {
         method: 'POST',
@@ -624,11 +669,11 @@ function TeamTab({ password }: { password: string }) {
       setMembers(updated)
       await saveAll(updated)
       setSaveMsg('Photo uploaded and saved!')
-    } catch {
-      setSaveMsg('Upload failed.')
+    } catch (error) {
+      setSaveMsg(error instanceof Error ? error.message : 'Upload failed.')
     } finally {
       setUploadingId(null)
-      setTimeout(() => setSaveMsg(''), 3000)
+      setTimeout(() => setSaveMsg(''), 8000)
     }
   }
 
@@ -699,7 +744,7 @@ function TeamTab({ password }: { password: string }) {
                   {uploadingId === member.id ? 'Uploading…' : 'Upload Photo'}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.heic,.heif"
                     style={{ display: 'none' }}
                     disabled={uploadingId === member.id}
                     onChange={(event) => {

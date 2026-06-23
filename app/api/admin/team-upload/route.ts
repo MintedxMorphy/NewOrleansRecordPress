@@ -1,6 +1,27 @@
-import { put } from '@vercel/blob'
 import { type NextRequest, NextResponse } from 'next/server'
+import { uploadSiteImage } from '@/lib/site-storage'
 import { verifyAdminPassword } from '@/lib/team-data'
+
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'avif'])
+
+function isImageFile(file: File) {
+  if (file.type.startsWith('image/')) return true
+  const extension = file.name.split('.').pop()?.toLowerCase()
+  return extension ? IMAGE_EXTENSIONS.has(extension) : false
+}
+
+function contentTypeFor(file: File, extension: string) {
+  if (file.type.startsWith('image/')) return file.type
+  switch (extension) {
+    case 'png': return 'image/png'
+    case 'webp': return 'image/webp'
+    case 'gif': return 'image/gif'
+    case 'heic': return 'image/heic'
+    case 'heif': return 'image/heif'
+    case 'avif': return 'image/avif'
+    default: return 'image/jpeg'
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,25 +42,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'No file provided' }, { status: 400 })
     }
 
-    if (!file.type.startsWith('image/')) {
-      return NextResponse.json({ ok: false, error: 'File must be an image' }, { status: 400 })
-    }
-
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    if (!isImageFile(file)) {
       return NextResponse.json(
-        { ok: false, error: 'Image uploads require BLOB_READ_WRITE_TOKEN on the server' },
-        { status: 503 },
+        { ok: false, error: 'File must be an image (JPG, PNG, WEBP, HEIC, etc.)' },
+        { status: 400 },
       )
     }
 
     const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const blob = await put(`team/${memberId}-${Date.now()}.${extension}`, file, {
-      access: 'public',
-    })
+    const bytes = Buffer.from(await file.arrayBuffer())
+    const storagePath = `team-photos/${memberId}-${Date.now()}.${extension}`
+    const url = await uploadSiteImage(storagePath, bytes, contentTypeFor(file, extension))
 
-    return NextResponse.json({ ok: true, url: blob.url })
+    return NextResponse.json({ ok: true, url })
   } catch (error) {
     console.error('Team upload error:', error)
-    return NextResponse.json({ ok: false, error: 'Upload failed' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Upload failed'
+    return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }

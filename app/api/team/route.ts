@@ -21,6 +21,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('Save team error:', err)
-    return NextResponse.json({ ok: false, error: 'Save failed' }, { status: 500 })
+    const message = err instanceof Error ? err.message : 'Save failed'
+    return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }
