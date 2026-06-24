@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DragDropContext, Draggable, Droppable, DraggableProvidedDragHandleProps, DropResult } from '@hello-pangea/dnd';
+import { DragDropContext, Draggable, Droppable, DraggableProvidedDragHandleProps, DropResult, DragUpdate } from '@hello-pangea/dnd';
 import {
   BadgeCheck,
   Boxes,
@@ -14,7 +14,7 @@ import {
   Truck,
 } from 'lucide-react';
 
-interface Job { [key: string]: string | boolean | undefined }
+interface Job { [key: string]: string | boolean | string[] | Array<Record<string, string>> | undefined }
 
 interface Props {
   jobs?: Job[];
@@ -123,6 +123,22 @@ function value(job: Job, keys: string[]) {
 
 function jobKey(job: Job) {
   return value(job, ['airtable_record_id', 'job_id', 'matrix', 'MATRIX']);
+}
+
+function mergedRecordIds(job: Job) {
+  const raw = job.merged_record_ids;
+  if (Array.isArray(raw) && raw.length) {
+    return raw.map(id => String(id)).filter(Boolean);
+  }
+  const primary = jobKey(job);
+  return primary ? [primary] : [];
+}
+
+function variantCount(job: Job) {
+  const explicit = Number(job.variant_count || job.duplicate_count || 0);
+  if (explicit > 1) return explicit;
+  const variants = job.variants;
+  return Array.isArray(variants) ? variants.length : 0;
 }
 
 function stationOf(job: Job): DashboardStage {
@@ -364,12 +380,21 @@ function shiftedSpanForStage(job: Job, targetStage: Station) {
 }
 
 function searchableJobText(job: Job) {
+  const variantText = Array.isArray(job.variants)
+    ? job.variants.map(variant => [
+        variant.colors,
+        variant.quantity,
+        variant.run_label,
+      ].filter(Boolean).join(' ')).join(' ')
+    : '';
+
   return [
     value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']),
     value(job, ['matrix', 'MATRIX', 'Matrix ID', 'job_id']),
     value(job, ['order_number', 'ORDER NUMBER']),
     value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']),
     value(job, ['colors', 'Colors', 'color', 'Color', 'Vinyl Color']),
+    variantText,
     value(job, ['notes', 'Notes', 'Project Notes', 'Production Notes']),
     value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']),
   ].join(' ').toLowerCase();
@@ -432,25 +457,32 @@ function useMediaQuery(query: string) {
 }
 
 function persistReorder(updates: Job[]) {
+  const expandedUpdates = updates.flatMap((job, index) => (
+    mergedRecordIds(job).map(jobId => ({
+      job_id: jobId,
+      stage: stationOf(job),
+      order: index + 1,
+    }))
+  ));
+
   return fetch('/api/jobs/reorder', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      updates: updates.map((job, index) => ({
-        job_id: jobKey(job),
-        stage: stationOf(job),
-        order: index + 1,
-      })),
-    }),
+    body: JSON.stringify({ updates: expandedUpdates }),
   });
 }
 
-function persistJobPosition(job: Job, stage: DashboardStage, order: number) {
-  return fetch(`/api/jobs/${encodeURIComponent(jobKey(job))}/stage`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stage, order }),
-  });
+async function persistJobPosition(job: Job, stage: DashboardStage, order: number) {
+  let lastResponse: Response | null = null;
+  for (const jobId of mergedRecordIds(job)) {
+    lastResponse = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/stage`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage, order }),
+    });
+    if (!lastResponse.ok) return lastResponse;
+  }
+  return lastResponse ?? new Response(null, { status: 400 });
 }
 
 function persistDashNotes(job: Job, dashNotes: string) {
@@ -554,7 +586,8 @@ function JobCard({
   const rushed = isRushOrder(rawDashNotes);
   const inferredReason = value(job, ['inferred_stage_reason']);
   const inferredAt = value(job, ['inferred_stage_at']);
-  const duplicateCount = value(job, ['duplicate_count']);
+  const duplicateCount = variantCount(job);
+  const hasVariants = duplicateCount > 1 && Array.isArray(job.variants) && job.variants.length > 1;
   const artReady = job.art_received === true || job.art_received === 'true';
   const canComplete = station === 'shipping';
   const completeColor = COLORS.red;
@@ -636,7 +669,9 @@ function JobCard({
           {runLabel && <StatusPill color={COLORS.green}>{runLabel}</StatusPill>}
           {artReady && <StatusPill color={COLORS.green}>Art</StatusPill>}
           {shipDate && <StatusPill color="#4DA3FF">{shipDate}</StatusPill>}
-          {duplicateCount && Number(duplicateCount) > 1 && <StatusPill color="#FFB84D">{duplicateCount} merged</StatusPill>}
+          {hasVariants
+            ? <StatusPill color="#FFB84D">{duplicateCount} variants</StatusPill>
+            : duplicateCount > 1 && <StatusPill color="#FFB84D">{duplicateCount} merged</StatusPill>}
         </div>
 
         {notes && (
@@ -788,6 +823,8 @@ function Pipeline({
 }) {
   const [mounted, setMounted] = useState(false);
   const [confirmCompleteJob, setConfirmCompleteJob] = useState<Job | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverStation, setDragOverStation] = useState<Station | null>(null);
   useEffect(() => setMounted(true), []);
 
   const saveMovedJob = async (job: Job, stage: DashboardStage, order: number) => {
@@ -805,13 +842,28 @@ function Pipeline({
     await completeJob(job);
   };
 
+  const onDragStart = (start: { draggableId: string }) => {
+    setDraggingId(start.draggableId);
+  };
+
+  const onDragUpdate = (update: DragUpdate) => {
+    const destinationId = update.destination?.droppableId;
+    if (destinationId && STATIONS.includes(destinationId as Station)) {
+      setDragOverStation(destinationId as Station);
+    }
+  };
+
   const onDragEnd = async (result: DropResult) => {
+    const hoveredStation = dragOverStation;
+    setDraggingId(null);
+    setDragOverStation(null);
     if (!result.destination) return;
 
+    let toId = result.destination.droppableId;
+    let destinationIndex = result.destination.index;
     const fromId = result.source.droppableId;
-    const toId = result.destination.droppableId;
     const fromStretched = fromId === STRETCHED_DROPPABLE_ID;
-    const toStretched = toId === STRETCHED_DROPPABLE_ID;
+    let toStretched = toId === STRETCHED_DROPPABLE_ID;
     const activeJobs = jobs.filter(job => stationOf(job) !== 'completed');
     const visibleActiveJobs = visibleJobs.filter(job => stationOf(job) !== 'completed');
     const hiddenJobs = jobs.filter(job => stationOf(job) === 'completed');
@@ -823,6 +875,16 @@ function Pipeline({
     const visibleColumnJobs = (station: Station) => (
       stationJobs(visibleActiveJobs, station).filter(job => isMobile || !activeSpanKeys.has(jobKey(job)))
     );
+
+    if (toStretched && !fromStretched) {
+      const fallbackStation = hoveredStation
+        ?? (STATIONS.includes(fromId as Station) ? (fromId as Station) : null);
+      if (!fallbackStation) return;
+      toId = fallbackStation;
+      toStretched = false;
+      destinationIndex = visibleColumnJobs(fallbackStation).length;
+    }
+
     const sourceList = fromStretched ? stretchedJobs(visibleActiveJobs) : visibleColumnJobs(fromId as Station);
     const destinationList = fromId === toId
       ? sourceList
@@ -832,8 +894,6 @@ function Pipeline({
     const [moved] = sourceList.splice(result.source.index, 1);
 
     if (!moved) return;
-
-    if (toStretched && !fromStretched) return;
 
     const targetStage = toStretched ? stationOf(moved) : (toId as Station);
     const rawDashNotes = value(moved, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
@@ -850,13 +910,13 @@ function Pipeline({
     };
 
     if (fromId === toId) {
-      sourceList.splice(result.destination.index, 0, movedNext);
+      sourceList.splice(destinationIndex, 0, movedNext);
     } else {
-      destinationList.splice(result.destination.index, 0, movedNext);
+      destinationList.splice(destinationIndex, 0, movedNext);
     }
 
     const destinationAfterMove = fromId === toId ? sourceList : destinationList;
-    const movedOrder = orderForInsertion(destinationAfterMove, result.destination.index);
+    const movedOrder = orderForInsertion(destinationAfterMove, destinationIndex);
     const movedPersisted = { ...movedNext, dashboard_order: String(movedOrder) };
     const rebuilt = activeJobs.map(job => {
       const key = jobKey(job);
@@ -895,11 +955,7 @@ function Pipeline({
     onError('');
 
     try {
-      const response = await fetch(`/api/jobs/${encodeURIComponent(jobKey(job))}/stage`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage: target, order: 999999 }),
-      });
+      const response = await persistJobPosition(job, target, 999999);
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.error || `Airtable save failed (${response.status})`);
@@ -921,7 +977,7 @@ function Pipeline({
     : 0;
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
+    <DragDropContext onDragStart={onDragStart} onDragUpdate={onDragUpdate} onDragEnd={onDragEnd}>
       <div style={{
         display: 'grid',
         gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(0, 1fr))',
@@ -930,7 +986,7 @@ function Pipeline({
         position: 'relative',
       }}>
         {!isMobile && spanLayout.length > 0 && (
-          <Droppable droppableId={STRETCHED_DROPPABLE_ID}>
+          <Droppable droppableId={STRETCHED_DROPPABLE_ID} isDropDisabled>
             {provided => (
               <div
                 ref={provided.innerRef}
@@ -952,6 +1008,8 @@ function Pipeline({
                   const { job, startIndex, endIndex, row } = entry;
                   const key = jobKey(job);
                   const stretch = stretchForJob(job, isMobile);
+                  const isDraggingNormalJob = Boolean(draggingId && !draggingId.startsWith('span-'));
+                  const isThisStretchedCard = draggingId === `span-${key}`;
                   return (
                     <Draggable key={`span-${key}`} draggableId={`span-${key}`} index={index}>
                       {(dragProvided, dragSnapshot) => (
@@ -964,7 +1022,7 @@ function Pipeline({
                             gridRow: `${row + 1}`,
                             minWidth: 0,
                             opacity: dragSnapshot.isDragging ? 0.88 : 1,
-                            pointerEvents: 'auto',
+                            pointerEvents: isDraggingNormalJob && !isThisStretchedCard ? 'none' : 'auto',
                           }}
                           data-job-key={key}
                         >
@@ -1218,6 +1276,7 @@ function JobDrawer({
     setSpanError('');
   }, [currentSpanStart, currentSpanEnd, job]);
 
+  const variants = Array.isArray(job.variants) ? job.variants : [];
   const details = [
     ['Station', jobStage === 'completed' ? 'Completed' : meta.label],
     ['Run', runLabel],
@@ -1466,6 +1525,37 @@ function JobDrawer({
             </div>
           ))}
         </div>
+
+        {variants.length > 1 && (
+          <div style={{ marginTop: '26px' }}>
+            <div style={{ color: COLORS.muted, fontSize: '10px', fontWeight: 850, letterSpacing: '0.08em', marginBottom: '8px', textTransform: 'uppercase' }}>
+              Press Variants
+            </div>
+            <div style={{ display: 'grid', gap: '8px' }}>
+              {variants.map((variant, index) => (
+                <div
+                  key={`${variant.airtable_record_id || index}-${variant.colors}-${variant.quantity}`}
+                  style={{
+                    background: '#0E1711',
+                    border: `1px solid ${meta.color}33`,
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                  }}
+                >
+                  <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 800 }}>
+                    {variant.colors || 'Color TBD'}
+                    {variant.quantity ? ` · ${variant.quantity}` : ''}
+                  </div>
+                  {variant.run_label && (
+                    <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
+                      {variant.run_label}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {notes && (
           <div style={{ marginTop: '26px' }}>
