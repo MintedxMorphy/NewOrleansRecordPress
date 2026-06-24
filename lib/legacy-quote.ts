@@ -4,10 +4,8 @@
  */
 
 export const LEGACY_PROJECT_TYPES = [
-  { value: "single", label: 'Single 12" (Standard Weight) - LP' },
-  { value: "single_heavyweight", label: 'Single 12" (Heavy Weight) - LP' },
-  { value: "double", label: 'Double 12" (Standard Weight) - 2xLP' },
-  { value: "double_heavyweight", label: 'Double 12" (Heavy Weight) - 2xLP' },
+  { value: "single_heavyweight", label: 'Single 12" (Heavy Weight 180 gram) - LP' },
+  { value: "double_heavyweight", label: 'Double 12" (Heavy Weight 180 gram) - 2xLP' },
   { value: "seveninch", label: 'Single 7" - EP' },
 ] as const
 

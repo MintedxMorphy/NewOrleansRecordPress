@@ -216,9 +216,9 @@ const ASSEMBLY_OPTIONS: Option[] = [
 
 export function QuoteCalculator() {
   const [masterFormat, setMasterFormat] = useState<LegacyQuoteInput["masterFormat"]>("audioFiles")
-  const [projectType, setProjectType] = useState<LegacyProjectType>("single")
+  const [projectType, setProjectType] = useState<LegacyProjectType>("single_heavyweight")
   const [variations, setVariations] = useState<LegacyVariation[]>([
-    { quantity: 500, colorStyle: "black" },
+    { quantity: 1000, colorStyle: "black" },
     { quantity: 0, colorStyle: "black" },
     { quantity: 0, colorStyle: "black" },
   ])
@@ -364,9 +364,9 @@ export function QuoteCalculator() {
     setHeavyJacket(false)
 
     if (preset === "standard") {
-      setProjectType("single")
+      setProjectType("single_heavyweight")
       setVariations([
-        { quantity: 500, colorStyle: "black" },
+        { quantity: 1000, colorStyle: "black" },
         { quantity: 0, colorStyle: "black" },
         { quantity: 0, colorStyle: "black" },
       ])
@@ -380,9 +380,9 @@ export function QuoteCalculator() {
     }
 
     if (preset === "double") {
-      setProjectType("double")
+      setProjectType("double_heavyweight")
       setVariations([
-        { quantity: 500, colorStyle: "solid" },
+        { quantity: 1000, colorStyle: "solid" },
         { quantity: 0, colorStyle: "black" },
         { quantity: 0, colorStyle: "black" },
       ])
@@ -395,9 +395,9 @@ export function QuoteCalculator() {
       return
     }
 
-    setProjectType("single")
+    setProjectType("single_heavyweight")
     setVariations([
-      { quantity: 100, colorStyle: "black" },
+      { quantity: 300, colorStyle: "black" },
       { quantity: 0, colorStyle: "black" },
       { quantity: 0, colorStyle: "black" },
     ])
@@ -589,7 +589,7 @@ export function QuoteCalculator() {
                   className="border border-border bg-secondary/70 p-4 text-left text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
                 >
                   <span className="block font-bold text-foreground">Standard Package</span>
-                  500x 12&quot; Black or Random Color 150g, printed labels, insert, jacket, shrinkwrap
+                  1000x 12&quot; Black or Random Color 180g, printed labels, insert, jacket, shrinkwrap
                 </button>
                 <button
                   type="button"
@@ -597,7 +597,7 @@ export function QuoteCalculator() {
                   className="border border-border bg-secondary/70 p-4 text-left text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
                 >
                   <span className="block font-bold text-foreground">Color Double LP</span>
-                  500x 2x12&quot; Solid or Translucent 150g, gatefold, shrinkwrap
+                  1000x 2x12&quot; Solid or Translucent 180g, gatefold, shrinkwrap
                 </button>
                 <button
                   type="button"
@@ -605,7 +605,7 @@ export function QuoteCalculator() {
                   className="border border-border bg-secondary/70 p-4 text-left text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
                 >
                   <span className="block font-bold text-foreground">DIY White Label</span>
-                  100x 12&quot; Black or Random Color 150g, blank labels, white paper sleeves
+                  300x 12&quot; Black or Random Color 180g, blank labels, white paper sleeves
                 </button>
               </div>
 
