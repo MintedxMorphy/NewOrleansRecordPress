@@ -18,14 +18,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ jo
       }
     }
 
-    await updateAirtableJobRecordsPressed(job_id, parsed);
+    const saved = await updateAirtableJobRecordsPressed(job_id, parsed);
     return NextResponse.json({
       ok: true,
       source: 'airtable',
       job: {
         job_id,
-        records_pressed: parsed === null ? '' : String(parsed),
-        'Records Pressed': parsed === null ? '' : String(parsed),
+        records_pressed: saved.records_pressed,
+        'Records Pressed': saved.records_pressed,
+        records_pressed_baseline_at: saved.records_pressed_baseline_at,
+        'Records Pressed Baseline At': saved.records_pressed_baseline_at,
       },
     });
   } catch (e: unknown) {

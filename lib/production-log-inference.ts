@@ -57,6 +57,55 @@ function numericValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function sumPressLogRecords(entries: PressLogEntry[]) {
+  return entries.reduce((total, entry) => total + numericValue(entry.records_pressed), 0);
+}
+
+function pressLogsAfter(entries: PressLogEntry[], baselineAt?: string) {
+  if (!baselineAt) return [];
+  const baselineMs = new Date(baselineAt).getTime();
+  if (!Number.isFinite(baselineMs)) return [];
+  return entries.filter(entry => new Date(entry.created_at).getTime() > baselineMs);
+}
+
+function resolvePressProgress(job: NORPJob, matchingPressEntries: PressLogEntry[]) {
+  const allTimeTotal = sumPressLogRecords(matchingPressEntries);
+  const latestPressEntry = matchingPressEntries[0];
+  const manualPressedRaw = String(job.records_pressed ?? '').replace(/,/g, '').trim();
+  const manualBaseline = manualPressedRaw ? numericValue(manualPressedRaw) : null;
+  const baselineAt = String(job.records_pressed_baseline_at ?? '').trim() || undefined;
+
+  if (manualBaseline !== null) {
+    const postBaselineEntries = pressLogsAfter(matchingPressEntries, baselineAt);
+    const sinceBaselineTotal = sumPressLogRecords(postBaselineEntries);
+    const total = manualBaseline + sinceBaselineTotal;
+
+    return {
+      records_pressed_total: String(total),
+      records_pressed_baseline: String(manualBaseline),
+      records_pressed_since_baseline: String(sinceBaselineTotal),
+      records_pressed_source: 'manual_baseline' as const,
+      records_pressed_from_logs: String(allTimeTotal),
+      press_log_count: String(postBaselineEntries.length),
+      press_log_count_all_time: String(matchingPressEntries.length),
+      latest_press_log_at: postBaselineEntries[0]?.created_at ?? latestPressEntry?.created_at ?? '',
+    };
+  }
+
+  if (allTimeTotal > 0) {
+    return {
+      records_pressed_total: String(allTimeTotal),
+      records_pressed_source: 'press_logs' as const,
+      records_pressed_from_logs: String(allTimeTotal),
+      press_log_count: String(matchingPressEntries.length),
+      press_log_count_all_time: String(matchingPressEntries.length),
+      latest_press_log_at: latestPressEntry?.created_at ?? '',
+    };
+  }
+
+  return {};
+}
+
 function stageFromQc(entry: QcLogEntry): Stage {
   const tasks = (entry.task_types || []).join(' ').toLowerCase();
   const notes = (entry.notes || '').toLowerCase();
@@ -107,30 +156,7 @@ export async function applyProductionLogInferences<T extends NORPJob>(jobs: T[])
 
   return jobs.map(job => {
     const matchingPressEntries = pressEntries.filter(entry => matchesJob(job, entry.job_ref));
-    const recordsPressedTotal = matchingPressEntries.reduce((total, entry) => (
-      total + numericValue(entry.records_pressed)
-    ), 0);
-    const latestPressEntry = matchingPressEntries[0];
-    const pressProgressFields = recordsPressedTotal > 0 ? {
-      records_pressed_total: String(recordsPressedTotal),
-      press_log_count: String(matchingPressEntries.length),
-      latest_press_log_at: latestPressEntry?.created_at ?? '',
-    } : {};
-
-    const manualPressedRaw = String(job.records_pressed ?? '').replace(/,/g, '').trim();
-    const manualPressed = manualPressedRaw ? numericValue(manualPressedRaw) : null;
-    const resolvedPressProgress = manualPressed !== null ? {
-      records_pressed_total: String(manualPressed),
-      records_pressed_source: 'manual' as const,
-      ...(recordsPressedTotal > 0 ? {
-        press_log_count: String(matchingPressEntries.length),
-        latest_press_log_at: latestPressEntry?.created_at ?? '',
-        records_pressed_from_logs: String(recordsPressedTotal),
-      } : {}),
-    } : recordsPressedTotal > 0 ? {
-      ...pressProgressFields,
-      records_pressed_source: 'press_logs' as const,
-    } : {};
+    const resolvedPressProgress = resolvePressProgress(job, matchingPressEntries);
 
     // Staff-set board positions are the source of truth. Logs only fill in
     // gaps for jobs that have not yet been manually placed on the dashboard.

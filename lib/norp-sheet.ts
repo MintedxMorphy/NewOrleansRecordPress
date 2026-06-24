@@ -32,7 +32,10 @@ export interface NORPJob {
   inferred_stage_at?: string;
   records_pressed_total?: string;
   records_pressed?: string;
-  records_pressed_source?: 'manual' | 'press_logs';
+  records_pressed_baseline_at?: string;
+  records_pressed_baseline?: string;
+  records_pressed_since_baseline?: string;
+  records_pressed_source?: 'manual_baseline' | 'press_logs';
   press_log_count?: string;
   latest_press_log_at?: string;
 }

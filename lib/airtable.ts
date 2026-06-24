@@ -19,6 +19,7 @@ const FIELD_ALIASES: Record<string, string[]> = {
   matrix: ['Matrix', 'MATRIX', 'Matrix ID', 'Catalog Number', 'Catalog #', 'DSK-016'],
   quantity: ['Quantity', 'Qty', 'Units', 'Run Size', '52'],
   records_pressed: ['Records Pressed', 'Dashboard Records Pressed', 'Pressed Count', 'Records Pressed Total'],
+  records_pressed_baseline_at: ['Records Pressed Baseline At', 'Records Pressed Set At', 'Pressed Baseline At'],
   colors: ['Colors', 'Color', 'Vinyl Color', 'Vinyl Colors', 'black'],
   weight: ['Weight', 'weight', 'Weight (g)', 'Vinyl Weight'],
   speed: ['Speed', 'RPM'],
@@ -135,6 +136,10 @@ function airtableDashNotesField() {
 
 function airtableRecordsPressedField() {
   return process.env.AIRTABLE_RECORDS_PRESSED_FIELD || 'Records Pressed';
+}
+
+function airtableRecordsPressedBaselineAtField() {
+  return process.env.AIRTABLE_RECORDS_PRESSED_BASELINE_AT_FIELD || 'Records Pressed Baseline At';
 }
 
 function airtableInventoryTables() {
@@ -558,6 +563,7 @@ function mapRecordToJob(record: AirtableRecord): NORPJob & { airtable_record_id:
     matrix: field(fields, FIELD_ALIASES.matrix),
     quantity: field(fields, FIELD_ALIASES.quantity),
     records_pressed: field(fields, FIELD_ALIASES.records_pressed),
+    records_pressed_baseline_at: field(fields, FIELD_ALIASES.records_pressed_baseline_at),
     colors: field(fields, FIELD_ALIASES.colors),
     weight: field(fields, FIELD_ALIASES.weight),
     speed: field(fields, FIELD_ALIASES.speed),
@@ -1054,6 +1060,9 @@ export async function updateAirtableJobRecordsPressed(jobId: string, recordsPres
   const recordsPressedField = production
     ? resolveAirtableField(production, [airtableRecordsPressedField(), ...FIELD_ALIASES.records_pressed])
     : undefined;
+  const baselineAtField = production
+    ? resolveAirtableField(production, [airtableRecordsPressedBaselineAtField(), ...FIELD_ALIASES.records_pressed_baseline_at])
+    : undefined;
 
   if (!recordsPressedField) {
     throw new Error(`Airtable field not found: ${airtableRecordsPressedField()}. Add a number field with that name to the Jobs table.`);
@@ -1062,6 +1071,9 @@ export async function updateAirtableJobRecordsPressed(jobId: string, recordsPres
   const fields: Record<string, unknown> = {
     [recordsPressedField.name]: recordsPressed === null ? null : recordsPressed,
   };
+  if (baselineAtField) {
+    fields[baselineAtField.name] = recordsPressed === null ? null : new Date().toISOString();
+  }
 
   const res = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
     method: 'PATCH',
@@ -1073,6 +1085,13 @@ export async function updateAirtableJobRecordsPressed(jobId: string, recordsPres
   if (!res.ok) {
     throw new Error(data.error?.message || `Airtable records pressed update failed (${res.status})`);
   }
+
+  return {
+    records_pressed: recordsPressed === null ? '' : String(recordsPressed),
+    records_pressed_baseline_at: recordsPressed === null
+      ? ''
+      : String(baselineAtField ? fields[baselineAtField.name] : new Date().toISOString()),
+  };
 }
 
 const INVENTORY_FIELD_ALIASES = {

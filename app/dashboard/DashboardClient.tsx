@@ -171,16 +171,20 @@ function manualRecordsPressed(job: Job) {
 }
 
 function displayedRecordsPressed(job: Job) {
-  const manual = manualRecordsPressed(job);
-  if (manual !== null) return manual;
   return numericValue(value(job, ['records_pressed_total']));
 }
 
-function logRecordsPressed(job: Job) {
+function recordsPressedSinceBaseline(job: Job) {
+  return numericValue(value(job, ['records_pressed_since_baseline']));
+}
+
+function allTimeLogRecordsPressed(job: Job) {
   const fromLogs = value(job, ['records_pressed_from_logs']);
   if (fromLogs !== '') return numericValue(fromLogs);
-  if (value(job, ['records_pressed_source']) === 'manual') return 0;
-  return numericValue(value(job, ['records_pressed_total']));
+  if (value(job, ['records_pressed_source']) === 'press_logs') {
+    return numericValue(value(job, ['records_pressed_total']));
+  }
+  return 0;
 }
 
 function sortJobs(jobs: Job[]) {
@@ -591,7 +595,8 @@ function JobCard({
   const quantityTotal = numericValue(quantity);
   const pressedTotal = displayedRecordsPressed(job);
   const pressLogCount = numericValue(value(job, ['press_log_count']));
-  const usingManualPressed = manualRecordsPressed(job) !== null;
+  const sinceBaseline = recordsPressedSinceBaseline(job);
+  const usingManualBaseline = manualRecordsPressed(job) !== null;
   const showPressProgress = station === 'now_pressing' && quantityTotal > 0;
   const progressPct = showPressProgress ? Math.min(100, Math.max(0, (pressedTotal / quantityTotal) * 100)) : 0;
   const colors = value(job, ['colors', 'Colors', 'color', 'Color', 'Vinyl Color']);
@@ -751,7 +756,14 @@ function JobCard({
               fontWeight: 750,
               marginTop: '6px',
             }}>
-              {Math.round(progressPct)}% complete{pressLogCount ? ` · ${pressLogCount} press log${pressLogCount === 1 ? '' : 's'}` : ''}{usingManualPressed ? ' · manual count' : ''}
+              {Math.round(progressPct)}% complete
+              {usingManualBaseline
+                ? sinceBaseline > 0
+                  ? ` · ${manualRecordsPressed(job)!.toLocaleString()} baseline + ${sinceBaseline.toLocaleString()} logged`
+                  : ' · baseline set'
+                : pressLogCount
+                  ? ` · ${pressLogCount} press log${pressLogCount === 1 ? '' : 's'}`
+                  : ''}
             </div>
           </div>
         )}
@@ -1288,7 +1300,8 @@ function JobDrawer({
   const quantityTotal = numericValue(value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']));
   const currentManualPressed = manualRecordsPressed(job);
   const currentDisplayedPressed = displayedRecordsPressed(job);
-  const currentLogPressed = logRecordsPressed(job);
+  const currentSinceBaseline = recordsPressedSinceBaseline(job);
+  const currentAllTimeLogs = allTimeLogRecordsPressed(job);
   const [draftRecordsPressed, setDraftRecordsPressed] = useState(
     currentManualPressed !== null ? String(currentManualPressed) : String(currentDisplayedPressed || ''),
   );
@@ -1473,13 +1486,23 @@ function JobDrawer({
               Press Progress
             </div>
             <div style={{ color: COLORS.muted, fontSize: '12px', lineHeight: 1.35, marginBottom: '10px' }}>
-              Update the pressed count shown on the board ({currentDisplayedPressed.toLocaleString()} / {quantityTotal.toLocaleString()}).
-              {currentLogPressed > 0 && (
-                <> Press log total: {currentLogPressed.toLocaleString()}{currentManualPressed !== null ? ' (overridden by manual count)' : ''}.</>
-              )}
+              Board total: {currentDisplayedPressed.toLocaleString()} / {quantityTotal.toLocaleString()}.
+              {currentManualPressed !== null ? (
+                <>
+                  {' '}Baseline {currentManualPressed.toLocaleString()}
+                  {currentSinceBaseline > 0
+                    ? ` + ${currentSinceBaseline.toLocaleString()} from press logs since last reset.`
+                    : '. Press logs after you save will add to this baseline.'}
+                  {currentAllTimeLogs > currentSinceBaseline
+                    ? ` Older logs (${(currentAllTimeLogs - currentSinceBaseline).toLocaleString()} records) are ignored.`
+                    : ''}
+                </>
+              ) : currentAllTimeLogs > 0 ? (
+                <> All-time press log total: {currentAllTimeLogs.toLocaleString()}.</>
+              ) : null}
             </div>
             <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              Records Pressed
+              Pressed Baseline
               <input
                 type="number"
                 min={0}
@@ -1515,7 +1538,7 @@ function JobDrawer({
                   padding: '10px 12px',
                 }}
               >
-                {savingRecordsPressed ? 'Saving...' : 'Save Pressed Count'}
+                {savingRecordsPressed ? 'Saving...' : 'Set Baseline'}
               </button>
               {currentManualPressed !== null && (
                 <button
@@ -2246,21 +2269,33 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
 
     const body = await response.json().catch(() => ({}));
     const savedValue = recordsPressed === null ? '' : String(recordsPressed);
-    const logTotal = logRecordsPressed(job);
+    const savedBaselineAt = recordsPressed === null
+      ? ''
+      : String(body.job?.records_pressed_baseline_at || body.job?.['Records Pressed Baseline At'] || new Date().toISOString());
     const updateJob = (candidate: Job) => {
       if (jobKey(candidate) !== key) return candidate;
       const next = {
         ...candidate,
         records_pressed: savedValue,
         'Records Pressed': savedValue,
-        records_pressed_source: recordsPressed === null ? 'press_logs' : 'manual',
+        records_pressed_baseline_at: savedBaselineAt,
+        'Records Pressed Baseline At': savedBaselineAt,
       } as Job;
       if (recordsPressed === null) {
-        next.records_pressed_total = logTotal > 0 ? String(logTotal) : '';
-        delete next.records_pressed_from_logs;
+        delete next.records_pressed_baseline_at;
+        delete next['Records Pressed Baseline At'];
+        next.records_pressed_source = 'press_logs';
+        next.records_pressed_total = allTimeLogRecordsPressed(candidate) > 0
+          ? String(allTimeLogRecordsPressed(candidate))
+          : '';
+        next.records_pressed_since_baseline = '';
+        next.records_pressed_baseline = '';
       } else {
+        next.records_pressed_source = 'manual_baseline';
+        next.records_pressed_baseline = savedValue;
+        next.records_pressed_since_baseline = '0';
         next.records_pressed_total = savedValue;
-        if (logTotal > 0) next.records_pressed_from_logs = String(logTotal);
+        next.press_log_count = '0';
       }
       return next;
     };
