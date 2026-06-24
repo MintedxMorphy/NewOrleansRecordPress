@@ -165,6 +165,24 @@ function numericValue(raw: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function manualRecordsPressed(job: Job) {
+  const raw = value(job, ['records_pressed', 'Records Pressed']);
+  return raw !== '' ? numericValue(raw) : null;
+}
+
+function displayedRecordsPressed(job: Job) {
+  const manual = manualRecordsPressed(job);
+  if (manual !== null) return manual;
+  return numericValue(value(job, ['records_pressed_total']));
+}
+
+function logRecordsPressed(job: Job) {
+  const fromLogs = value(job, ['records_pressed_from_logs']);
+  if (fromLogs !== '') return numericValue(fromLogs);
+  if (value(job, ['records_pressed_source']) === 'manual') return 0;
+  return numericValue(value(job, ['records_pressed_total']));
+}
+
 function sortJobs(jobs: Job[]) {
   return [...jobs].sort((a, b) => {
     const orderDiff = dashboardOrder(a) - dashboardOrder(b);
@@ -571,8 +589,9 @@ function JobCard({
   const matrix = value(job, ['matrix', 'MATRIX', 'Matrix ID', 'job_id']);
   const quantity = value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']);
   const quantityTotal = numericValue(quantity);
-  const pressedTotal = numericValue(value(job, ['records_pressed_total']));
+  const pressedTotal = displayedRecordsPressed(job);
   const pressLogCount = numericValue(value(job, ['press_log_count']));
+  const usingManualPressed = manualRecordsPressed(job) !== null;
   const showPressProgress = station === 'now_pressing' && quantityTotal > 0;
   const progressPct = showPressProgress ? Math.min(100, Math.max(0, (pressedTotal / quantityTotal) * 100)) : 0;
   const colors = value(job, ['colors', 'Colors', 'color', 'Color', 'Vinyl Color']);
@@ -732,7 +751,7 @@ function JobCard({
               fontWeight: 750,
               marginTop: '6px',
             }}>
-              {Math.round(progressPct)}% complete{pressLogCount ? ` · ${pressLogCount} press log${pressLogCount === 1 ? '' : 's'}` : ''}
+              {Math.round(progressPct)}% complete{pressLogCount ? ` · ${pressLogCount} press log${pressLogCount === 1 ? '' : 's'}` : ''}{usingManualPressed ? ' · manual count' : ''}
             </div>
           </div>
         )}
@@ -1234,6 +1253,7 @@ function JobDrawer({
   onRushToggle,
   onStageSpanSave,
   onSplitJob,
+  onRecordsPressedSave,
 }: {
   job: Job;
   onClose: () => void;
@@ -1241,6 +1261,7 @@ function JobDrawer({
   onRushToggle: (job: Job, rushed: boolean) => Promise<void>;
   onStageSpanSave: (job: Job, span: Station[]) => Promise<void>;
   onSplitJob: (job: Job, payload: { stage: Station; quantity: string }) => Promise<void>;
+  onRecordsPressedSave: (job: Job, recordsPressed: number | null) => Promise<void>;
 }) {
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
@@ -1264,6 +1285,21 @@ function JobDrawer({
   const [splitQuantity, setSplitQuantity] = useState('');
   const [splitting, setSplitting] = useState(false);
   const [splitError, setSplitError] = useState('');
+  const quantityTotal = numericValue(value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']));
+  const currentManualPressed = manualRecordsPressed(job);
+  const currentDisplayedPressed = displayedRecordsPressed(job);
+  const currentLogPressed = logRecordsPressed(job);
+  const [draftRecordsPressed, setDraftRecordsPressed] = useState(
+    currentManualPressed !== null ? String(currentManualPressed) : String(currentDisplayedPressed || ''),
+  );
+  const [savingRecordsPressed, setSavingRecordsPressed] = useState(false);
+  const [recordsPressedError, setRecordsPressedError] = useState('');
+
+  useEffect(() => {
+    const manual = manualRecordsPressed(job);
+    setDraftRecordsPressed(manual !== null ? String(manual) : String(displayedRecordsPressed(job) || ''));
+    setRecordsPressedError('');
+  }, [job]);
 
   useEffect(() => {
     setDraftDashNotes(dashNotes);
@@ -1351,6 +1387,20 @@ function JobDrawer({
       setSplitting(false);
     }
   };
+  const saveRecordsPressed = async (recordsPressed: number | null) => {
+    setSavingRecordsPressed(true);
+    setRecordsPressedError('');
+    try {
+      await onRecordsPressedSave(job, recordsPressed);
+    } catch (error) {
+      setRecordsPressedError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingRecordsPressed(false);
+    }
+  };
+  const recordsPressedDirty = draftRecordsPressed !== (
+    currentManualPressed !== null ? String(currentManualPressed) : String(currentDisplayedPressed || '')
+  );
 
   return (
     <>
@@ -1410,6 +1460,88 @@ function JobDrawer({
         >
           {savingRush ? 'Saving Rush...' : rushed ? 'Rush Order On' : 'Rush Order'}
         </button>
+
+        {station === 'now_pressing' && quantityTotal > 0 && (
+          <div style={{
+            background: COLORS.card,
+            border: `1px solid ${meta.color}55`,
+            borderRadius: '8px',
+            marginBottom: '22px',
+            padding: '14px',
+          }}>
+            <div style={{ color: meta.color, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', marginBottom: '10px', textTransform: 'uppercase' }}>
+              Press Progress
+            </div>
+            <div style={{ color: COLORS.muted, fontSize: '12px', lineHeight: 1.35, marginBottom: '10px' }}>
+              Update the pressed count shown on the board ({currentDisplayedPressed.toLocaleString()} / {quantityTotal.toLocaleString()}).
+              {currentLogPressed > 0 && (
+                <> Press log total: {currentLogPressed.toLocaleString()}{currentManualPressed !== null ? ' (overridden by manual count)' : ''}.</>
+              )}
+            </div>
+            <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Records Pressed
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={draftRecordsPressed}
+                onChange={event => setDraftRecordsPressed(event.target.value)}
+                style={{
+                  background: COLORS.panel,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '8px',
+                  color: COLORS.text,
+                  font: 'inherit',
+                  fontSize: '16px',
+                  padding: '10px',
+                }}
+              />
+            </label>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <button
+                type="button"
+                disabled={savingRecordsPressed || !recordsPressedDirty}
+                onClick={() => saveRecordsPressed(draftRecordsPressed === '' ? null : numericValue(draftRecordsPressed))}
+                style={{
+                  background: meta.color,
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: '#041109',
+                  cursor: savingRecordsPressed || !recordsPressedDirty ? 'default' : 'pointer',
+                  flex: 1,
+                  fontSize: '13px',
+                  fontWeight: 900,
+                  opacity: savingRecordsPressed || !recordsPressedDirty ? 0.55 : 1,
+                  padding: '10px 12px',
+                }}
+              >
+                {savingRecordsPressed ? 'Saving...' : 'Save Pressed Count'}
+              </button>
+              {currentManualPressed !== null && (
+                <button
+                  type="button"
+                  disabled={savingRecordsPressed}
+                  onClick={() => saveRecordsPressed(null)}
+                  style={{
+                    background: COLORS.panel,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: '8px',
+                    color: COLORS.muted,
+                    cursor: savingRecordsPressed ? 'default' : 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 850,
+                    padding: '10px 12px',
+                  }}
+                >
+                  Use Logs
+                </button>
+              )}
+            </div>
+            {recordsPressedError && (
+              <div style={{ color: COLORS.red, fontSize: '12px', marginTop: '10px' }}>{recordsPressedError}</div>
+            )}
+          </div>
+        )}
 
         {jobStage !== 'completed' && (
           <div style={{
@@ -2099,6 +2231,44 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     setError('');
   };
 
+  const saveRecordsPressed = async (job: Job, recordsPressed: number | null) => {
+    const key = jobKey(job);
+    const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/records-pressed`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records_pressed: recordsPressed }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || `Records pressed save failed (${response.status})`);
+    }
+
+    const body = await response.json().catch(() => ({}));
+    const savedValue = recordsPressed === null ? '' : String(recordsPressed);
+    const logTotal = logRecordsPressed(job);
+    const updateJob = (candidate: Job) => {
+      if (jobKey(candidate) !== key) return candidate;
+      const next = {
+        ...candidate,
+        records_pressed: savedValue,
+        'Records Pressed': savedValue,
+        records_pressed_source: recordsPressed === null ? 'press_logs' : 'manual',
+      } as Job;
+      if (recordsPressed === null) {
+        next.records_pressed_total = logTotal > 0 ? String(logTotal) : '';
+        delete next.records_pressed_from_logs;
+      } else {
+        next.records_pressed_total = savedValue;
+        if (logTotal > 0) next.records_pressed_from_logs = String(logTotal);
+      }
+      return next;
+    };
+    setJobs(current => current.map(updateJob));
+    setSelectedJob(current => current && jobKey(current) === key ? updateJob(current) : current);
+    setError('');
+  };
+
   return (
     <main style={{
       background:
@@ -2284,6 +2454,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
           onRushToggle={toggleRushOrder}
           onStageSpanSave={saveStageSpan}
           onSplitJob={splitJob}
+          onRecordsPressedSave={saveRecordsPressed}
         />
       )}
     </main>

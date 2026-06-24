@@ -117,12 +117,27 @@ export async function applyProductionLogInferences<T extends NORPJob>(jobs: T[])
       latest_press_log_at: latestPressEntry?.created_at ?? '',
     } : {};
 
+    const manualPressedRaw = String(job.records_pressed ?? '').replace(/,/g, '').trim();
+    const manualPressed = manualPressedRaw ? numericValue(manualPressedRaw) : null;
+    const resolvedPressProgress = manualPressed !== null ? {
+      records_pressed_total: String(manualPressed),
+      records_pressed_source: 'manual' as const,
+      ...(recordsPressedTotal > 0 ? {
+        press_log_count: String(matchingPressEntries.length),
+        latest_press_log_at: latestPressEntry?.created_at ?? '',
+        records_pressed_from_logs: String(recordsPressedTotal),
+      } : {}),
+    } : recordsPressedTotal > 0 ? {
+      ...pressProgressFields,
+      records_pressed_source: 'press_logs' as const,
+    } : {};
+
     // Staff-set board positions are the source of truth. Logs only fill in
     // gaps for jobs that have not yet been manually placed on the dashboard.
     if (job.stage_source === 'airtable_dashboard_stage') {
       return {
         ...job,
-        ...pressProgressFields,
+        ...resolvedPressProgress,
       };
     }
 
@@ -148,11 +163,14 @@ export async function applyProductionLogInferences<T extends NORPJob>(jobs: T[])
       break;
     }
 
-    if (!inferred) return job;
+    if (!inferred) return {
+      ...job,
+      ...resolvedPressProgress,
+    };
 
     return {
       ...job,
-      ...pressProgressFields,
+      ...resolvedPressProgress,
       stage: inferred.stage,
       stage_source: 'production_logs',
       inferred_stage_reason: inferred.reason,

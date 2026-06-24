@@ -18,6 +18,7 @@ const FIELD_ALIASES: Record<string, string[]> = {
   customer: ['Customer', 'Customer Name', 'Client', 'Project', 'Project Name', 'Artist', 'Title', '1', 'Name', 'Silent EM'],
   matrix: ['Matrix', 'MATRIX', 'Matrix ID', 'Catalog Number', 'Catalog #', 'DSK-016'],
   quantity: ['Quantity', 'Qty', 'Units', 'Run Size', '52'],
+  records_pressed: ['Records Pressed', 'Dashboard Records Pressed', 'Pressed Count', 'Records Pressed Total'],
   colors: ['Colors', 'Color', 'Vinyl Color', 'Vinyl Colors', 'black'],
   weight: ['Weight', 'weight', 'Weight (g)', 'Vinyl Weight'],
   speed: ['Speed', 'RPM'],
@@ -130,6 +131,10 @@ function airtableJobIdField() {
 
 function airtableDashNotesField() {
   return process.env.AIRTABLE_DASH_NOTES_FIELD || 'Dash Notes';
+}
+
+function airtableRecordsPressedField() {
+  return process.env.AIRTABLE_RECORDS_PRESSED_FIELD || 'Records Pressed';
 }
 
 function airtableInventoryTables() {
@@ -552,6 +557,7 @@ function mapRecordToJob(record: AirtableRecord): NORPJob & { airtable_record_id:
     customer: field(fields, FIELD_ALIASES.customer),
     matrix: field(fields, FIELD_ALIASES.matrix),
     quantity: field(fields, FIELD_ALIASES.quantity),
+    records_pressed: field(fields, FIELD_ALIASES.records_pressed),
     colors: field(fields, FIELD_ALIASES.colors),
     weight: field(fields, FIELD_ALIASES.weight),
     speed: field(fields, FIELD_ALIASES.speed),
@@ -1036,6 +1042,36 @@ export async function updateAirtableJobDashNotes(jobId: string, dashNotes: strin
 
   if (!res.ok) {
     throw new Error(data.error?.message || `Airtable dash notes update failed (${res.status})`);
+  }
+}
+
+export async function updateAirtableJobRecordsPressed(jobId: string, recordsPressed: number | null) {
+  const recordId = await findAirtableRecordId(jobId);
+  if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
+
+  const tables = await getAirtableTablesMetaOrEmpty();
+  const production = tables.find(table => table.id === airtableJobsTable() || table.name === airtableJobsTable());
+  const recordsPressedField = production
+    ? resolveAirtableField(production, [airtableRecordsPressedField(), ...FIELD_ALIASES.records_pressed])
+    : undefined;
+
+  if (!recordsPressedField) {
+    throw new Error(`Airtable field not found: ${airtableRecordsPressedField()}. Add a number field with that name to the Jobs table.`);
+  }
+
+  const fields: Record<string, unknown> = {
+    [recordsPressedField.name]: recordsPressed === null ? null : recordsPressed,
+  };
+
+  const res = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
+    method: 'PATCH',
+    headers: airtableHeaders(),
+    body: JSON.stringify({ fields }),
+  });
+  const data = await res.json() as { error?: { message?: string } };
+
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Airtable records pressed update failed (${res.status})`);
   }
 }
 

@@ -76,9 +76,22 @@ if (!existing.has(env.AIRTABLE_ORDER_FIELD || 'Dashboard Order')) {
   else missing.push({ name: env.AIRTABLE_ORDER_FIELD || 'Dashboard Order', status: response.status, error: data.error });
 }
 
+if (!existing.has(env.AIRTABLE_RECORDS_PRESSED_FIELD || 'Records Pressed')) {
+  const { response, data } = await request(baseUrl, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: env.AIRTABLE_RECORDS_PRESSED_FIELD || 'Records Pressed',
+      type: 'number',
+      options: { precision: 0 },
+    }),
+  });
+  if (response.ok) created.push(data.name);
+  else missing.push({ name: env.AIRTABLE_RECORDS_PRESSED_FIELD || 'Records Pressed', status: response.status, error: data.error });
+}
+
 console.log(JSON.stringify({
   ok: missing.length === 0,
   created,
-  alreadyPresent: [...existing].filter(name => name === (env.AIRTABLE_STAGE_FIELD || 'Dashboard Stage') || name === (env.AIRTABLE_ORDER_FIELD || 'Dashboard Order')),
+  alreadyPresent: [...existing].filter(name => name === (env.AIRTABLE_STAGE_FIELD || 'Dashboard Stage') || name === (env.AIRTABLE_ORDER_FIELD || 'Dashboard Order') || name === (env.AIRTABLE_RECORDS_PRESSED_FIELD || 'Records Pressed')),
   missing,
 }, null, 2));

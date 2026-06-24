@@ -31,6 +31,8 @@ export interface NORPJob {
   inferred_stage_reason?: string;
   inferred_stage_at?: string;
   records_pressed_total?: string;
+  records_pressed?: string;
+  records_pressed_source?: 'manual' | 'press_logs';
   press_log_count?: string;
   latest_press_log_at?: string;
 }
