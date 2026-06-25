@@ -270,26 +270,29 @@ export async function runShipmentTrackingPipeline(options: ShipmentPipelineOptio
           selected: bestSelected,
         });
 
-        if (!bestSelected || bestSelected.confidence !== 'high') continue;
+        const highConfidenceCandidates = candidates.filter(candidate => candidate.confidence === 'high');
+        if (!bestSelected || !highConfidenceCandidates.length) continue;
 
-        try {
-          if (seenTrackingNumbers.has(bestSelected.tracking_number)) {
-            result.skipped_existing.push(`${bestSelected.tracking_number} (duplicate in this run)`);
-            continue;
+        for (const candidate of highConfidenceCandidates) {
+          try {
+            if (seenTrackingNumbers.has(candidate.tracking_number)) {
+              result.skipped_existing.push(`${candidate.tracking_number} (duplicate in this run)`);
+              continue;
+            }
+            seenTrackingNumbers.add(candidate.tracking_number);
+
+            await registerAndWriteCandidate(candidate, {
+              inbox,
+              email_id: email.id,
+              subject: email.subject,
+              body: email.body,
+            }, dryRun, result);
+          } catch (error) {
+            result.errors.push({
+              stage: 'register',
+              detail: `${candidate.tracking_number}: ${error instanceof Error ? error.message : String(error)}`,
+            });
           }
-          seenTrackingNumbers.add(bestSelected.tracking_number);
-
-          await registerAndWriteCandidate(bestSelected, {
-            inbox,
-            email_id: email.id,
-            subject: email.subject,
-            body: email.body,
-          }, dryRun, result);
-        } catch (error) {
-          result.errors.push({
-            stage: 'register',
-            detail: `${bestSelected.tracking_number}: ${error instanceof Error ? error.message : String(error)}`,
-          });
         }
       }
     } catch (error) {

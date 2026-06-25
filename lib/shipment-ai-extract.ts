@@ -27,6 +27,8 @@ const CARRIER_SLUGS: Record<string, string> = {
   'old dominion': 'old-dominion',
   xpo: 'xpo-logistics',
   ontrac: 'ontrac',
+  'aaa cooper': 'aaa-cooper',
+  'aaa cooper transportation': 'aaa-cooper',
   uline: '',
   amazon: '',
   shiprush: '',
