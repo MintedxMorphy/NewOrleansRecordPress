@@ -98,6 +98,11 @@ async function registerAndWriteCandidate(
 ) {
   const trackingNumber = candidate.tracking_number;
 
+  if (dryRun) {
+    result.created.push(`${trackingNumber} (dry-run)`);
+    return;
+  }
+
   if (await shipmentLedgerHasTracking(trackingNumber)) {
     result.skipped_existing.push(trackingNumber);
     return;
@@ -107,17 +112,6 @@ async function registerAndWriteCandidate(
     subject: emailMeta.subject,
     body: emailMeta.body,
   });
-
-  if (dryRun) {
-    result.created.push(`${trackingNumber} (dry-run)`);
-    await upsertSheetShipmentStatus(trackingNumber, {
-      job_id: jobLink.job_id,
-      carrier: candidate.carrier,
-      status: 'Dry run',
-      notes: `[dry-run] ${candidate.reason}; job_link=${jobLink.reason}`,
-    }, { dryRun: true });
-    return;
-  }
 
   if (!(await isAfterShipConfiguredAsync())) {
     result.errors.push({ stage: 'aftership', detail: 'AFTERSHIP_API_KEY not configured' });

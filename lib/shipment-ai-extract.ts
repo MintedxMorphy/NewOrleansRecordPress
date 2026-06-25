@@ -113,7 +113,6 @@ ${email.body.slice(0, 45000)}
     },
     body: JSON.stringify({
       model,
-      temperature: 0,
       response_format: { type: 'json_object' },
       messages: [
         {
