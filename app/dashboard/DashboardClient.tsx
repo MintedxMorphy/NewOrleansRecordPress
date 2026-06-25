@@ -187,6 +187,294 @@ function allTimeLogRecordsPressed(job: Job) {
   return 0;
 }
 
+type LogisticsShipment = {
+  id: string;
+  tracking_number: string;
+  direction: 'inbound' | 'outbound';
+  carrier: string;
+  status: string;
+  supply_type: string;
+  shipped_date: string;
+  est_delivery: string;
+  delivered_date: string;
+  total_cost: number;
+  notes: string;
+};
+
+type JobLogisticsState = {
+  shipments: LogisticsShipment[];
+  totals: { inbound_cost: number; outbound_cost: number; all_cost: number };
+};
+
+function formatMoney(amount: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
+}
+
+function trackingLink(carrier: string, trackingNumber: string) {
+  const number = trackingNumber.trim();
+  if (!number) return '';
+  const normalized = carrier.toLowerCase();
+  if (normalized.includes('ups')) return `https://www.ups.com/track?tracknum=${encodeURIComponent(number)}`;
+  if (normalized.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(number)}`;
+  if (normalized.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(number)}`;
+  return `https://www.aftership.com/track/${encodeURIComponent(number)}`;
+}
+
+function JobLogisticsPanel({ job }: { job: Job }) {
+  const [data, setData] = useState<JobLogisticsState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [direction, setDirection] = useState<'inbound' | 'outbound'>('inbound');
+  const [supplyType, setSupplyType] = useState('finished_goods');
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [carrier, setCarrier] = useState('');
+  const [status, setStatus] = useState('In transit');
+  const [totalCost, setTotalCost] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const loadLogistics = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const key = jobKey(job);
+      const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/logistics`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || `Load failed (${response.status})`);
+      setData({
+        shipments: body.shipments || [],
+        totals: body.totals || { inbound_cost: 0, outbound_cost: 0, all_cost: 0 },
+      });
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : String(loadError));
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadLogistics();
+  }, [job]);
+
+  const addShipment = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const key = jobKey(job);
+      const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/logistics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          direction,
+          supply_type: supplyType,
+          tracking_number: trackingNumber,
+          carrier,
+          status,
+          total_cost: totalCost === '' ? 0 : Number(totalCost),
+          notes,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || `Save failed (${response.status})`);
+      setData({
+        shipments: body.shipments || [],
+        totals: body.totals || { inbound_cost: 0, outbound_cost: 0, all_cost: 0 },
+      });
+      setTrackingNumber('');
+      setCarrier('');
+      setTotalCost('');
+      setNotes('');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : String(saveError));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inbound = (data?.shipments || []).filter(shipment => shipment.direction === 'inbound');
+  const outbound = (data?.shipments || []).filter(shipment => shipment.direction === 'outbound');
+
+  const renderShipment = (shipment: LogisticsShipment) => {
+    const link = trackingLink(shipment.carrier, shipment.tracking_number);
+    return (
+      <div
+        key={shipment.id}
+        style={{
+          background: COLORS.panel,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: '8px',
+          padding: '10px 12px',
+        }}
+      >
+        <div style={{ alignItems: 'start', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 850 }}>
+              {shipment.supply_type || (shipment.direction === 'outbound' ? 'Finished Goods' : 'Supplies')}
+            </div>
+            <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
+              {shipment.carrier || 'Carrier TBD'}{shipment.status ? ` · ${shipment.status}` : ''}
+            </div>
+            {shipment.tracking_number && (
+              <div style={{ fontSize: '12px', marginTop: '6px' }}>
+                {link ? (
+                  <a href={link} target="_blank" rel="noreferrer" style={{ color: COLORS.blue, textDecoration: 'none' }}>
+                    {shipment.tracking_number}
+                  </a>
+                ) : shipment.tracking_number}
+              </div>
+            )}
+            {(shipment.shipped_date || shipment.est_delivery || shipment.delivered_date) && (
+              <div style={{ color: COLORS.faint, fontSize: '12px', marginTop: '6px' }}>
+                {shipment.shipped_date ? `Shipped ${shipment.shipped_date}` : ''}
+                {shipment.est_delivery ? `${shipment.shipped_date ? ' · ' : ''}ETA ${shipment.est_delivery}` : ''}
+                {shipment.delivered_date ? `${(shipment.shipped_date || shipment.est_delivery) ? ' · ' : ''}Delivered ${shipment.delivered_date}` : ''}
+              </div>
+            )}
+            {shipment.notes && (
+              <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '6px', lineHeight: 1.35 }}>{shipment.notes}</div>
+            )}
+          </div>
+          <div style={{ color: COLORS.gold, fontSize: '14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
+            {formatMoney(shipment.total_cost)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{
+      background: COLORS.card,
+      border: `1px solid ${COLORS.border}`,
+      borderRadius: '8px',
+      marginBottom: '22px',
+      padding: '14px',
+    }}>
+      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', marginBottom: '10px' }}>
+        <Truck size={16} color={COLORS.blue} />
+        <div style={{ color: COLORS.blue, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          Logistics
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ color: COLORS.muted, fontSize: '13px' }}>Loading shipments...</div>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: '14px' }}>
+            {[
+              ['Inbound', data?.totals.inbound_cost || 0],
+              ['Outbound', data?.totals.outbound_cost || 0],
+              ['Total', data?.totals.all_cost || 0],
+            ].map(([label, amount]) => (
+              <div key={String(label)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
+                <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</div>
+                <div style={{ color: COLORS.gold, fontSize: '18px', fontWeight: 900, marginTop: '4px' }}>{formatMoney(Number(amount))}</div>
+              </div>
+            ))}
+          </div>
+
+          {inbound.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 850, letterSpacing: '0.05em', marginBottom: '8px', textTransform: 'uppercase' }}>
+                Inbound to NORP
+              </div>
+              <div style={{ display: 'grid', gap: '8px' }}>{inbound.map(renderShipment)}</div>
+            </div>
+          )}
+
+          {outbound.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 850, letterSpacing: '0.05em', marginBottom: '8px', textTransform: 'uppercase' }}>
+                Outbound to client
+              </div>
+              <div style={{ display: 'grid', gap: '8px' }}>{outbound.map(renderShipment)}</div>
+            </div>
+          )}
+
+          {!inbound.length && !outbound.length && (
+            <div style={{ color: COLORS.muted, fontSize: '13px', lineHeight: 1.4, marginBottom: '12px' }}>
+              No shipments linked yet. Add one below — they match this job by matrix ID ({value(job, ['matrix', 'MATRIX']) || 'none'}) or customer name.
+            </div>
+          )}
+        </>
+      )}
+
+      <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: '12px', paddingTop: '12px' }}>
+        <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 850, letterSpacing: '0.05em', marginBottom: '10px', textTransform: 'uppercase' }}>
+          Add Shipment
+        </div>
+        <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            Direction
+            <select value={direction} onChange={event => setDirection(event.target.value as 'inbound' | 'outbound')} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }}>
+              <option value="inbound">Inbound to NORP</option>
+              <option value="outbound">Outbound to client</option>
+            </select>
+          </label>
+          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            Supply / Package
+            <select value={supplyType} onChange={event => setSupplyType(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }}>
+              <option value="pvc">PVC</option>
+              <option value="inner_sleeves">Inner Sleeves</option>
+              <option value="jackets">Jackets</option>
+              <option value="labels">Labels</option>
+              <option value="stampers">Stampers</option>
+              <option value="finished_goods">Finished Goods</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            Tracking Number
+            <input value={trackingNumber} onChange={event => setTrackingNumber(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="Optional for now" />
+          </label>
+          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            Carrier
+            <input value={carrier} onChange={event => setCarrier(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="UPS, FedEx, USPS, R&L..." />
+          </label>
+          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            Status
+            <input value={status} onChange={event => setStatus(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} />
+          </label>
+          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            Total Cost
+            <input type="number" min={0} step="0.01" value={totalCost} onChange={event => setTotalCost(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="0.00" />
+          </label>
+          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase', gridColumn: '1 / -1' }}>
+            Notes
+            <input value={notes} onChange={event => setNotes(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="Invoice #, vendor, pallet count..." />
+          </label>
+        </div>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={addShipment}
+          style={{
+            background: COLORS.blue,
+            border: 'none',
+            borderRadius: '8px',
+            color: '#041018',
+            cursor: saving ? 'default' : 'pointer',
+            fontSize: '13px',
+            fontWeight: 900,
+            marginTop: '12px',
+            opacity: saving ? 0.7 : 1,
+            padding: '10px 12px',
+            width: '100%',
+          }}
+        >
+          {saving ? 'Saving shipment...' : 'Add Shipment'}
+        </button>
+      </div>
+
+      {error && (
+        <div style={{ color: COLORS.red, fontSize: '12px', lineHeight: 1.4, marginTop: '10px' }}>{error}</div>
+      )}
+    </div>
+  );
+}
+
 function sortJobs(jobs: Job[]) {
   return [...jobs].sort((a, b) => {
     const orderDiff = dashboardOrder(a) - dashboardOrder(b);
@@ -1473,6 +1761,8 @@ function JobDrawer({
         >
           {savingRush ? 'Saving Rush...' : rushed ? 'Rush Order On' : 'Rush Order'}
         </button>
+
+        <JobLogisticsPanel job={job} />
 
         {station === 'now_pressing' && quantityTotal > 0 && (
           <div style={{

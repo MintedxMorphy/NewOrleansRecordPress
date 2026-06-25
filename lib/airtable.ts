@@ -656,6 +656,56 @@ async function findAirtableRecordId(jobId: string) {
   return data.records?.[0]?.id;
 }
 
+export async function resolveAirtableJobReference(jobRef: string) {
+  const recordIdPattern = /^rec[a-zA-Z0-9]{14,}$/;
+  if (recordIdPattern.test(jobRef)) {
+    const record = await getAirtableRecord(jobRef);
+    return jobContextFromRecord(record);
+  }
+
+  const lookupFields = [
+    airtableJobIdField(),
+    'Matrix',
+    'MATRIX',
+    'Matrix ID',
+    'Job ID',
+    'Job Id',
+  ];
+
+  for (const fieldName of lookupFields) {
+    const params = new URLSearchParams({
+      maxRecords: '1',
+      filterByFormula: `{${fieldName}}='${escapeFormulaValue(jobRef)}'`,
+    });
+
+    const res = await airtableFetch(`${tableUrl()}?${params.toString()}`, {
+      headers: airtableHeaders(),
+      cache: 'no-store',
+    });
+    const data = (await res.json()) as AirtableListResponse;
+
+    if (!res.ok) {
+      throw new Error(data.error?.message || `Airtable lookup failed (${res.status})`);
+    }
+
+    const record = data.records?.[0];
+    if (record) return jobContextFromRecord(record);
+  }
+
+  return null;
+}
+
+function jobContextFromRecord(record: AirtableRecord) {
+  const fields = record.fields;
+  return {
+    recordId: record.id,
+    job_id: field(fields, FIELD_ALIASES.job_id) || field(fields, FIELD_ALIASES.matrix),
+    matrix: field(fields, FIELD_ALIASES.matrix),
+    customer: field(fields, FIELD_ALIASES.customer),
+    order_number: field(fields, FIELD_ALIASES.order_number),
+  };
+}
+
 async function getAirtableRecord(recordId: string) {
   const res = await airtableFetch(tableUrl(`/${encodeURIComponent(recordId)}`), {
     headers: airtableHeaders(),
