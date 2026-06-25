@@ -281,3 +281,58 @@ export async function registerAfterShipTracking(input: RegisterAfterShipTracking
 
   throw new Error(data.meta?.message || `AfterShip create tracking failed (${res.status})`);
 }
+
+type AfterShipTrackingRecord = AfterShipTrackingPayload & {
+  id?: string;
+};
+
+type AfterShipListResponse = AfterShipApiEnvelope<{ trackings?: AfterShipTrackingRecord[] }>;
+
+export async function getAfterShipTracking(trackingNumber: string, slug?: string) {
+  if (!isAfterShipConfigured()) {
+    throw new Error('AfterShip is not configured');
+  }
+
+  const normalized = normalizeTrackingNumber(trackingNumber);
+  const params = new URLSearchParams({ tracking_numbers: normalized });
+  if (slug) params.set('slug', slug);
+
+  const res = await fetch(`${afterShipUrl('/trackings')}?${params.toString()}`, {
+    headers: afterShipHeaders(),
+    cache: 'no-store',
+  });
+  const data = (await res.json()) as AfterShipListResponse & {
+    meta?: { code?: number; message?: string; type?: string };
+  };
+
+  if (!res.ok) {
+    throw new Error(data.meta?.message || `AfterShip tracking lookup failed (${res.status})`);
+  }
+
+  return data.data?.trackings?.[0] || null;
+}
+
+export function afterShipRecordToStatusUpdate(record: AfterShipTrackingRecord): AfterShipTrackingUpdate | null {
+  if (!record.tracking_number) return null;
+
+  const tag = record.tag || '';
+  const statusDetail = record.subtag_message || record.checkpoints?.[record.checkpoints.length - 1]?.message || '';
+  const deliveredDate = tag === 'Delivered'
+    ? (record.shipment_delivery_date || record.checkpoints?.[record.checkpoints.length - 1]?.checkpoint_time || '').slice(0, 10)
+    : '';
+
+  const edd = record.courier_estimated_delivery_date;
+
+  return {
+    aftership_id: record.id || '',
+    tracking_number: normalizeTrackingNumber(record.tracking_number),
+    carrier_slug: record.slug || '',
+    carrier_label: carrierLabelFromSlug(record.slug || ''),
+    status: afterShipStatusLabel(tag, statusDetail),
+    status_detail: statusDetail,
+    shipped_date: (record.shipment_pickup_date || '').slice(0, 10),
+    est_delivery: (edd?.estimated_delivery_date || edd?.estimated_delivery_date_max || edd?.estimated_delivery_date_min || '').slice(0, 10),
+    delivered_date: deliveredDate,
+    airtable_record_id: record.custom_fields?.airtable_record_id || '',
+  };
+}

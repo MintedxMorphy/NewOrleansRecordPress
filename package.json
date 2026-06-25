@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "shipment-pipeline:dry-run": "node scripts/run-shipment-pipeline.mjs --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",

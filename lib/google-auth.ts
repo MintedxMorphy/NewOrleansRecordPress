@@ -25,6 +25,17 @@ export function getServiceAccountAuth(subject: string): JWT {
   });
 }
 
+export function getShipmentInboxAuth(subject: string): JWT {
+  const keyJson = Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY!, 'base64').toString('utf-8');
+  const key = JSON.parse(keyJson);
+  return new google.auth.JWT({
+    email: key.client_email,
+    key: key.private_key,
+    scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+    subject,
+  });
+}
+
 // Returns OAuth2 client using refresh token
 // For personal gmail account sheets (neworleansrecordpress@gmail.com)
 // or fallback when service account not configured

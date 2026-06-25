@@ -250,6 +250,7 @@ export default function AdminPage() {
       </Card>
 
       <Card title="Trigger Cron Jobs">
+        <CronTrigger label="Shipment Tracking" path="/api/cron/shipment-tracking?dry_run=1" />
         <CronTrigger label="Scan Email" path="/api/cron/scan-email" />
         <CronTrigger label="Seed Jobs from Email History" path="/api/cron/seed-jobs" />
         <CronTrigger label="QBO Sync" path="/api/cron/qbo-sync" />
