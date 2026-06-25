@@ -3,6 +3,7 @@
     { "path": "/api/cron/qbo-sync",       "schedule": "0 14 * * *" },
     { "path": "/api/cron/compound-check", "schedule": "30 11 * * *" },
     { "path": "/api/cron/ups-tracking",   "schedule": "0 15 * * *" },
-    { "path": "/api/cron/gusto-sync",     "schedule": "0 11 * * *" }
+    { "path": "/api/cron/gusto-sync",     "schedule": "0 11 * * *" },
+    { "path": "/api/cron/aftership-register", "schedule": "0 16 * * *" }
   ]
 }

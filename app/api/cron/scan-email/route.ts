@@ -356,6 +356,30 @@ async function scanMailboxCore(
           actionTaken = 'created_job';
 
         } else if (['order_update', 'shipping_update'].includes(classification.classification)) {
+          if (extracted.tracking_number) {
+            try {
+              const { registerTrackingShipment } = await import('@/lib/shipment-tracking');
+              await registerTrackingShipment({
+                tracking_number: extracted.tracking_number,
+                job_id: extracted.job_id || jobId || undefined,
+                customer: extracted.customer_name || undefined,
+                direction: extracted.job_id || jobId ? 'outbound' : 'inbound',
+                notes: classification.summary || subject,
+                source: `email:${email}`,
+              });
+              actionTaken = 'registered_aftership_tracking';
+              if (extracted.job_id) jobId = extracted.job_id;
+            } catch (registerError) {
+              actionTaken = 'aftership_register_failed';
+              results.push({
+                emailId: msg.id,
+                inbox: email,
+                classification: classification.classification ?? 'other',
+                error: registerError instanceof Error ? registerError.message : String(registerError),
+              });
+            }
+          }
+
           if (extracted.job_id) {
             const found = await findRow('jobs', 'job_id', extracted.job_id);
             if (found) {
@@ -363,9 +387,11 @@ async function scanMailboxCore(
                 ...found.row,
                 notes: `${found.row.notes}\n[${now.toISOString()}] (via ${email}) ${classification.summary}`.trim(),
               });
-              actionTaken = 'updated_job_notes';
+              if (actionTaken !== 'registered_aftership_tracking') {
+                actionTaken = 'updated_job_notes';
+              }
             }
-          } else if (extracted.tracking_number) {
+          } else if (extracted.tracking_number && actionTaken !== 'registered_aftership_tracking') {
             const found = await findRow('jobs', 'tracking_number', extracted.tracking_number);
             if (found) {
               await updateRow('jobs', found.rowIndex, {

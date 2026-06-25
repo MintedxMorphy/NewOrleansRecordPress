@@ -6,6 +6,7 @@ import {
   type ShipmentDirection,
 } from '@/lib/airtable-shipments';
 import { isAirtableConfigured } from '@/lib/airtable';
+import { registerTrackingShipment } from '@/lib/shipment-tracking';
 
 function parseDirection(value: unknown): ShipmentDirection {
   return String(value || '').toLowerCase().includes('out') ? 'outbound' : 'inbound';
@@ -37,13 +38,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ job
       return NextResponse.json({ error: 'Airtable is not configured' }, { status: 500 });
     }
 
-    const shipment = await createJobShipment(job_id, {
-      ...body,
-      direction: parseDirection(body.direction),
-      total_cost: body.total_cost === undefined || body.total_cost === null
-        ? 0
-        : Number(body.total_cost),
-    });
+    const shipment = body.tracking_number
+      ? (await registerTrackingShipment({
+          tracking_number: body.tracking_number,
+          direction: parseDirection(body.direction),
+          carrier: body.carrier,
+          supply_type: body.supply_type,
+          total_cost: body.total_cost === undefined || body.total_cost === null
+            ? 0
+            : Number(body.total_cost),
+          notes: body.notes,
+          job_ref: job_id,
+          source: 'dashboard',
+        })).shipment
+      : await createJobShipment(job_id, {
+          ...body,
+          direction: parseDirection(body.direction),
+          total_cost: body.total_cost === undefined || body.total_cost === null
+            ? 0
+            : Number(body.total_cost),
+        });
 
     const logistics = await getJobLogistics(job_id);
     return NextResponse.json({ ok: true, shipment, ...logistics });

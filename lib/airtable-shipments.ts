@@ -28,6 +28,7 @@ export type JobShipment = {
   delivered_date: string;
   total_cost: number;
   notes: string;
+  aftership_id: string;
 };
 
 export type JobLogisticsSummary = {
@@ -57,6 +58,39 @@ export type CreateJobShipmentInput = {
   delivered_date?: string;
   total_cost?: number;
   notes?: string;
+  aftership_id?: string;
+};
+
+export type UpdateShipmentInput = {
+  tracking_number?: string;
+  direction?: ShipmentDirection;
+  carrier?: string;
+  status?: string;
+  supply_type?: SupplyType | string;
+  matrix?: string;
+  customer?: string;
+  shipped_date?: string;
+  est_delivery?: string;
+  delivered_date?: string;
+  total_cost?: number;
+  notes?: string;
+  aftership_id?: string;
+};
+
+export type StandaloneShipmentInput = {
+  tracking_number: string;
+  direction?: ShipmentDirection;
+  carrier?: string;
+  status?: string;
+  supply_type?: SupplyType | string;
+  matrix?: string;
+  customer?: string;
+  shipped_date?: string;
+  est_delivery?: string;
+  delivered_date?: string;
+  total_cost?: number;
+  notes?: string;
+  aftership_id?: string;
 };
 
 const AIRTABLE_API_URL = 'https://api.airtable.com/v0';
@@ -74,6 +108,7 @@ const SHIPMENT_FIELD_ALIASES = {
   delivered_date: ['Delivered Date', 'Actual Delivery', 'Delivery Date'],
   total_cost: ['Total Cost', 'Shipping Cost', 'Cost'],
   notes: ['Notes'],
+  aftership_id: ['AfterShip ID', 'AfterShip Tracking ID'],
 } as const;
 
 type AirtableRecord = {
@@ -191,6 +226,7 @@ function mapShipmentRecord(record: AirtableRecord): JobShipment {
     delivered_date: field(fields, SHIPMENT_FIELD_ALIASES.delivered_date),
     total_cost: parseNumber(rawField(fields, SHIPMENT_FIELD_ALIASES.total_cost)),
     notes: field(fields, SHIPMENT_FIELD_ALIASES.notes),
+    aftership_id: field(fields, SHIPMENT_FIELD_ALIASES.aftership_id),
   };
 }
 
@@ -201,6 +237,128 @@ function rawField(fields: Record<string, unknown>, aliases: readonly string[]) {
     if (value !== null && value !== undefined && value !== '') return value;
   }
   return undefined;
+}
+
+function normalizeTrackingNumber(value: string) {
+  return value.replace(/\s+/g, '').trim().toUpperCase();
+}
+
+function buildWritableFields(
+  table: AirtableTableMeta,
+  input: UpdateShipmentInput,
+  options: { includeEmptyStrings?: boolean } = {},
+) {
+  const writable: Record<string, unknown> = {};
+  const includeEmpty = options.includeEmptyStrings ?? false;
+
+  const assign = (aliases: readonly string[], value: unknown) => {
+    const fieldMeta = resolveField(table, aliases);
+    if (!fieldMeta) return;
+    if (value === undefined) return;
+    if (!includeEmpty && (value === null || value === '')) return;
+    const sanitized = airtableValueForField(fieldMeta, value);
+    if (sanitized === undefined && !includeEmpty) return;
+    writable[fieldMeta.name] = sanitized ?? value;
+  };
+
+  assign(SHIPMENT_FIELD_ALIASES.tracking_number, input.tracking_number);
+  if (input.direction) assign(SHIPMENT_FIELD_ALIASES.direction, directionLabel(input.direction));
+  assign(SHIPMENT_FIELD_ALIASES.carrier, input.carrier);
+  assign(SHIPMENT_FIELD_ALIASES.status, input.status);
+  if (input.supply_type) assign(SHIPMENT_FIELD_ALIASES.supply_type, supplyTypeLabel(String(input.supply_type)));
+  assign(SHIPMENT_FIELD_ALIASES.matrix, input.matrix);
+  assign(SHIPMENT_FIELD_ALIASES.customer, input.customer);
+  assign(SHIPMENT_FIELD_ALIASES.shipped_date, input.shipped_date);
+  assign(SHIPMENT_FIELD_ALIASES.est_delivery, input.est_delivery);
+  assign(SHIPMENT_FIELD_ALIASES.delivered_date, input.delivered_date);
+  if (input.total_cost !== undefined) assign(SHIPMENT_FIELD_ALIASES.total_cost, input.total_cost);
+  assign(SHIPMENT_FIELD_ALIASES.notes, input.notes);
+  assign(SHIPMENT_FIELD_ALIASES.aftership_id, input.aftership_id);
+
+  return writable;
+}
+
+export async function findShipmentByTrackingNumber(trackingNumber: string) {
+  const normalized = normalizeTrackingNumber(trackingNumber);
+  if (!normalized) return null;
+
+  const shipments = await listAllShipments();
+  return shipments.find(shipment => normalizeTrackingNumber(shipment.tracking_number) === normalized) || null;
+}
+
+export async function findShipmentByRecordId(recordId: string) {
+  if (!recordId) return null;
+
+  const res = await fetch(shipmentsTableUrl(`/${encodeURIComponent(recordId)}`), {
+    headers: airtableHeaders(),
+    cache: 'no-store',
+  });
+  const data = await res.json() as AirtableRecord & { error?: { message?: string } };
+  if (!res.ok) return null;
+  return mapShipmentRecord(data);
+}
+
+export async function updateShipmentRecord(recordId: string, input: UpdateShipmentInput) {
+  const table = await getShipmentsTableMeta();
+  if (!table) {
+    throw new Error(`Airtable table not found: ${airtableShipmentsTable()}`);
+  }
+
+  const writable = buildWritableFields(table, input);
+  if (!Object.keys(writable).length) {
+    const existing = await findShipmentByRecordId(recordId);
+    if (!existing) throw new Error(`Shipment not found: ${recordId}`);
+    return existing;
+  }
+
+  const res = await fetch(shipmentsTableUrl(`/${encodeURIComponent(recordId)}`), {
+    method: 'PATCH',
+    headers: airtableHeaders(),
+    body: JSON.stringify({ fields: writable, typecast: true }),
+  });
+  const data = await res.json() as AirtableRecord & { error?: { message?: string } };
+
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Airtable shipment update failed (${res.status})`);
+  }
+
+  return mapShipmentRecord(data);
+}
+
+export async function createStandaloneShipment(input: StandaloneShipmentInput) {
+  const table = await getShipmentsTableMeta();
+  if (!table) {
+    throw new Error(`Airtable table not found: ${airtableShipmentsTable()}`);
+  }
+
+  const writable = buildWritableFields(table, {
+    tracking_number: input.tracking_number,
+    direction: input.direction || 'inbound',
+    carrier: input.carrier || '',
+    status: input.status || 'Tracking registered',
+    supply_type: input.supply_type || 'other',
+    matrix: input.matrix || '',
+    customer: input.customer || '',
+    shipped_date: input.shipped_date || new Date().toISOString().slice(0, 10),
+    est_delivery: input.est_delivery || '',
+    delivered_date: input.delivered_date || '',
+    total_cost: input.total_cost ?? 0,
+    notes: input.notes || '',
+    aftership_id: input.aftership_id || '',
+  }, { includeEmptyStrings: true });
+
+  const res = await fetch(shipmentsTableUrl(), {
+    method: 'POST',
+    headers: airtableHeaders(),
+    body: JSON.stringify({ fields: writable, typecast: true }),
+  });
+  const data = await res.json() as AirtableRecord & { error?: { message?: string } };
+
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Airtable shipment create failed (${res.status})`);
+  }
+
+  return mapShipmentRecord(data);
 }
 
 function shipmentMatchesJob(shipment: JobShipment, job: { matrix: string; customer: string }) {
@@ -244,6 +402,10 @@ async function listAllShipments() {
   } while (offset);
 
   return shipments;
+}
+
+export async function listAllShipmentsForSync() {
+  return listAllShipments();
 }
 
 async function getShipmentsTableMeta() {

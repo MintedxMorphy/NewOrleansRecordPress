@@ -71,6 +71,7 @@ if (!table) {
         { name: 'Delivered Date', type: 'date', options: { dateFormat: { name: 'iso' } } },
         { name: 'Total Cost', type: 'currency', options: { precision: 2, symbol: '$' } },
         { name: 'Notes', type: 'multilineText' },
+        { name: 'AfterShip ID', type: 'singleLineText' },
       ],
     }),
   });
@@ -117,6 +118,7 @@ const desiredFields = [
   ['Delivered Date', { name: 'Delivered Date', type: 'date', options: { dateFormat: { name: 'iso' } } }],
   ['Total Cost', { name: 'Total Cost', type: 'currency', options: { precision: 2, symbol: '$' } }],
   ['Notes', { name: 'Notes', type: 'multilineText' }],
+  ['AfterShip ID', { name: 'AfterShip ID', type: 'singleLineText' }],
 ];
 
 for (const [name, payload] of desiredFields) {
