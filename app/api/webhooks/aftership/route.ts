@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { isAfterShipWebhookConfigured, verifyAfterShipWebhookSignature, type AfterShipWebhookEvent } from '@/lib/aftership';
-import { handleAfterShipWebhookEvent } from '@/lib/shipment-tracking';
+import { verifyAfterShipWebhookSignature, isAfterShipWebhookConfigured, type AfterShipWebhookEvent } from '@/lib/aftership';
+import { handleAfterShipWebhookForSheet } from '@/lib/shipment-aftership-sync';
 
 function unauthorizedBearer(req: NextRequest) {
   const expected = process.env.AFTERSHIP_WEBHOOK_BEARER;
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = JSON.parse(rawBody) as AfterShipWebhookEvent;
-    const result = await handleAfterShipWebhookEvent(payload);
+    const result = await handleAfterShipWebhookForSheet(payload);
 
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {

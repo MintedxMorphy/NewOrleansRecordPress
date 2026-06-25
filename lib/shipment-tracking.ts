@@ -1,6 +1,6 @@
 import {
   carrierLabelFromSlug,
-  isAfterShipConfigured,
+  isAfterShipConfiguredAsync,
   normalizeTrackingNumber,
   parseAfterShipTrackingUpdate,
   registerAfterShipTracking,
@@ -206,7 +206,7 @@ export async function handleAfterShipWebhookEvent(payload: AfterShipWebhookEvent
 }
 
 export async function registerPendingAfterShipShipments(limit = 25) {
-  if (!isAfterShipConfigured()) {
+  if (!(await isAfterShipConfiguredAsync())) {
     return { registered: 0, skipped: 0, errors: ['AfterShip is not configured'] };
   }
 

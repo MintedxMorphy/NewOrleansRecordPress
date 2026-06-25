@@ -3,7 +3,7 @@ import {
   afterShipRecordToStatusUpdate,
   carrierLabelFromSlug,
   getAfterShipTracking,
-  isAfterShipConfigured,
+  isAfterShipConfiguredAsync,
   registerAfterShipTracking,
 } from '@/lib/aftership';
 import { getShipmentInboxAuth, hasServiceAccount } from '@/lib/google-auth';
@@ -113,7 +113,7 @@ async function registerAndWriteCandidate(
     return;
   }
 
-  if (!isAfterShipConfigured()) {
+  if (!(await isAfterShipConfiguredAsync())) {
     result.errors.push({ stage: 'aftership', detail: 'AFTERSHIP_API_KEY not configured' });
     return;
   }
@@ -145,7 +145,7 @@ async function registerAndWriteCandidate(
 }
 
 async function pollActiveShipments(dryRun: boolean, result: ShipmentPipelineResult) {
-  if (!isAfterShipConfigured()) return;
+  if (!(await isAfterShipConfiguredAsync())) return;
 
   const active = await listActiveSheetShipments();
   for (const row of active) {

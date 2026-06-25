@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { getAfterShipApiKey } from '@/lib/aftership-config';
 
 const DEFAULT_API_VERSION = '2026-01';
 
@@ -52,10 +53,6 @@ export type AfterShipTrackingUpdate = {
   airtable_record_id: string;
 };
 
-function afterShipApiKey() {
-  return process.env.AFTERSHIP_API_KEY || process.env.AFTERSHIP_API_KEY_V2;
-}
-
 function afterShipWebhookSecret() {
   return process.env.AFTERSHIP_WEBHOOK_SECRET;
 }
@@ -65,15 +62,19 @@ function afterShipApiVersion() {
 }
 
 export function isAfterShipConfigured() {
-  return Boolean(afterShipApiKey());
+  return Boolean(process.env.AFTERSHIP_API_KEY || process.env.AFTERSHIP_API_KEY_V2);
+}
+
+export async function isAfterShipConfiguredAsync() {
+  return Boolean(await getAfterShipApiKey());
 }
 
 export function isAfterShipWebhookConfigured() {
   return Boolean(afterShipWebhookSecret());
 }
 
-function afterShipHeaders() {
-  const apiKey = afterShipApiKey();
+async function afterShipHeaders() {
+  const apiKey = await getAfterShipApiKey();
   if (!apiKey) throw new Error('Missing AFTERSHIP_API_KEY');
   return {
     'Content-Type': 'application/json',
@@ -226,7 +227,7 @@ type AfterShipApiEnvelope<T> = {
 type AfterShipCreateResponse = AfterShipApiEnvelope<{ id?: string; tracking_number?: string; slug?: string; tag?: string }>;
 
 export async function registerAfterShipTracking(input: RegisterAfterShipTrackingInput) {
-  if (!isAfterShipConfigured()) {
+  if (!(await isAfterShipConfiguredAsync())) {
     throw new Error('AfterShip is not configured');
   }
 
@@ -249,7 +250,7 @@ export async function registerAfterShipTracking(input: RegisterAfterShipTracking
 
   const res = await fetch(afterShipUrl('/trackings'), {
     method: 'POST',
-    headers: afterShipHeaders(),
+    headers: await afterShipHeaders(),
     body: JSON.stringify(body),
   });
 
@@ -289,7 +290,7 @@ type AfterShipTrackingRecord = AfterShipTrackingPayload & {
 type AfterShipListResponse = AfterShipApiEnvelope<{ trackings?: AfterShipTrackingRecord[] }>;
 
 export async function getAfterShipTracking(trackingNumber: string, slug?: string) {
-  if (!isAfterShipConfigured()) {
+  if (!(await isAfterShipConfiguredAsync())) {
     throw new Error('AfterShip is not configured');
   }
 
@@ -298,7 +299,7 @@ export async function getAfterShipTracking(trackingNumber: string, slug?: string
   if (slug) params.set('slug', slug);
 
   const res = await fetch(`${afterShipUrl('/trackings')}?${params.toString()}`, {
-    headers: afterShipHeaders(),
+    headers: await afterShipHeaders(),
     cache: 'no-store',
   });
   const data = (await res.json()) as AfterShipListResponse & {
@@ -335,4 +336,26 @@ export function afterShipRecordToStatusUpdate(record: AfterShipTrackingRecord): 
     delivered_date: deliveredDate,
     airtable_record_id: record.custom_fields?.airtable_record_id || '',
   };
+}
+
+export async function testAfterShipConnection() {
+  const apiKey = await getAfterShipApiKey();
+  if (!apiKey) {
+    return { ok: false as const, error: 'AfterShip API key is not configured' };
+  }
+
+  const res = await fetch(afterShipUrl('/couriers'), {
+    headers: {
+      'Content-Type': 'application/json',
+      'as-api-key': apiKey,
+    },
+    cache: 'no-store',
+  });
+
+  const data = await res.json().catch(() => ({})) as { meta?: { message?: string } };
+  if (!res.ok) {
+    return { ok: false as const, error: data.meta?.message || `AfterShip API error (${res.status})` };
+  }
+
+  return { ok: true as const };
 }

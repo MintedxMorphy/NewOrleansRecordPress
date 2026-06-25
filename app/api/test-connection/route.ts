@@ -47,5 +47,18 @@ export async function GET() {
     results.gmailAccess = `❌ ${e.message}`;
   }
 
+  // Test 4: AfterShip
+  try {
+    const { isAfterShipReady } = await import('@/lib/aftership-config');
+    const { testAfterShipConnection } = await import('@/lib/aftership');
+    const ready = await isAfterShipReady();
+    results.aftershipKey = ready ? '✅ SET' : '❌ NOT SET';
+    results.aftershipConnection = ready
+      ? (await testAfterShipConnection()).ok ? '✅ Connected' : '❌ API error'
+      : 'skipped';
+  } catch (e: any) {
+    results.aftershipConnection = `❌ ${e.message}`;
+  }
+
   return NextResponse.json(results, { status: 200 });
 }
