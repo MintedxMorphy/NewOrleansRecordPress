@@ -11,7 +11,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span style={{ color: "#2A2A2A" }}>|</span>
             <span style={{ color: "#9A9A9A", fontSize: "14px" }}>Operations Dashboard</span>
             <a href="/dashboard" style={{ color: "#9A9A9A", fontSize: "13px", marginLeft: "16px", textDecoration: "none" }}>Home</a>
-            <a href="/dashboard/admin" style={{ color: "#9A9A9A", fontSize: "13px", textDecoration: "none" }}>Admin</a>
+            <a href="/admin" style={{ color: "#9A9A9A", fontSize: "13px", textDecoration: "none" }}>Admin</a>
           </div>
         </nav>
         <main style={{ padding: "24px" }}>{children}</main>

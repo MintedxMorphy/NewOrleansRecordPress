@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ShipmentTrackingAdmin } from '@/components/shipment-tracking-admin'
+import { AdminCronTools } from '@/components/admin-cron-tools'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -836,12 +837,32 @@ function TeamTab({ password }: { password: string }) {
 
 type Tab = 'inventory' | 'shop' | 'team' | 'shipments'
 
+const TAB_VALUES: Tab[] = ['inventory', 'shop', 'team', 'shipments']
+
+function tabFromSearchParams(): Tab | null {
+  if (typeof window === 'undefined') return null
+  const tab = new URLSearchParams(window.location.search).get('tab')
+  return TAB_VALUES.includes(tab as Tab) ? (tab as Tab) : null
+}
+
 export default function AdminPage() {
   const [password, setPassword] = useState('')
   const [authed, setAuthed] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('inventory')
   // team tab loaded on demand
   const [inventory, setInventory] = useState<Inventory | null>(null)
+
+  useEffect(() => {
+    const tab = tabFromSearchParams()
+    if (tab) setActiveTab(tab)
+  }, [])
+
+  function selectTab(tab: Tab) {
+    setActiveTab(tab)
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tab)
+    window.history.replaceState({}, '', url.toString())
+  }
 
   function handleAuth(pw: string) {
     setPassword(pw)
@@ -871,10 +892,10 @@ export default function AdminPage() {
       <div style={S.nav}>
         <div style={S.navLeft}>
           <span style={S.navBrand}>NORP Admin</span>
-          <button onClick={() => setActiveTab('inventory')} style={tabStyle('inventory')}>Inventory</button>
-          <button onClick={() => setActiveTab('shop')} style={tabStyle('shop')}>Shop Products</button>
-          <button onClick={() => setActiveTab('team')} style={tabStyle('team')}>Team</button>
-          <button onClick={() => setActiveTab('shipments')} style={tabStyle('shipments')}>Shipments</button>
+          <button onClick={() => selectTab('inventory')} style={tabStyle('inventory')}>Inventory</button>
+          <button onClick={() => selectTab('shop')} style={tabStyle('shop')}>Shop Products</button>
+          <button onClick={() => selectTab('team')} style={tabStyle('team')}>Team</button>
+          <button onClick={() => selectTab('shipments')} style={{ ...tabStyle('shipments'), color: activeTab === 'shipments' ? '#FFB800' : '#666' }}>Shipments</button>
         </div>
         <div style={S.navRight}>
           <a href="/dashboard" style={{ ...S.btnGreen, textDecoration: 'none', display: 'inline-block' }}>Operations Dashboard</a>
@@ -912,6 +933,7 @@ export default function AdminPage() {
         {activeTab === 'shipments' && (
           <div style={S.cardPad}>
             <ShipmentTrackingAdmin password={password} showPasswordField={false} />
+            <AdminCronTools />
           </div>
         )}
       </div>
