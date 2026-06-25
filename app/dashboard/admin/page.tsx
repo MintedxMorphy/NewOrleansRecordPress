@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ShipmentTrackingAdmin } from '@/components/shipment-tracking-admin';
 
 const COLORS = {
   bg: '#0A0A0A', card: '#141414', elevated: '#1A1A1A',
@@ -230,75 +231,6 @@ function TokenRefresh({ label, path, method = 'POST' }: { label: string; path: s
 
 // ── Shipment Tracking ─────────────────────────────────────────────────────────
 
-function ShipmentTrackingPanel() {
-  const [password, setPassword] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [status, setStatus] = useState<any>(null);
-  const [result, setResult] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const loadStatus = async () => {
-    const res = await fetch('/api/admin/shipment-tracking');
-    setStatus(await res.json());
-  };
-
-  useEffect(() => { void loadStatus(); }, []);
-
-  const call = async (body: Record<string, unknown>) => {
-    if (!password) { setResult('Admin password required'); return; }
-    setLoading(true);
-    setResult('Running...');
-    try {
-      const res = await fetch('/api/admin/shipment-tracking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password, ...body }),
-      });
-      const data = await res.json();
-      setResult(JSON.stringify(data, null, 2));
-      await loadStatus();
-    } catch (e: any) {
-      setResult(`Error: ${e?.message}`);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div>
-      <p style={{ color: COLORS.muted, fontSize: '13px', marginBottom: '12px', lineHeight: 1.5 }}>
-        Saves your AfterShip API key to NORP_OPS_DB, scans all five inboxes, registers trackings, and writes status to the <code style={{ background: COLORS.elevated, padding: '1px 4px', borderRadius: '3px' }}>shipments</code> sheet.
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-        <Input label="Admin Password" value={password} onChange={setPassword} type="password" />
-        <Input label="AfterShip API Key" value={apiKey} onChange={setApiKey} type="password" />
-      </div>
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
-        <Btn onClick={() => void loadStatus()} color={COLORS.muted}>Refresh Status</Btn>
-        <Btn onClick={() => call({ action: 'save_key', aftership_api_key: apiKey })} color={COLORS.gold}>
-          {loading ? 'Saving...' : 'Save API Key'}
-        </Btn>
-        <Btn onClick={() => call({ action: 'test' })} color={COLORS.purple}>Test AfterShip</Btn>
-        <Btn onClick={() => call({ action: 'run', dry_run: true, lookback_hours: 36 })}>
-          {loading ? 'Running...' : 'Dry Run (36h)'}
-        </Btn>
-        <Btn onClick={() => call({ action: 'run', dry_run: false, lookback_hours: 36 })} color={COLORS.yellow}>
-          {loading ? 'Running...' : 'Run Live (36h)'}
-        </Btn>
-      </div>
-      {status && (
-        <pre style={{ background: COLORS.elevated, border: `1px solid ${COLORS.border}`, borderRadius: '6px', padding: '10px', fontSize: '11px', color: COLORS.text, overflowX: 'auto', marginBottom: '12px' }}>
-          {JSON.stringify(status, null, 2)}
-        </pre>
-      )}
-      {result && (
-        <pre style={{ background: COLORS.elevated, border: `1px solid ${COLORS.border}`, borderRadius: '6px', padding: '10px', fontSize: '11px', color: COLORS.text, overflowX: 'auto', maxHeight: '360px', overflowY: 'auto' }}>
-          {result}
-        </pre>
-      )}
-    </div>
-  );
-}
-
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -321,7 +253,7 @@ export default function AdminPage() {
       </Card>
 
       <Card title="Shipment Tracking (AfterShip)">
-        <ShipmentTrackingPanel />
+        <ShipmentTrackingAdmin />
       </Card>
 
       <Card title="Trigger Cron Jobs">

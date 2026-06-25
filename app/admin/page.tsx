@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { ShipmentTrackingAdmin } from '@/components/shipment-tracking-admin'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -833,7 +834,7 @@ function TeamTab({ password }: { password: string }) {
 
 // ─── Main Admin Page ──────────────────────────────────────────────────────────
 
-type Tab = 'inventory' | 'shop' | 'team'
+type Tab = 'inventory' | 'shop' | 'team' | 'shipments'
 
 export default function AdminPage() {
   const [password, setPassword] = useState('')
@@ -873,6 +874,7 @@ export default function AdminPage() {
           <button onClick={() => setActiveTab('inventory')} style={tabStyle('inventory')}>Inventory</button>
           <button onClick={() => setActiveTab('shop')} style={tabStyle('shop')}>Shop Products</button>
           <button onClick={() => setActiveTab('team')} style={tabStyle('team')}>Team</button>
+          <button onClick={() => setActiveTab('shipments')} style={tabStyle('shipments')}>Shipments</button>
         </div>
         <div style={S.navRight}>
           <a href="/dashboard" style={{ ...S.btnGreen, textDecoration: 'none', display: 'inline-block' }}>Operations Dashboard</a>
@@ -885,14 +887,16 @@ export default function AdminPage() {
       <div style={S.content}>
         <div style={{ marginBottom: 28 }}>
           <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>
-            {activeTab === 'inventory' ? 'Inventory' : activeTab === 'shop' ? 'Shop Products' : 'Team'}
+            {activeTab === 'inventory' ? 'Inventory' : activeTab === 'shop' ? 'Shop Products' : activeTab === 'team' ? 'Team' : 'Shipments'}
           </h1>
           <p style={{ color: '#888', fontSize: 14 }}>
             {activeTab === 'inventory'
               ? 'Track PVC compound, inner sleeves, and outer sleeves'
               : activeTab === 'shop'
               ? 'Manage products, stock, and pricing'
-              : 'Edit team members and upload profile photos for the public /team page'}
+              : activeTab === 'team'
+              ? 'Edit team members and upload profile photos for the public /team page'
+              : 'AfterShip tracking — save API key, scan inboxes, update the shipments sheet'}
           </p>
         </div>
 
@@ -904,6 +908,11 @@ export default function AdminPage() {
         )}
         {activeTab === 'team' && (
           <TeamTab password={password} />
+        )}
+        {activeTab === 'shipments' && (
+          <div style={S.cardPad}>
+            <ShipmentTrackingAdmin password={password} showPasswordField={false} />
+          </div>
         )}
       </div>
     </div>
