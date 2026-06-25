@@ -12,6 +12,7 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
   const [apiKey, setApiKey] = useState('');
   const [status, setStatus] = useState<Record<string, unknown> | null>(null);
   const [result, setResult] = useState('');
+  const [lastAction, setLastAction] = useState('No run yet');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -41,9 +42,11 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
   const call = async (body: Record<string, unknown>) => {
     if (!effectivePassword) {
       setResult('Admin password required');
+      setLastAction('Blocked');
       return;
     }
     setLoading(true);
+    setLastAction(String(body.action || 'run'));
     setResult('Running...');
     try {
       const res = await fetch('/api/admin/shipment-tracking', {
@@ -115,17 +118,26 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
         </button>
       </div>
 
-      {status && (
-        <pre style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 6, color: '#F0ECE2', fontSize: 11, marginBottom: 12, overflowX: 'auto', padding: 10 }}>
-          {JSON.stringify(status, null, 2)}
+      <div style={{ background: '#101826', border: '1px solid #1A53FF66', borderRadius: 8, marginBottom: 12, padding: 12 }}>
+        <div style={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+          <strong style={{ color: '#F0ECE2', fontSize: 14 }}>Run Output</strong>
+          <span style={{ color: loading ? '#FFB800' : '#888', fontSize: 12 }}>
+            {loading ? 'Running now...' : lastAction}
+          </span>
+        </div>
+        <pre style={{ background: '#0a0a0a', border: '1px solid #2a2a2a', borderRadius: 6, color: '#F0ECE2', fontSize: 11, margin: 0, maxHeight: 420, minHeight: 72, overflow: 'auto', padding: 10, whiteSpace: 'pre-wrap' }}>
+          {result || 'No run yet. Click Dry Run (36h) to scan recent shipping emails without creating AfterShip trackings.'}
         </pre>
-      )}
+      </div>
 
-      {result && (
-        <pre style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 6, color: '#F0ECE2', fontSize: 11, maxHeight: 360, overflow: 'auto', padding: 10 }}>
-          {result}
-        </pre>
-      )}
+      <details open style={{ marginTop: 12 }}>
+        <summary style={{ color: '#888', cursor: 'pointer', fontSize: 13, marginBottom: 8 }}>Connection Status</summary>
+        {status && (
+          <pre style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 6, color: '#F0ECE2', fontSize: 11, marginBottom: 12, overflowX: 'auto', padding: 10 }}>
+            {JSON.stringify(status, null, 2)}
+          </pre>
+        )}
+      </details>
     </div>
   );
 }
