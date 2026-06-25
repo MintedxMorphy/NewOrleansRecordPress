@@ -10,6 +10,7 @@ type Props = {
 export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswordField = true }: Props) {
   const [password, setPassword] = useState(passwordProp);
   const [apiKey, setApiKey] = useState('');
+  const [aiApiKey, setAiApiKey] = useState('');
   const [status, setStatus] = useState<Record<string, unknown> | null>(null);
   const [result, setResult] = useState('');
   const [lastAction, setLastAction] = useState('No run yet');
@@ -67,7 +68,7 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
   return (
     <div>
       <p style={{ color: '#888', fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
-        Saves your AfterShip API key, scans all five company inboxes, registers trackings in AfterShip, and writes live status to the{' '}
+        Uses GPT 5.5 to parse shipping emails/PDFs, registers real trackings in AfterShip, and writes live status to the{' '}
         <code style={{ background: '#1a1a1a', padding: '1px 4px', borderRadius: 3 }}>shipments</code> tab in NORP_OPS_DB.
       </p>
 
@@ -77,7 +78,7 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
         </div>
       )}
 
-      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: showPasswordField ? '1fr 1fr' : '1fr', marginBottom: 12 }}>
+      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: showPasswordField ? '1fr 1fr' : '1fr 1fr', marginBottom: 12 }}>
         {showPasswordField && (
           <div>
             <label style={{ color: '#888', display: 'block', fontSize: 11, letterSpacing: '0.06em', marginBottom: 4, textTransform: 'uppercase' }}>Admin Password</label>
@@ -98,6 +99,15 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
             style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 6, color: '#F0ECE2', fontSize: 13, padding: '8px 10px', width: '100%' }}
           />
         </div>
+        <div>
+          <label style={{ color: '#888', display: 'block', fontSize: 11, letterSpacing: '0.06em', marginBottom: 4, textTransform: 'uppercase' }}>GPT / OpenAI API Key</label>
+          <input
+            type="password"
+            value={aiApiKey}
+            onChange={event => setAiApiKey(event.target.value)}
+            style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 6, color: '#F0ECE2', fontSize: 13, padding: '8px 10px', width: '100%' }}
+          />
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
@@ -106,6 +116,9 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
         </button>
         <button type="button" disabled={loading} onClick={() => void call({ action: 'save_key', aftership_api_key: apiKey })} style={{ background: '#2a2200', border: '1px solid #665500', borderRadius: 8, color: '#C9A84C', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>
           {loading ? 'Saving...' : 'Save API Key'}
+        </button>
+        <button type="button" disabled={loading} onClick={() => void call({ action: 'save_ai_key', shipment_ai_api_key: aiApiKey })} style={{ background: '#2a2200', border: '1px solid #665500', borderRadius: 8, color: '#C9A84C', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>
+          {loading ? 'Saving...' : 'Save GPT Key'}
         </button>
         <button type="button" disabled={loading} onClick={() => void call({ action: 'test' })} style={{ background: '#1a1a2a', border: '1px solid #3a3a5a', borderRadius: 8, color: '#aaaaee', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>
           Test AfterShip

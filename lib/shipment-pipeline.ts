@@ -8,6 +8,8 @@ import {
 } from '@/lib/aftership';
 import { getShipmentInboxAuth, hasServiceAccount } from '@/lib/google-auth';
 import { appendRow, findRow, updateRow } from '@/lib/sheets';
+import { extractTrackingCandidatesWithAI } from '@/lib/shipment-ai-extract';
+import { getShipmentAiModel, isShipmentAiReady } from '@/lib/shipment-ai-config';
 import { extractBestTracking, extractTrackingCandidates, type ExtractedTracking } from '@/lib/shipment-email-extract';
 import { fetchShipmentEmails, SHIPMENT_INBOXES } from '@/lib/shipment-gmail';
 import { linkJobFromEmail } from '@/lib/shipment-job-link';
@@ -43,6 +45,10 @@ export type ShipmentPipelineResult = {
   skipped_existing: string[];
   polled: string[];
   errors: Array<{ stage: string; detail: string }>;
+  parser: {
+    ai_enabled: boolean;
+    ai_model: string;
+  };
 };
 
 const DEFAULT_LOOKBACK_HOURS = 36;
@@ -172,6 +178,26 @@ async function pollActiveShipments(dryRun: boolean, result: ShipmentPipelineResu
   }
 }
 
+function mergeCandidates(...groups: ExtractedTracking[][]) {
+  const merged = new Map<string, ExtractedTracking>();
+  for (const candidates of groups) {
+    for (const candidate of candidates) {
+      const existing = merged.get(candidate.tracking_number);
+      if (!existing) {
+        merged.set(candidate.tracking_number, candidate);
+        continue;
+      }
+      if (existing.confidence === 'medium' && candidate.confidence === 'high') {
+        merged.set(candidate.tracking_number, candidate);
+      }
+    }
+  }
+  return [...merged.values()].sort((a, b) => {
+    const rank = { high: 0, medium: 1 };
+    return rank[a.confidence] - rank[b.confidence];
+  });
+}
+
 export async function runShipmentTrackingPipeline(options: ShipmentPipelineOptions = {}): Promise<ShipmentPipelineResult> {
   if (!hasServiceAccount()) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY is required for shipment inbox scanning');
@@ -193,6 +219,10 @@ export async function runShipmentTrackingPipeline(options: ShipmentPipelineOptio
     skipped_existing: [],
     polled: [],
     errors: [],
+    parser: {
+      ai_enabled: await isShipmentAiReady(),
+      ai_model: await getShipmentAiModel(),
+    },
   };
   const seenTrackingNumbers = new Set<string>();
 
@@ -203,8 +233,23 @@ export async function runShipmentTrackingPipeline(options: ShipmentPipelineOptio
       const emails = await fetchShipmentEmails(gmail, inbox, afterEpochSeconds, maxEmails);
 
       for (const email of emails) {
-        const candidates = extractTrackingCandidates(email);
+        const regexCandidates = extractTrackingCandidates(email);
+        let aiCandidates: ExtractedTracking[] = [];
+
+        if (result.parser.ai_enabled) {
+          try {
+            aiCandidates = await extractTrackingCandidatesWithAI(email);
+          } catch (error) {
+            result.errors.push({
+              stage: 'ai_extract',
+              detail: `${inbox} ${email.id}: ${error instanceof Error ? error.message : String(error)}`,
+            });
+          }
+        }
+
+        const candidates = mergeCandidates(aiCandidates, regexCandidates);
         const selected = extractBestTracking(email);
+        const bestSelected = candidates.find(candidate => candidate.confidence === 'high') || candidates[0] || selected;
 
         result.extracted.push({
           inbox,
@@ -212,19 +257,19 @@ export async function runShipmentTrackingPipeline(options: ShipmentPipelineOptio
           from: email.from,
           subject: email.subject,
           candidates,
-          selected,
+          selected: bestSelected,
         });
 
-        if (!selected || selected.confidence !== 'high') continue;
+        if (!bestSelected || bestSelected.confidence !== 'high') continue;
 
         try {
-          if (seenTrackingNumbers.has(selected.tracking_number)) {
-            result.skipped_existing.push(`${selected.tracking_number} (duplicate in this run)`);
+          if (seenTrackingNumbers.has(bestSelected.tracking_number)) {
+            result.skipped_existing.push(`${bestSelected.tracking_number} (duplicate in this run)`);
             continue;
           }
-          seenTrackingNumbers.add(selected.tracking_number);
+          seenTrackingNumbers.add(bestSelected.tracking_number);
 
-          await registerAndWriteCandidate(selected, {
+          await registerAndWriteCandidate(bestSelected, {
             inbox,
             email_id: email.id,
             subject: email.subject,
@@ -233,7 +278,7 @@ export async function runShipmentTrackingPipeline(options: ShipmentPipelineOptio
         } catch (error) {
           result.errors.push({
             stage: 'register',
-            detail: `${selected.tracking_number}: ${error instanceof Error ? error.message : String(error)}`,
+            detail: `${bestSelected.tracking_number}: ${error instanceof Error ? error.message : String(error)}`,
           });
         }
       }
