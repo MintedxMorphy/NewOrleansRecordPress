@@ -2,6 +2,7 @@ import { getShipmentAiApiKey, getShipmentAiModel } from '@/lib/shipment-ai-confi
 import type { ExtractedTracking } from '@/lib/shipment-email-extract';
 
 type AiTrackingCandidate = {
+  email_id?: string;
   tracking_number?: string;
   carrier?: string;
   confidence?: 'high' | 'medium' | 'low';
@@ -161,4 +162,90 @@ ${email.body.slice(0, 45000)}
   }
 
   return [...deduped.values()];
+}
+
+export async function extractTrackingCandidatesBatchWithAI(emails: Array<{
+  id: string;
+  from: string;
+  subject: string;
+  body: string;
+}>): Promise<Record<string, ExtractedTracking[]>> {
+  const apiKey = await getShipmentAiApiKey();
+  if (!apiKey || emails.length === 0) return {};
+
+  const model = await getShipmentAiModel();
+  const input = emails.map((email, index) => `
+--- EMAIL ${index + 1} ---
+EMAIL_ID: ${email.id}
+FROM: ${email.from}
+SUBJECT: ${email.subject}
+TEXT:
+${email.body.slice(0, 7000)}
+`).join('\n\n');
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: [
+            'You extract real package/freight tracking numbers from batches of shipping emails for a record pressing plant.',
+            'Return ONLY JSON: {"trackings":[{"email_id":"exact EMAIL_ID","tracking_number":"...","carrier":"UPS|FedEx|USPS|DHL|Saia|R+L Carriers|Estes|Old Dominion|XPO|OnTrac|Unknown","confidence":"high|medium|low","evidence":"short quoted context"}]}',
+            'Do not return invoice numbers, payment references, order numbers, phone numbers, postal codes, reward/promo numbers, dates, amounts, or account numbers.',
+            'Only return tracking numbers when surrounding context says it is a shipment/tracking/PRO/BOL/waybill/package ID.',
+            'For carrier billing emails with only invoice/payment references, return no tracking for that email.',
+          ].join(' '),
+        },
+        {
+          role: 'user',
+          content: input,
+        },
+      ],
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = data.error?.message || `GPT batch parser failed (${res.status})`;
+    throw new Error(message);
+  }
+
+  const parsed = parseJsonObject(textFromOpenAi(data));
+  const byEmail: Record<string, ExtractedTracking[]> = {};
+  const validEmailIds = new Set(emails.map(email => email.id));
+
+  for (const candidate of parsed.trackings || []) {
+    const emailId = String(candidate.email_id || '').trim();
+    if (!validEmailIds.has(emailId)) continue;
+
+    const trackingNumber = normalizeTrackingNumber(candidate.tracking_number || '');
+    if (!plausibleTrackingNumber(trackingNumber)) continue;
+
+    const confidence = candidate.confidence === 'high' || candidate.confidence === 'medium'
+      ? candidate.confidence
+      : 'medium';
+    const carrier = carrierLabel(candidate.carrier || '');
+
+    const extracted: ExtractedTracking = {
+      tracking_number: trackingNumber,
+      carrier,
+      slug: carrierSlug(carrier),
+      confidence,
+      reason: `GPT 5.5 batch parser${candidate.evidence ? `: ${candidate.evidence.slice(0, 160)}` : ''}`,
+    };
+
+    byEmail[emailId] ||= [];
+    if (!byEmail[emailId].some(existing => existing.tracking_number === trackingNumber)) {
+      byEmail[emailId].push(extracted);
+    }
+  }
+
+  return byEmail;
 }

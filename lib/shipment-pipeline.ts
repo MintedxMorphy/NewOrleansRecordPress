@@ -8,7 +8,7 @@ import {
 } from '@/lib/aftership';
 import { getShipmentInboxAuth, hasServiceAccount } from '@/lib/google-auth';
 import { appendRow, findRow, updateRow } from '@/lib/sheets';
-import { extractTrackingCandidatesWithAI } from '@/lib/shipment-ai-extract';
+import { extractTrackingCandidatesBatchWithAI } from '@/lib/shipment-ai-extract';
 import { getShipmentAiModel, isShipmentAiReady } from '@/lib/shipment-ai-config';
 import { extractBestTracking, extractTrackingCandidates, type ExtractedTracking } from '@/lib/shipment-email-extract';
 import { fetchShipmentEmails, SHIPMENT_INBOXES } from '@/lib/shipment-gmail';
@@ -192,6 +192,32 @@ function mergeCandidates(...groups: ExtractedTracking[][]) {
   });
 }
 
+async function batchAiCandidates(
+  inbox: string,
+  emails: Array<{ id: string; from: string; subject: string; body: string }>,
+  result: ShipmentPipelineResult,
+) {
+  if (!result.parser.ai_enabled) return {};
+
+  const byEmail: Record<string, ExtractedTracking[]> = {};
+  const chunkSize = 8;
+  for (let index = 0; index < emails.length; index += chunkSize) {
+    const chunk = emails.slice(index, index + chunkSize);
+    try {
+      const parsed = await extractTrackingCandidatesBatchWithAI(chunk);
+      for (const [emailId, candidates] of Object.entries(parsed)) {
+        byEmail[emailId] = candidates;
+      }
+    } catch (error) {
+      result.errors.push({
+        stage: 'ai_extract',
+        detail: `${inbox} chunk ${Math.floor(index / chunkSize) + 1}: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }
+  return byEmail;
+}
+
 export async function runShipmentTrackingPipeline(options: ShipmentPipelineOptions = {}): Promise<ShipmentPipelineResult> {
   if (!hasServiceAccount()) {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY is required for shipment inbox scanning');
@@ -225,21 +251,11 @@ export async function runShipmentTrackingPipeline(options: ShipmentPipelineOptio
       const auth = getShipmentInboxAuth(inbox);
       const gmail = google.gmail({ version: 'v1', auth });
       const emails = await fetchShipmentEmails(gmail, inbox, afterEpochSeconds, maxEmails);
+      const aiByEmail = await batchAiCandidates(inbox, emails, result);
 
       for (const email of emails) {
         const regexCandidates = extractTrackingCandidates(email);
-        let aiCandidates: ExtractedTracking[] = [];
-
-        if (result.parser.ai_enabled) {
-          try {
-            aiCandidates = await extractTrackingCandidatesWithAI(email);
-          } catch (error) {
-            result.errors.push({
-              stage: 'ai_extract',
-              detail: `${inbox} ${email.id}: ${error instanceof Error ? error.message : String(error)}`,
-            });
-          }
-        }
+        const aiCandidates = aiByEmail[email.id] || [];
 
         const candidates = mergeCandidates(aiCandidates, regexCandidates);
         const selected = extractBestTracking(email);
