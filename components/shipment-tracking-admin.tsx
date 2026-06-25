@@ -113,6 +113,9 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
         <button type="button" disabled={loading} onClick={() => void call({ action: 'run', dry_run: true, lookback_hours: 36 })} style={{ background: '#1A53FF22', border: '1px solid #1A53FF66', borderRadius: 8, color: '#1A53FF', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>
           {loading ? 'Running...' : 'Dry Run (36h)'}
         </button>
+        <button type="button" disabled={loading} onClick={() => void call({ action: 'run', dry_run: true, backfill: 30 })} style={{ background: '#1A53FF22', border: '1px solid #1A53FF66', borderRadius: 8, color: '#1A53FF', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>
+          {loading ? 'Running...' : 'Dry Run (30d)'}
+        </button>
         <button type="button" disabled={loading} onClick={() => void call({ action: 'run', dry_run: false, lookback_hours: 36 })} style={{ background: '#2a2200', border: '1px solid #665500', borderRadius: 8, color: '#FFB800', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>
           {loading ? 'Running...' : 'Run Live (36h)'}
         </button>

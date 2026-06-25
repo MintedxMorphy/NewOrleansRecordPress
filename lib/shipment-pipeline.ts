@@ -194,6 +194,7 @@ export async function runShipmentTrackingPipeline(options: ShipmentPipelineOptio
     polled: [],
     errors: [],
   };
+  const seenTrackingNumbers = new Set<string>();
 
   for (const inbox of inboxes) {
     try {
@@ -217,6 +218,12 @@ export async function runShipmentTrackingPipeline(options: ShipmentPipelineOptio
         if (!selected || selected.confidence !== 'high') continue;
 
         try {
+          if (seenTrackingNumbers.has(selected.tracking_number)) {
+            result.skipped_existing.push(`${selected.tracking_number} (duplicate in this run)`);
+            continue;
+          }
+          seenTrackingNumbers.add(selected.tracking_number);
+
           await registerAndWriteCandidate(selected, {
             inbox,
             email_id: email.id,
