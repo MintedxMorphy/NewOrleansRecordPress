@@ -199,7 +199,7 @@ function InventoryTab({ password, inventory, setInventory }: {
       setInventory(local)
       setSaveMsg('Saved!')
     } else {
-      setSaveMsg('Error saving.')
+      setSaveMsg(data.error ? `Error: ${data.error}` : 'Error saving.')
     }
     setTimeout(() => setSaveMsg(''), 2500)
   }

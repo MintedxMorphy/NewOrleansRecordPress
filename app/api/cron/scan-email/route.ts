@@ -3,6 +3,13 @@ import { google } from 'googleapis';
 import Anthropic from '@anthropic-ai/sdk';
 import { findRow, updateRow, appendRow, getSheet } from '@/lib/sheets';
 import { getWorkspaceAuth, getOAuth2Auth, hasServiceAccount } from '@/lib/google-auth';
+import { createVendorCostRows, type VendorCostRowInput } from '@/lib/airtable-vendor-costs';
+import { extractPdfText as extractPdfTextFromBuffer } from '@/lib/pdf-text';
+import {
+  autoApplicableVendorInvoiceRows,
+  parseVendorInvoiceTextWithAi,
+  type VendorInvoiceParseResult,
+} from '@/lib/vendor-invoice-import';
 
 // Operational inboxes — forwarded emails land here too
 const ALL_MAILBOXES = [
@@ -10,6 +17,7 @@ const ALL_MAILBOXES = [
   'scott@neworleansrecordpress.com',
   'brice@neworleansrecordpress.com',
   'patrick@neworleansrecordpress.com',
+  'accounting@neworleansrecordpress.com',
 ];
 
 // Personal Gmail account (uses OAuth2 refresh token, not DWD)
@@ -78,21 +86,15 @@ function extractBodyText(payload: any): string {
   return '';
 }
 
-async function extractPdfText(buf: Buffer): Promise<string> {
-  try {
-    // Dynamic require avoids Next.js build-time module evaluation
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pdfParse = require("pdf-parse/lib/pdf-parse");
-    const data = await pdfParse(buf);
-    return (data.text ?? "").slice(0, 2000);
-  } catch {
-    return '';
-  }
-}
+type PdfAttachment = {
+  filename: string;
+  mimeType: string;
+  buffer: Buffer;
+  text: string;
+};
 
-// Find all PDF attachments and extract text
-async function extractAllPdfText(gmail: any, messageId: string, parts: any[]): Promise<string> {
-  const pdfTexts: string[] = [];
+async function collectPdfAttachments(gmail: any, messageId: string, parts: any[]): Promise<PdfAttachment[]> {
+  const attachments: PdfAttachment[] = [];
 
   const processParts = async (partList: any[]) => {
     for (const part of partList) {
@@ -105,15 +107,18 @@ async function extractAllPdfText(gmail: any, messageId: string, parts: any[]): P
             id: part.body.attachmentId,
           });
           if (att.data.data) {
-            const buf = decodeBase64Url(att.data.data);
-            const text = await extractPdfText(buf);
-            if (text) pdfTexts.push(`[PDF: ${part.filename}]\n${text}`);
+            const buffer = decodeBase64Url(att.data.data);
+            attachments.push({
+              filename: part.filename,
+              mimeType: part.mimeType ?? 'application/pdf',
+              buffer,
+              text: await extractPdfTextFromBuffer(buffer),
+            });
           }
         } catch (e) {
-          console.error(`[extractAllPdfText] Failed to extract ${part.filename}:`, e);
+          console.error(`[collectPdfAttachments] Failed to extract ${part.filename}:`, e);
         }
       }
-      // Recurse into nested parts
       if (part.parts) {
         await processParts(part.parts);
       }
@@ -121,7 +126,7 @@ async function extractAllPdfText(gmail: any, messageId: string, parts: any[]): P
   };
 
   await processParts(parts);
-  return pdfTexts.join('\n\n');
+  return attachments;
 }
 
 async function uploadToDrive(drive: any, content: Buffer, filename: string, mimeType: string, year: string, month: string): Promise<string> {
@@ -163,6 +168,344 @@ interface ScanResult {
   error?: string;
 }
 
+type ScanOptions = {
+  beforeDate?: number;
+  vendorCostBackfillOnly?: boolean;
+};
+
+type ScanBatch = {
+  backfill_days: number;
+  batch_days: number;
+  batch_index: number;
+  total_batches: number;
+  batch_anchor_epoch_seconds: number;
+  window_start_epoch_seconds: number;
+  window_end_epoch_seconds: number;
+  next_batch_index: number | null;
+};
+
+type VendorBackfillTask = [number, number, number, number]; // after, before, inbox index, attempt
+
+type VendorBackfillState = {
+  run_id: string;
+  status: 'running' | 'completed' | 'paused';
+  started_at: string;
+  updated_at: string;
+  anchor_epoch_seconds: number;
+  window_hours: number;
+  inboxes: string[];
+  cursor: number;
+  queue: VendorBackfillTask[];
+  in_progress?: {
+    cursor: number;
+    task: VendorBackfillTask;
+    started_at: string;
+  };
+  totals: {
+    completed_tasks: number;
+    failed_tasks: number;
+    split_tasks: number;
+    total_processed: number;
+    vendor_costs_backfilled: number;
+    vendor_costs_duplicate: number;
+    vendor_invoices_for_review: number;
+    action_counts: Record<string, number>;
+  };
+  failures: Array<{
+    task: VendorBackfillTask;
+    inbox: string;
+    error: string;
+    failed_at: string;
+  }>;
+};
+
+const VENDOR_COST_BACKFILL_STATE_KEY = 'vendor_cost_backfill_state';
+const VENDOR_COST_BACKFILL_INBOXES = [
+  'gregory@neworleansrecordpress.com',
+  'scott@neworleansrecordpress.com',
+  'brice@neworleansrecordpress.com',
+  'patrick@neworleansrecordpress.com',
+  'accounting@neworleansrecordpress.com',
+];
+const VENDOR_BACKFILL_STALE_MS = 3 * 60 * 1000;
+
+function vendorCostRowsFromInvoiceResult(
+  result: VendorInvoiceParseResult,
+  sourceFile: string,
+): VendorCostRowInput[] {
+  return autoApplicableVendorInvoiceRows(result).map(line => ({
+    invoice_number: result.invoice.invoice_number,
+    vendor: result.invoice.vendor,
+    category: line.category || 'Other',
+    matrix: line.matrix,
+    customer: line.matched_job?.customer || '',
+    job_id: line.matched_job?.job_id || '',
+    description: line.description,
+    quantity: line.quantity,
+    unit_cost: line.unit_cost,
+    amount: line.amount,
+    invoice_date: result.invoice.invoice_date,
+    source_file: sourceFile || result.invoice.source_file,
+    raw_line: line.raw_line || line.description,
+    match_confidence: line.confidence,
+  }));
+}
+
+function optionalNumber(value: string | null) {
+  if (value === null || value.trim() === '') return undefined;
+  const number = Number(value);
+  if (!Number.isFinite(number)) throw new Error(`Invalid number: ${value}`);
+  return number;
+}
+
+function resolveEmailScanBatch(input: {
+  backfillDays: number;
+  batchDays: number;
+  batchIndex?: number;
+  batchAnchorEpochSeconds?: number;
+}): ScanBatch {
+  const backfillDays = Math.max(1, Math.floor(input.backfillDays));
+  const batchDays = Math.max(1, Math.floor(input.batchDays));
+  const batchIndex = Math.max(0, Math.floor(input.batchIndex || 0));
+  const batchAnchor = input.batchAnchorEpochSeconds || Math.floor(Date.now() / 1000);
+  const daySeconds = 24 * 60 * 60;
+  const totalBatches = Math.ceil(backfillDays / batchDays);
+  const backfillStart = batchAnchor - backfillDays * daySeconds;
+  const windowEnd = batchAnchor - batchIndex * batchDays * daySeconds;
+  const windowStart = Math.max(backfillStart, windowEnd - batchDays * daySeconds);
+
+  return {
+    backfill_days: backfillDays,
+    batch_days: batchDays,
+    batch_index: batchIndex,
+    total_batches: totalBatches,
+    batch_anchor_epoch_seconds: batchAnchor,
+    window_start_epoch_seconds: windowStart,
+    window_end_epoch_seconds: windowEnd,
+    next_batch_index: batchIndex + 1 < totalBatches ? batchIndex + 1 : null,
+  };
+}
+
+function nextBatchUrl(req: NextRequest, batch: ScanBatch) {
+  if (batch.next_batch_index === null) return undefined;
+  const url = req.nextUrl.clone();
+  url.searchParams.set('batch', String(batch.next_batch_index));
+  url.searchParams.set('batch_anchor', String(batch.batch_anchor_epoch_seconds));
+  return `${url.pathname}?${url.searchParams.toString()}`;
+}
+
+async function loadVendorBackfillState(): Promise<VendorBackfillState | null> {
+  const row = await findRow('qbo_cache', 'key', VENDOR_COST_BACKFILL_STATE_KEY);
+  if (!row?.row.value) return null;
+  return JSON.parse(row.row.value) as VendorBackfillState;
+}
+
+async function saveVendorBackfillState(state: VendorBackfillState) {
+  state.updated_at = new Date().toISOString();
+  const row = {
+    key: VENDOR_COST_BACKFILL_STATE_KEY,
+    value: JSON.stringify(state),
+    updated_at: state.updated_at,
+  };
+  const existing = await findRow('qbo_cache', 'key', VENDOR_COST_BACKFILL_STATE_KEY);
+  if (existing) await updateRow('qbo_cache', existing.rowIndex, row);
+  else await appendRow('qbo_cache', row);
+}
+
+function buildVendorBackfillQueue(input: {
+  days: number;
+  windowHours: number;
+  anchorEpochSeconds: number;
+  inboxes: string[];
+}) {
+  const queue: VendorBackfillTask[] = [];
+  const windowSeconds = Math.max(1, input.windowHours) * 60 * 60;
+  const totalWindows = Math.ceil((input.days * 24 * 60 * 60) / windowSeconds);
+
+  for (let windowIndex = 0; windowIndex < totalWindows; windowIndex += 1) {
+    const before = input.anchorEpochSeconds - windowIndex * windowSeconds;
+    const after = Math.max(input.anchorEpochSeconds - input.days * 24 * 60 * 60, before - windowSeconds);
+    for (let inboxIndex = 0; inboxIndex < input.inboxes.length; inboxIndex += 1) {
+      queue.push([after, before, inboxIndex, 0]);
+    }
+  }
+
+  return queue;
+}
+
+function summarizeVendorBackfillState(state: VendorBackfillState | null) {
+  if (!state) return { exists: false };
+  return {
+    exists: true,
+    run_id: state.run_id,
+    status: state.status,
+    started_at: state.started_at,
+    updated_at: state.updated_at,
+    window_hours: state.window_hours,
+    inboxes: state.inboxes,
+    cursor: state.cursor,
+    queue_length: state.queue.length,
+    remaining_tasks: Math.max(0, state.queue.length - state.cursor),
+    in_progress: state.in_progress ? {
+      cursor: state.in_progress.cursor,
+      inbox: state.inboxes[state.in_progress.task[2]] || '',
+      after: state.in_progress.task[0],
+      before: state.in_progress.task[1],
+      attempt: state.in_progress.task[3],
+      started_at: state.in_progress.started_at,
+    } : null,
+    totals: state.totals,
+    recent_failures: state.failures.slice(-10).map(failure => ({
+      ...failure,
+      inbox: failure.inbox,
+      after: failure.task[0],
+      before: failure.task[1],
+      attempt: failure.task[3],
+    })),
+  };
+}
+
+function actionCounts(results: ScanResult[]) {
+  const counts: Record<string, number> = {};
+  for (const result of results) {
+    counts[result.action] = (counts[result.action] || 0) + 1;
+  }
+  return counts;
+}
+
+function addActionCounts(target: Record<string, number>, source: Record<string, number>) {
+  for (const [action, count] of Object.entries(source)) {
+    target[action] = (target[action] || 0) + count;
+  }
+}
+
+function markVendorBackfillFailure(state: VendorBackfillState, task: VendorBackfillTask, error: string) {
+  const [after, before, inboxIndex, attempt] = task;
+  const duration = before - after;
+  if (duration > 60 * 60 && attempt < 4) {
+    const mid = Math.floor((after + before) / 2);
+    state.queue.push([after, mid, inboxIndex, attempt + 1]);
+    state.queue.push([mid, before, inboxIndex, attempt + 1]);
+    state.totals.split_tasks += 1;
+    return 'split';
+  }
+
+  state.totals.failed_tasks += 1;
+  state.failures.push({
+    task,
+    inbox: state.inboxes[inboxIndex] || '',
+    error,
+    failed_at: new Date().toISOString(),
+  });
+  state.failures = state.failures.slice(-100);
+  return 'failed';
+}
+
+async function startVendorCostBackfill(req: NextRequest) {
+  const days = Math.max(1, Math.floor(optionalNumber(req.nextUrl.searchParams.get('days')) || 30));
+  const windowHours = Math.max(1, Math.floor(optionalNumber(req.nextUrl.searchParams.get('window_hours')) || 6));
+  const anchor = optionalNumber(req.nextUrl.searchParams.get('anchor')) || Math.floor(Date.now() / 1000);
+  const inboxParam = req.nextUrl.searchParams.get('inboxes');
+  const inboxes = inboxParam
+    ? inboxParam.split(',').map(inbox => inbox.trim()).filter(Boolean)
+    : VENDOR_COST_BACKFILL_INBOXES;
+  const now = new Date().toISOString();
+  const state: VendorBackfillState = {
+    run_id: `vendor-cost-backfill-${now}`,
+    status: 'running',
+    started_at: now,
+    updated_at: now,
+    anchor_epoch_seconds: anchor,
+    window_hours: windowHours,
+    inboxes,
+    cursor: 0,
+    queue: buildVendorBackfillQueue({ days, windowHours, anchorEpochSeconds: anchor, inboxes }),
+    totals: {
+      completed_tasks: 0,
+      failed_tasks: 0,
+      split_tasks: 0,
+      total_processed: 0,
+      vendor_costs_backfilled: 0,
+      vendor_costs_duplicate: 0,
+      vendor_invoices_for_review: 0,
+      action_counts: {},
+    },
+    failures: [],
+  };
+  await saveVendorBackfillState(state);
+  return state;
+}
+
+async function processVendorCostBackfillNext(anthropic: Anthropic) {
+  const state = await loadVendorBackfillState();
+  if (!state) return { error: 'No vendor cost backfill state exists. Start one first.' };
+  if (state.status !== 'running') return { state: summarizeVendorBackfillState(state), processed: null };
+
+  if (state.in_progress) {
+    const started = Date.parse(state.in_progress.started_at);
+    if (Number.isFinite(started) && Date.now() - started > VENDOR_BACKFILL_STALE_MS) {
+      const recoveredTask = state.in_progress.task;
+      const recovered = markVendorBackfillFailure(state, recoveredTask, 'Recovered stale in-progress task');
+      state.cursor = Math.max(state.cursor, state.in_progress.cursor + 1);
+      state.in_progress = undefined;
+      await saveVendorBackfillState(state);
+      return { recovered_stale_task: recovered, state: summarizeVendorBackfillState(state), processed: null };
+    }
+    return { state: summarizeVendorBackfillState(state), processed: null };
+  }
+
+  const task = state.queue[state.cursor];
+  if (!task) {
+    state.status = 'completed';
+    await saveVendorBackfillState(state);
+    return { state: summarizeVendorBackfillState(state), processed: null };
+  }
+
+  state.in_progress = {
+    cursor: state.cursor,
+    task,
+    started_at: new Date().toISOString(),
+  };
+  await saveVendorBackfillState(state);
+
+  const [after, before, inboxIndex] = task;
+  const inbox = state.inboxes[inboxIndex];
+  let processed: Record<string, unknown>;
+
+  try {
+    const results = await scanMailbox(inbox, after, new Set(), anthropic, {
+      beforeDate: before,
+      vendorCostBackfillOnly: true,
+    });
+    const counts = actionCounts(results);
+    const errors = results.filter(result => result.error).length;
+    const failed = errors > 0 && results.every(result => result.error);
+
+    if (failed) {
+      const failureAction = markVendorBackfillFailure(state, task, results.map(result => result.error).filter(Boolean).join('; ') || 'Mailbox scan failed');
+      processed = { inbox, after, before, status: failureAction, errors, actions: counts };
+    } else {
+      state.totals.completed_tasks += 1;
+      state.totals.total_processed += results.length;
+      state.totals.vendor_costs_backfilled += counts.vendor_costs_backfilled || 0;
+      state.totals.vendor_costs_duplicate += counts.vendor_costs_backfill_duplicate || 0;
+      state.totals.vendor_invoices_for_review += counts.vendor_costs_backfill_review || 0;
+      addActionCounts(state.totals.action_counts, counts);
+      processed = { inbox, after, before, status: 'completed', errors, actions: counts };
+    }
+  } catch (error) {
+    const failureAction = markVendorBackfillFailure(state, task, error instanceof Error ? error.message : String(error));
+    processed = { inbox, after, before, status: failureAction, error: error instanceof Error ? error.message : String(error) };
+  }
+
+  state.cursor += 1;
+  state.in_progress = undefined;
+  if (state.cursor >= state.queue.length) state.status = 'completed';
+  await saveVendorBackfillState(state);
+
+  return { state: summarizeVendorBackfillState(state), processed };
+}
+
 // Concurrency limiter
 function pLimit(concurrency: number) {
   const queue: (() => Promise<void>)[] = [];
@@ -199,14 +542,15 @@ async function scanMailboxWithAuth(
   auth: any,
   afterDate: number,
   processedIds: Set<string>,
-  anthropic: Anthropic
+  anthropic: Anthropic,
+  options: ScanOptions = {},
 ): Promise<ScanResult[]> {
   const results: ScanResult[] = [];
 
   try {
     const gmail = google.gmail({ version: 'v1', auth });
     const driveAuth = auth; // use same auth for drive
-    return await scanMailboxCore(email, gmail, driveAuth, afterDate, processedIds, anthropic);
+    return await scanMailboxCore(email, gmail, driveAuth, afterDate, processedIds, anthropic, options);
   } catch (e: any) {
     console.error(`[scanMailbox] Failed to scan ${email}:`, e?.message);
     return [];
@@ -217,13 +561,14 @@ async function scanMailbox(
   email: string,
   afterDate: number,
   processedIds: Set<string>,
-  anthropic: Anthropic
+  anthropic: Anthropic,
+  options: ScanOptions = {},
 ): Promise<ScanResult[]> {
   try {
     const auth = getWorkspaceAuth(email);
     const gmail = google.gmail({ version: 'v1', auth });
     const driveAuth = hasServiceAccount() ? getWorkspaceAuth('gregory@neworleansrecordpress.com') : getOAuth2Auth();
-    return await scanMailboxCore(email, gmail, driveAuth, afterDate, processedIds, anthropic);
+    return await scanMailboxCore(email, gmail, driveAuth, afterDate, processedIds, anthropic, options);
   } catch (e: any) {
     console.error(`[scanMailbox] Failed to scan ${email}:`, e?.message);
     return [{ emailId: 'N/A', inbox: email, classification: 'error', action: 'mailbox_scan_failed', error: e?.message }];
@@ -236,29 +581,45 @@ async function scanMailboxCore(
   driveAuth: any,
   afterDate: number,
   processedIds: Set<string>,
-  anthropic: Anthropic
+  anthropic: Anthropic,
+  options: ScanOptions = {},
 ): Promise<ScanResult[]> {
   const results: ScanResult[] = [];
 
   try {
     const drive = google.drive({ version: 'v3', auth: driveAuth });
 
-    const listRes = await gmail.users.messages.list({
-      userId: 'me',
-      q: `after:${afterDate} -in:sent -in:draft`,
-      maxResults: 50,
-    });
+    const query = [
+      `after:${afterDate}`,
+      options.beforeDate ? `before:${options.beforeDate}` : '',
+      options.vendorCostBackfillOnly ? '(invoice OR invoices OR bill OR billing OR receipt OR statement OR "amount due" OR "balance due") filename:pdf' : '',
+      '-in:sent',
+      '-in:draft',
+    ].filter(Boolean).join(' ');
 
-    const messages = listRes.data.messages ?? [];
+    const messages: Array<{ id?: string }> = [];
+    let pageToken: string | undefined;
+    do {
+      const listRes = await gmail.users.messages.list({
+        userId: 'me',
+        q: query,
+        maxResults: 100,
+        pageToken,
+      });
+      messages.push(...(listRes.data.messages ?? []));
+      pageToken = listRes.data.nextPageToken || undefined;
+    } while (pageToken);
 
     for (const msg of messages) {
       if (!msg.id) continue;
 
-      // Skip if already processed (dedup across mailboxes)
-      if (processedIds.has(msg.id)) {
+      // Skip if already processed during normal scans. Vendor-cost backfills
+      // intentionally revisit older invoice emails, relying on Vendor Costs
+      // duplicate keys to prevent double cost writes.
+      if (processedIds.has(msg.id) && !options.vendorCostBackfillOnly) {
         continue;
       }
-      processedIds.add(msg.id);
+      if (!options.vendorCostBackfillOnly) processedIds.add(msg.id);
 
       try {
         const full = await gmail.users.messages.get({ userId: 'me', id: msg.id, format: 'full' });
@@ -267,31 +628,44 @@ async function scanMailboxCore(
         const from = headers.find((h: any) => h.name === 'From')?.value ?? '';
         let bodyText = extractBodyText(full.data.payload);
 
-        // Extract PDF text for ALL email categories
         const parts = full.data.payload?.parts ?? [];
-        const pdfText = await extractAllPdfText(gmail, msg.id, parts.length > 0 ? parts : [full.data.payload]);
+        const partsToScan = parts.length > 0 ? parts : [full.data.payload];
+        const pdfAttachments = await collectPdfAttachments(gmail, msg.id, partsToScan);
+        const pdfText = pdfAttachments
+          .filter(attachment => attachment.text)
+          .map(attachment => `[PDF: ${attachment.filename}]\n${attachment.text}`)
+          .join('\n\n');
         if (pdfText) {
           bodyText = `${bodyText}\n\n--- ATTACHED PDF CONTENT ---\n${pdfText}`;
         }
 
-        // Classify with Claude
-        const prompt = CLASSIFICATION_PROMPT
-          .replace('{{SUBJECT}}', subject)
-          .replace('{{BODY}}', bodyText.slice(0, 4000)); // Increased limit for PDF content
-
-        const claudeRes = await anthropic.messages.create({
-          model: 'claude-sonnet-4-5',
-          max_tokens: 512,
-          messages: [{ role: 'user', content: prompt }],
-        });
-
         let classification: any = {};
-        try {
-          const raw = (claudeRes.content[0] as any).text ?? '';
-          const jsonMatch = raw.match(/\{[\s\S]*\}/);
-          classification = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-        } catch {
-          classification = { classification: 'other', confidence: 0.5, summary: 'Parse error', extracted: {} };
+        if (options.vendorCostBackfillOnly) {
+          classification = {
+            classification: 'vendor_invoice',
+            confidence: 1,
+            summary: 'Vendor cost backfill candidate',
+            extracted: {},
+          };
+        } else {
+          // Classify with Claude
+          const prompt = CLASSIFICATION_PROMPT
+            .replace('{{SUBJECT}}', subject)
+            .replace('{{BODY}}', bodyText.slice(0, 4000)); // Increased limit for PDF content
+
+          const claudeRes = await anthropic.messages.create({
+            model: 'claude-sonnet-4-5',
+            max_tokens: 512,
+            messages: [{ role: 'user', content: prompt }],
+          });
+
+          try {
+            const raw = (claudeRes.content[0] as any).text ?? '';
+            const jsonMatch = raw.match(/\{[\s\S]*\}/);
+            classification = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+          } catch {
+            classification = { classification: 'other', confidence: 0.5, summary: 'Parse error', extracted: {} };
+          }
         }
 
         const { extracted = {} } = classification;
@@ -307,20 +681,44 @@ async function scanMailboxCore(
         if (classification.classification === 'vendor_invoice') {
           // Download PDF attachments and upload to Drive
           let pdfUrl = '';
-          for (const part of parts) {
-            if (part.filename && part.body?.attachmentId) {
-              const att = await gmail.users.messages.attachments.get({
-                userId: 'me', messageId: msg.id, id: part.body.attachmentId,
-              });
-              if (att.data.data) {
-                const buf = decodeBase64Url(att.data.data);
-                pdfUrl = await uploadToDrive(drive, buf, part.filename, part.mimeType ?? 'application/pdf', year, month);
-              }
+          if (!options.vendorCostBackfillOnly) {
+            for (const attachment of pdfAttachments) {
+              pdfUrl = await uploadToDrive(drive, attachment.buffer, attachment.filename, attachment.mimeType, year, month);
             }
           }
 
           billId = `BILL-${msg.id}`;
-          await appendRow('bills_inbox', {
+          let vendorCostNote = '';
+          let shouldWriteBillRow = !options.vendorCostBackfillOnly;
+          try {
+            const parsedInvoice = await parseVendorInvoiceTextWithAi({
+              text: bodyText,
+              vendorHint: extracted.vendor_name ?? '',
+              sourceFile: pdfUrl || subject,
+            });
+            const rows = vendorCostRowsFromInvoiceResult(parsedInvoice, pdfUrl || subject);
+            const reviewCount = parsedInvoice.line_items.length - rows.length;
+            shouldWriteBillRow = shouldWriteBillRow || parsedInvoice.line_items.length > 0;
+
+            if (rows.length) {
+              const vendorCostResult = await createVendorCostRows(rows);
+              vendorCostNote = ` Vendor costs: parsed ${parsedInvoice.line_items.length} line(s), auto-applied ${vendorCostResult.created.length}, skipped duplicate ${vendorCostResult.skipped.length}, review ${reviewCount}.`;
+              actionTaken = vendorCostResult.created.length
+                ? (options.vendorCostBackfillOnly ? 'vendor_costs_backfilled' : 'added_to_bills_inbox_and_vendor_costs')
+                : (options.vendorCostBackfillOnly ? 'vendor_costs_backfill_duplicate' : 'added_to_bills_inbox_vendor_costs_duplicate');
+            } else if (parsedInvoice.line_items.length) {
+              vendorCostNote = ` Vendor costs: parsed ${parsedInvoice.line_items.length} line(s), none auto-applied; review ${reviewCount}.`;
+              if (options.vendorCostBackfillOnly) actionTaken = 'vendor_costs_backfill_review';
+            } else {
+              vendorCostNote = ' Vendor costs: no line-item costs found.';
+              if (options.vendorCostBackfillOnly) actionTaken = 'vendor_costs_backfill_no_line_items';
+            }
+          } catch (e) {
+            vendorCostNote = ` Vendor cost parse/apply failed: ${e instanceof Error ? e.message : String(e)}.`;
+            if (options.vendorCostBackfillOnly) actionTaken = 'vendor_costs_backfill_parse_failed';
+          }
+
+          const billRow = {
             email_id: msg.id,
             date_received: new Date().toISOString(),
             sender: from,
@@ -331,9 +729,32 @@ async function scanMailboxCore(
             status: 'new',
             pdf_drive_url: pdfUrl,
             qbo_bill_id: '',
-            notes: `Classified by Claude (${(classification.confidence * 100).toFixed(0)}%) from ${email}: ${classification.summary}`,
-          });
-          actionTaken = 'added_to_bills_inbox';
+            notes: `${options.vendorCostBackfillOnly ? 'Vendor cost backfill' : `Classified by Claude (${(classification.confidence * 100).toFixed(0)}%)`} from ${email}: ${classification.summary}${vendorCostNote}`,
+          };
+
+          if (options.vendorCostBackfillOnly) {
+            if (shouldWriteBillRow) {
+              const existingBill = await findRow('bills_inbox', 'email_id', msg.id);
+              if (existingBill) {
+                await updateRow('bills_inbox', existingBill.rowIndex, {
+                  ...existingBill.row,
+                  ...billRow,
+                  pdf_drive_url: existingBill.row.pdf_drive_url || pdfUrl,
+                  notes: `${existingBill.row.notes || ''}\n[Vendor cost backfill ${new Date().toISOString()}]${vendorCostNote}`.trim(),
+                });
+              } else {
+                await appendRow('bills_inbox', billRow);
+              }
+            } else {
+              billId = '';
+            }
+          } else {
+            await appendRow('bills_inbox', billRow);
+          }
+          if (actionTaken === 'logged') actionTaken = 'added_to_bills_inbox';
+
+        } else if (options.vendorCostBackfillOnly) {
+          actionTaken = 'ignored_not_vendor_invoice_backfill';
 
         } else if (classification.classification === 'quote_request') {
           const newJobId = `NORP-${year}${month}${String(now.getDate()).padStart(2,'0')}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
@@ -398,20 +819,22 @@ async function scanMailboxCore(
           }
         }
 
-        // Log to email_log with inbox field
-        await appendRow('email_log', {
-          email_id: msg.id,
-          timestamp: now.toISOString(),
-          inbox: email,
-          from,
-          subject,
-          classification: classification.classification ?? 'other',
-          confidence: String(classification.confidence ?? ''),
-          summary: classification.summary ?? '',
-          action_taken: actionTaken,
-          job_id: jobId,
-          bill_id: billId,
-        });
+        if (!options.vendorCostBackfillOnly) {
+          // Log to email_log with inbox field
+          await appendRow('email_log', {
+            email_id: msg.id,
+            timestamp: now.toISOString(),
+            inbox: email,
+            from,
+            subject,
+            classification: classification.classification ?? 'other',
+            confidence: String(classification.confidence ?? ''),
+            summary: classification.summary ?? '',
+            action_taken: actionTaken,
+            job_id: jobId,
+            bill_id: billId,
+          });
+        }
 
         results.push({
           emailId: msg.id,
@@ -452,10 +875,30 @@ export async function GET(req: NextRequest) {
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+  if (req.nextUrl?.searchParams?.get('vendor_cost_backfill_queue') === '1') {
+    const action = req.nextUrl.searchParams.get('action') || 'status';
+    if (action === 'start') {
+      const state = await startVendorCostBackfill(req);
+      return NextResponse.json({ ok: true, action, state: summarizeVendorBackfillState(state) });
+    }
+    if (action === 'next') {
+      const result = await processVendorCostBackfillNext(anthropic);
+      return NextResponse.json({ ok: !('error' in result), action, ...result });
+    }
+    const state = await loadVendorBackfillState();
+    return NextResponse.json({ ok: true, action: 'status', state: summarizeVendorBackfillState(state) });
+  }
+
+  const requestedInbox = req.nextUrl?.searchParams?.get('inbox') || '';
+
   // Determine which mailboxes to scan
-  const mailboxes = hasServiceAccount()
-    ? ALL_MAILBOXES
-    : ['gregory@neworleansrecordpress.com']; // fallback to OAuth token holder
+  const mailboxes = requestedInbox === PERSONAL_GMAIL
+    ? []
+    : requestedInbox
+    ? [requestedInbox]
+    : hasServiceAccount()
+      ? ALL_MAILBOXES
+      : ['gregory@neworleansrecordpress.com']; // fallback to OAuth token holder
 
   if (!hasServiceAccount()) {
     console.warn('[scan-email] GOOGLE_SERVICE_ACCOUNT_KEY not set — scanning gregory@ only (fallback mode)');
@@ -464,13 +907,33 @@ export async function GET(req: NextRequest) {
   // Always include personal Gmail if GOOGLE_PERSONAL_REFRESH_TOKEN is set
   const scanPersonalGmail = !!process.env.GOOGLE_PERSONAL_REFRESH_TOKEN;
 
-  // Get last run timestamp
-  const lastRunRow = await findRow('qbo_cache', 'key', 'email_last_run');
-  // Allow manual lookback override via query param (e.g. ?lookback=7 for 7 days back)
-  const lookbackDays = req.nextUrl?.searchParams?.get('lookback');
+  const vendorCostBackfillOnly = req.nextUrl?.searchParams?.get('vendor_cost_backfill') === '1';
+  const lookbackDays = optionalNumber(req.nextUrl?.searchParams?.get('lookback'));
+  const batchDays = optionalNumber(req.nextUrl?.searchParams?.get('batch_days'));
+  const batchIndex = optionalNumber(req.nextUrl?.searchParams?.get('batch'));
+  const batchAnchor = optionalNumber(req.nextUrl?.searchParams?.get('batch_anchor'));
+  const explicitAfter = optionalNumber(req.nextUrl?.searchParams?.get('after'));
+  const explicitBefore = optionalNumber(req.nextUrl?.searchParams?.get('before'));
+  const batch = batchDays !== undefined
+    ? resolveEmailScanBatch({
+      backfillDays: lookbackDays ?? 30,
+      batchDays,
+      batchIndex,
+      batchAnchorEpochSeconds: batchAnchor,
+    })
+    : undefined;
+
+  // Get last run timestamp unless this call explicitly bounds the scan.
+  const lastRunRow = batch || explicitAfter
+    ? null
+    : await findRow('qbo_cache', 'key', 'email_last_run');
   let lastRunTs: number;
-  if (lookbackDays) {
-    lastRunTs = Date.now() - parseInt(lookbackDays) * 24 * 60 * 60 * 1000;
+  if (batch) {
+    lastRunTs = batch.window_start_epoch_seconds * 1000;
+  } else if (explicitAfter) {
+    lastRunTs = explicitAfter * 1000;
+  } else if (lookbackDays) {
+    lastRunTs = Date.now() - lookbackDays * 24 * 60 * 60 * 1000;
   } else if (lastRunRow) {
     lastRunTs = parseInt(lastRunRow.row.value);
   } else {
@@ -478,6 +941,11 @@ export async function GET(req: NextRequest) {
     lastRunTs = Date.now() - 7 * 24 * 60 * 60 * 1000;
   }
   const afterDate = Math.floor(lastRunTs / 1000);
+  const beforeDate = batch?.window_end_epoch_seconds || explicitBefore;
+  const scanOptions: ScanOptions = {
+    beforeDate,
+    vendorCostBackfillOnly,
+  };
 
   // Load processed IDs from email_log to prevent duplicates
   const emailLog = await getSheet('email_log');
@@ -486,26 +954,28 @@ export async function GET(req: NextRequest) {
   // Scan all mailboxes with concurrency limit of 3
   const limit = pLimit(3);
   const allResults = await limit(
-    mailboxes.map(mb => () => scanMailbox(mb, afterDate, processedIds, anthropic))
+    mailboxes.map(mb => () => scanMailbox(mb, afterDate, processedIds, anthropic, scanOptions))
   );
 
   // Also scan personal Gmail if token available
-  if (scanPersonalGmail) {
+  if (scanPersonalGmail && (!requestedInbox || requestedInbox === PERSONAL_GMAIL)) {
     const personalAuth = getOAuth2Auth(process.env.GOOGLE_PERSONAL_REFRESH_TOKEN);
-    const personalResults = await scanMailboxWithAuth(PERSONAL_GMAIL, personalAuth, afterDate, processedIds, anthropic);
+    const personalResults = await scanMailboxWithAuth(PERSONAL_GMAIL, personalAuth, afterDate, processedIds, anthropic, scanOptions);
     allResults.push(personalResults);
   }
 
   const flatResults = allResults.flat();
   const now = new Date();
 
-  // Update last run timestamp
-  const tsRow = { key: 'email_last_run', value: String(Date.now()), updated_at: now.toISOString() };
-  const existing = await findRow('qbo_cache', 'key', 'email_last_run');
-  if (existing) {
-    await updateRow('qbo_cache', existing.rowIndex, tsRow);
-  } else {
-    await appendRow('qbo_cache', tsRow);
+  // Update last run timestamp only for normal forward scans.
+  if (!vendorCostBackfillOnly && !batch && !explicitAfter && !explicitBefore) {
+    const tsRow = { key: 'email_last_run', value: String(Date.now()), updated_at: now.toISOString() };
+    const existing = await findRow('qbo_cache', 'key', 'email_last_run');
+    if (existing) {
+      await updateRow('qbo_cache', existing.rowIndex, tsRow);
+    } else {
+      await appendRow('qbo_cache', tsRow);
+    }
   }
 
   const processed = flatResults.filter(r => r.action !== 'mailbox_scan_failed' && r.action !== 'failed');
@@ -513,8 +983,16 @@ export async function GET(req: NextRequest) {
   const summary = {
     ok: true,
     mode: hasServiceAccount() ? 'service_account_dwd' : 'oauth_fallback',
+    vendorCostBackfillOnly,
     mailboxesScanned: mailboxes.length,
+    afterDate,
+    beforeDate,
+    batch,
+    next_batch_url: batch ? nextBatchUrl(req, batch) : undefined,
     totalProcessed: processed.length,
+    vendorCostsBackfilled: flatResults.filter(r => r.action === 'vendor_costs_backfilled').length,
+    vendorCostsDuplicate: flatResults.filter(r => r.action === 'vendor_costs_backfill_duplicate').length,
+    vendorInvoicesForReview: flatResults.filter(r => r.action === 'added_to_bills_inbox' && vendorCostBackfillOnly).length,
     errors: flatResults.filter(r => r.error).length,
     results: flatResults,
   };

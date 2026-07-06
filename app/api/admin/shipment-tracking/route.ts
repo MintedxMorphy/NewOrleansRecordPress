@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getAfterShipApiKey, isAfterShipReady, saveAfterShipApiKey } from '@/lib/aftership-config';
 import { testAfterShipConnection } from '@/lib/aftership';
-import { runShipmentTrackingPipeline } from '@/lib/shipment-pipeline';
+import { resolveShipmentBackfillBatch, runShipmentTrackingPipeline } from '@/lib/shipment-pipeline';
 import { getShipmentAiApiKey, getShipmentAiModel, isShipmentAiReady, saveShipmentAiApiKey } from '@/lib/shipment-ai-config';
 import { verifyAdminPassword } from '@/lib/team-data';
 import { hasServiceAccount } from '@/lib/google-auth';
@@ -36,6 +36,9 @@ export async function POST(req: NextRequest) {
       inbox?: string;
       backfill?: number;
       lookback_hours?: number;
+      batch_days?: number;
+      batch_index?: number;
+      batch_anchor?: number;
     };
 
     if (!verifyAdminPassword(String(body.password || ''))) {
@@ -70,14 +73,26 @@ export async function POST(req: NextRequest) {
     }
 
     const dryRun = body.dry_run !== false;
+    const batch = body.batch_days !== undefined
+      ? resolveShipmentBackfillBatch({
+        backfillDays: body.backfill ?? 30,
+        batchDays: body.batch_days,
+        batchIndex: body.batch_index,
+        batchAnchorEpochSeconds: body.batch_anchor,
+      })
+      : undefined;
     const result = await runShipmentTrackingPipeline({
       dryRun,
       inbox: body.inbox,
       backfillDays: body.backfill,
       lookbackHours: body.lookback_hours,
+      windowStartEpochSeconds: batch?.window_start_epoch_seconds,
+      windowEndEpochSeconds: batch?.window_end_epoch_seconds,
+      batch,
+      skipPoll: batch ? batch.next_batch_index !== null : undefined,
     });
 
-    return NextResponse.json({ ok: result.ok, dry_run: dryRun, ...result });
+    return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });

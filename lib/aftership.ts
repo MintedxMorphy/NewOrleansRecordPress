@@ -9,6 +9,7 @@ export type AfterShipTrackingPayload = {
   id?: string;
   tracking_number?: string;
   slug?: string;
+  title?: string;
   tag?: string;
   subtag?: string;
   subtag_message?: string;
@@ -25,6 +26,8 @@ export type AfterShipTrackingPayload = {
     message?: string;
     checkpoint_time?: string;
   }>;
+  title?: string;
+  order_id?: string;
 };
 
 export type AfterShipWebhookEvent = {
@@ -285,9 +288,26 @@ export async function registerAfterShipTracking(input: RegisterAfterShipTracking
 
 type AfterShipTrackingRecord = AfterShipTrackingPayload & {
   id?: string;
+  title?: string;
+  order_id?: string;
+  order_number?: string;
 };
 
-type AfterShipListResponse = AfterShipApiEnvelope<{ trackings?: AfterShipTrackingRecord[] }>;
+type AfterShipListResponse = AfterShipApiEnvelope<{
+  trackings?: AfterShipTrackingRecord[];
+  pagination?: {
+    total?: number;
+    next_cursor?: string;
+    has_next_page?: boolean;
+  };
+}>;
+
+export type AfterShipTrackingsPage = {
+  trackings: AfterShipTrackingRecord[];
+  next_cursor?: string;
+  has_next_page: boolean;
+  total?: number;
+};
 
 export async function getAfterShipTracking(trackingNumber: string, slug?: string) {
   if (!(await isAfterShipConfiguredAsync())) {
@@ -311,6 +331,34 @@ export async function getAfterShipTracking(trackingNumber: string, slug?: string
   }
 
   return data.data?.trackings?.[0] || null;
+}
+
+export async function listAfterShipTrackingsPage(cursor?: string, limit = 200): Promise<AfterShipTrackingsPage> {
+  if (!(await isAfterShipConfiguredAsync())) {
+    throw new Error('AfterShip is not configured');
+  }
+
+  const params = new URLSearchParams({ limit: String(Math.min(Math.max(limit, 1), 200)) });
+  if (cursor) params.set('cursor', cursor);
+
+  const res = await fetch(`${afterShipUrl('/trackings')}?${params.toString()}`, {
+    headers: await afterShipHeaders(),
+    cache: 'no-store',
+  });
+  const data = (await res.json()) as AfterShipListResponse & {
+    meta?: { code?: number; message?: string; type?: string };
+  };
+
+  if (!res.ok) {
+    throw new Error(data.meta?.message || `AfterShip list trackings failed (${res.status})`);
+  }
+
+  return {
+    trackings: data.data?.trackings || [],
+    next_cursor: data.data?.pagination?.next_cursor,
+    has_next_page: Boolean(data.data?.pagination?.has_next_page),
+    total: data.data?.pagination?.total,
+  };
 }
 
 export function afterShipRecordToStatusUpdate(record: AfterShipTrackingRecord): AfterShipTrackingUpdate | null {

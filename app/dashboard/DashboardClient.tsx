@@ -14,7 +14,8 @@ import {
   Truck,
 } from 'lucide-react';
 
-interface Job { [key: string]: string | boolean | string[] | Array<Record<string, string>> | undefined }
+type JobRecord = Record<string, string | number | boolean | null | undefined>;
+interface Job { [key: string]: string | number | boolean | string[] | JobRecord[] | Record<string, unknown> | undefined }
 
 interface Props {
   jobs?: Job[];
@@ -102,6 +103,8 @@ const COLORS = {
   border: '#2A2A2A',
   red: '#FF4D4D',
   green: '#00E86A',
+  blue: '#4DA3FF',
+  gold: '#C9A84C',
 };
 
 const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2QqTZmnF/viwybIIrPi9Pd9Tyo?blocks=hide';
@@ -119,6 +122,12 @@ function value(job: Job, keys: string[]) {
     if (found !== undefined && found !== false && String(found).trim() !== '') return String(found);
   }
   return '';
+}
+
+function jobRecords(value: unknown): JobRecord[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is JobRecord => typeof item === 'object' && item !== null && !Array.isArray(item))
+    : [];
 }
 
 function jobKey(job: Job) {
@@ -199,6 +208,8 @@ type LogisticsShipment = {
   delivered_date: string;
   total_cost: number;
   notes: string;
+  tracking_url?: string;
+  source?: string;
 };
 
 type JobLogisticsState = {
@@ -206,11 +217,87 @@ type JobLogisticsState = {
   totals: { inbound_cost: number; outbound_cost: number; all_cost: number };
 };
 
+type VendorCostItem = {
+  id: string;
+  invoice_number?: string;
+  vendor?: string;
+  category?: string;
+  matrix?: string;
+  description?: string;
+  amount?: number;
+  invoice_date?: string;
+  source_file?: string;
+};
+
+type VendorCostSummary = {
+  total: number;
+  count: number;
+  categories: Record<string, number>;
+  items: VendorCostItem[];
+};
+
+type VendorInvoiceMatchedJob = {
+  record_id?: string;
+  job_id?: string;
+  matrix?: string;
+  customer?: string;
+  order_number?: string;
+};
+
+type VendorInvoiceLine = {
+  id: string;
+  description: string;
+  matrix: string;
+  category: string;
+  quantity: number;
+  unit_cost: number;
+  amount: number;
+  confidence: string;
+  raw_line: string;
+  matched_job?: VendorInvoiceMatchedJob | null;
+  skipped?: boolean;
+};
+
+type VendorInvoiceParseResult = {
+  invoice: {
+    invoice_number: string;
+    vendor: string;
+    invoice_date: string;
+    total: number;
+    source_file: string;
+  };
+  line_items: VendorInvoiceLine[];
+  matches?: { matched: number; unmatched: number };
+};
+
 function formatMoney(amount: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
 }
 
-function trackingLink(carrier: string, trackingNumber: string) {
+function vendorCostSummary(job: Job): VendorCostSummary | null {
+  const raw = job.vendor_cost_summary;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+
+  const shaped = raw as Record<string, unknown>;
+  const total = Number(shaped.total || job.vendor_cost_total || 0);
+  const count = Number(shaped.count || job.vendor_cost_count || 0);
+  const rawCategories = shaped.categories && typeof shaped.categories === 'object' && !Array.isArray(shaped.categories)
+    ? shaped.categories as Record<string, unknown>
+    : {};
+  const categories = Object.fromEntries(
+    Object.entries(rawCategories).map(([category, amount]) => [category, Number(amount || 0)]),
+  );
+  const items = Array.isArray(shaped.items)
+    ? shaped.items.map(item => item as VendorCostItem)
+    : [];
+
+  if (!total && !count && !items.length) return null;
+  return { total, count: count || items.length, categories, items };
+}
+
+function trackingLink(carrier: string, trackingNumber: string, trackingUrl = '') {
+  const url = trackingUrl.trim();
+  if (url) return url;
   const number = trackingNumber.trim();
   if (!number) return '';
   const normalized = carrier.toLowerCase();
@@ -220,7 +307,79 @@ function trackingLink(carrier: string, trackingNumber: string) {
   return `https://www.aftership.com/track/${encodeURIComponent(number)}`;
 }
 
-function JobLogisticsPanel({ job }: { job: Job }) {
+function jobShipments(job: Job): LogisticsShipment[] {
+  const raw = job.shipments;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item))
+    .map((item, index) => ({
+      id: String(item.id || `shipment:${index}`),
+      tracking_number: String(item.tracking_number || ''),
+      direction: String(item.direction || '').toLowerCase().includes('out') ? 'outbound' as const : 'inbound' as const,
+      carrier: String(item.carrier || ''),
+      status: String(item.status || ''),
+      supply_type: String(item.supply_type || ''),
+      shipped_date: String(item.shipped_date || ''),
+      est_delivery: String(item.est_delivery || ''),
+      delivered_date: String(item.delivered_date || ''),
+      total_cost: Number(item.total_cost || 0),
+      notes: String(item.notes || ''),
+      tracking_url: String(item.tracking_url || ''),
+      source: String(item.source || ''),
+    }))
+    .filter(shipment => shipment.tracking_number || shipment.status || shipment.carrier);
+}
+
+function shipmentStatusTone(status = '') {
+  const normalized = status.toLowerCase();
+  if (normalized.includes('exception') || normalized.includes('fail') || normalized.includes('expired')) return COLORS.red;
+  if (normalized.includes('delivered')) return COLORS.green;
+  if (normalized.includes('out for delivery')) return COLORS.gold;
+  if (normalized.includes('transit') || normalized.includes('pickup')) return COLORS.blue;
+  if (normalized.includes('label') || normalized.includes('pending') || normalized.includes('registered')) return COLORS.muted;
+  return COLORS.blue;
+}
+
+function shipmentStatusShort(status = '') {
+  const normalized = status.toLowerCase();
+  if (normalized.includes('exception')) return 'Exception';
+  if (normalized.includes('fail')) return 'Attempt failed';
+  if (normalized.includes('delivered')) return 'Delivered';
+  if (normalized.includes('out for delivery')) return 'Out for delivery';
+  if (normalized.includes('transit')) return 'In transit';
+  if (normalized.includes('pickup')) return 'Ready for pickup';
+  if (normalized.includes('label') || normalized.includes('pending') || normalized.includes('registered')) return 'Label created';
+  return status.split(' — ')[0]?.trim() || status || 'Tracking';
+}
+
+function isActiveShipment(shipment: LogisticsShipment) {
+  const normalized = shipment.status.toLowerCase();
+  return Boolean(normalized) && !normalized.includes('delivered') && !normalized.includes('returned');
+}
+
+function logisticsTotals(shipments: LogisticsShipment[]) {
+  return shipments.reduce((totals, shipment) => {
+    const cost = Number(shipment.total_cost || 0);
+    totals.all_cost += cost;
+    if (shipment.direction === 'outbound') totals.outbound_cost += cost;
+    else totals.inbound_cost += cost;
+    return totals;
+  }, { inbound_cost: 0, outbound_cost: 0, all_cost: 0 });
+}
+
+function shipmentNotesForDisplay(notes = '') {
+  const trimmed = notes.trim();
+  if (!trimmed) return '';
+  if (/^auto from |^updated from aftership|^aftership webhook/i.test(trimmed)) return '';
+  return trimmed;
+}
+
+function supplyTypeLabel(supplyType = '', direction: LogisticsShipment['direction'] = 'inbound') {
+  if (supplyType) return supplyType.replace(/_/g, ' ');
+  return direction === 'outbound' ? 'Finished goods' : 'Supplies';
+}
+
+function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsChanged?: () => Promise<void> | void }) {
   const [data, setData] = useState<JobLogisticsState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -233,6 +392,8 @@ function JobLogisticsPanel({ job }: { job: Job }) {
   const [totalCost, setTotalCost] = useState('');
   const [notes, setNotes] = useState('');
 
+  const embeddedShipments = useMemo(() => jobShipments(job), [job]);
+
   const loadLogistics = async () => {
     setLoading(true);
     setError('');
@@ -243,17 +404,34 @@ function JobLogisticsPanel({ job }: { job: Job }) {
       if (!response.ok) throw new Error(body.error || `Load failed (${response.status})`);
       setData({
         shipments: body.shipments || [],
-        totals: body.totals || { inbound_cost: 0, outbound_cost: 0, all_cost: 0 },
+        totals: body.totals || logisticsTotals(body.shipments || []),
       });
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : String(loadError));
-      setData(null);
+      if (embeddedShipments.length) {
+        setData({
+          shipments: embeddedShipments,
+          totals: logisticsTotals(embeddedShipments),
+        });
+        setError('');
+      } else {
+        setError(loadError instanceof Error ? loadError.message : String(loadError));
+        setData(null);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    if (embeddedShipments.length) {
+      setData({
+        shipments: embeddedShipments,
+        totals: logisticsTotals(embeddedShipments),
+      });
+      setLoading(false);
+      setError('');
+      return;
+    }
     void loadLogistics();
   }, [job]);
 
@@ -279,12 +457,13 @@ function JobLogisticsPanel({ job }: { job: Job }) {
       if (!response.ok) throw new Error(body.error || `Save failed (${response.status})`);
       setData({
         shipments: body.shipments || [],
-        totals: body.totals || { inbound_cost: 0, outbound_cost: 0, all_cost: 0 },
+        totals: body.totals || logisticsTotals(body.shipments || []),
       });
       setTrackingNumber('');
       setCarrier('');
       setTotalCost('');
       setNotes('');
+      await onShipmentsChanged?.();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : String(saveError));
     } finally {
@@ -296,48 +475,63 @@ function JobLogisticsPanel({ job }: { job: Job }) {
   const outbound = (data?.shipments || []).filter(shipment => shipment.direction === 'outbound');
 
   const renderShipment = (shipment: LogisticsShipment) => {
-    const link = trackingLink(shipment.carrier, shipment.tracking_number);
+    const link = trackingLink(shipment.carrier, shipment.tracking_number, shipment.tracking_url);
+    const tone = shipmentStatusTone(shipment.status);
+    const displayNotes = shipmentNotesForDisplay(shipment.notes);
     return (
       <div
         key={shipment.id}
         style={{
           background: COLORS.panel,
-          border: `1px solid ${COLORS.border}`,
+          border: `1px solid ${tone}44`,
+          borderLeft: `3px solid ${tone}`,
           borderRadius: '8px',
           padding: '10px 12px',
         }}
       >
         <div style={{ alignItems: 'start', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 850 }}>
-              {shipment.supply_type || (shipment.direction === 'outbound' ? 'Finished Goods' : 'Supplies')}
+            <div style={{ alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 850 }}>
+                {supplyTypeLabel(shipment.supply_type, shipment.direction)}
+              </div>
+              <StatusPill color={tone}>{shipmentStatusShort(shipment.status)}</StatusPill>
+              <StatusPill color={shipment.direction === 'outbound' ? COLORS.gold : COLORS.blue}>
+                {shipment.direction === 'outbound' ? 'Outbound' : 'Inbound'}
+              </StatusPill>
             </div>
-            <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
-              {shipment.carrier || 'Carrier TBD'}{shipment.status ? ` · ${shipment.status}` : ''}
+            <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '6px' }}>
+              {shipment.carrier || 'Carrier TBD'}
             </div>
             {shipment.tracking_number && (
               <div style={{ fontSize: '12px', marginTop: '6px' }}>
                 {link ? (
-                  <a href={link} target="_blank" rel="noreferrer" style={{ color: COLORS.blue, textDecoration: 'none' }}>
+                  <a href={link} target="_blank" rel="noreferrer" onClick={event => event.stopPropagation()} style={{ color: COLORS.blue, fontFamily: 'monospace', textDecoration: 'none' }}>
                     {shipment.tracking_number}
                   </a>
-                ) : shipment.tracking_number}
+                ) : (
+                  <span style={{ fontFamily: 'monospace' }}>{shipment.tracking_number}</span>
+                )}
               </div>
             )}
             {(shipment.shipped_date || shipment.est_delivery || shipment.delivered_date) && (
               <div style={{ color: COLORS.faint, fontSize: '12px', marginTop: '6px' }}>
                 {shipment.shipped_date ? `Shipped ${shipment.shipped_date}` : ''}
-                {shipment.est_delivery ? `${shipment.shipped_date ? ' · ' : ''}ETA ${shipment.est_delivery}` : ''}
+                {shipment.est_delivery && !shipment.status.toLowerCase().includes('delivered')
+                  ? `${shipment.shipped_date ? ' · ' : ''}ETA ${shipment.est_delivery}`
+                  : ''}
                 {shipment.delivered_date ? `${(shipment.shipped_date || shipment.est_delivery) ? ' · ' : ''}Delivered ${shipment.delivered_date}` : ''}
               </div>
             )}
-            {shipment.notes && (
-              <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '6px', lineHeight: 1.35 }}>{shipment.notes}</div>
+            {displayNotes && (
+              <div style={{ color: COLORS.muted, fontSize: '12px', lineHeight: 1.35, marginTop: '6px' }}>{displayNotes}</div>
             )}
           </div>
-          <div style={{ color: COLORS.gold, fontSize: '14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
-            {formatMoney(shipment.total_cost)}
-          </div>
+          {shipment.total_cost > 0 && (
+            <div style={{ color: COLORS.gold, fontSize: '14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
+              {formatMoney(shipment.total_cost)}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -395,7 +589,7 @@ function JobLogisticsPanel({ job }: { job: Job }) {
 
           {!inbound.length && !outbound.length && (
             <div style={{ color: COLORS.muted, fontSize: '13px', lineHeight: 1.4, marginBottom: '12px' }}>
-              No shipments linked yet. Add one below — they match this job by matrix ID ({value(job, ['matrix', 'MATRIX']) || 'none'}) or customer name.
+              No shipments linked yet. AfterShip auto-tracking appears here when a package matches matrix ID ({value(job, ['matrix', 'MATRIX']) || 'none'}), job ID, or customer name. You can also add one manually below.
             </div>
           )}
         </>
@@ -471,6 +665,76 @@ function JobLogisticsPanel({ job }: { job: Job }) {
       {error && (
         <div style={{ color: COLORS.red, fontSize: '12px', lineHeight: 1.4, marginTop: '10px' }}>{error}</div>
       )}
+    </div>
+  );
+}
+
+function VendorCostsPanel({ job }: { job: Job }) {
+  const summary = vendorCostSummary(job);
+  if (!summary) return null;
+
+  const categories = Object.entries(summary.categories)
+    .filter(([, amount]) => amount)
+    .sort((a, b) => b[1] - a[1]);
+
+  return (
+    <div style={{
+      background: COLORS.card,
+      border: `1px solid ${COLORS.border}`,
+      borderRadius: '8px',
+      marginBottom: '22px',
+      padding: '14px',
+    }}>
+      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', marginBottom: '10px' }}>
+        <Paperclip size={16} color={COLORS.gold} />
+        <div style={{ color: COLORS.gold, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          Vendor Costs
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', marginBottom: '14px' }}>
+        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
+          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Total</div>
+          <div style={{ color: COLORS.gold, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{formatMoney(summary.total)}</div>
+        </div>
+        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
+          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Lines</div>
+          <div style={{ color: COLORS.text, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{summary.count}</div>
+        </div>
+      </div>
+
+      {categories.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+          {categories.map(([category, amount]) => (
+            <StatusPill key={category} color={COLORS.gold}>{category}: {formatMoney(amount)}</StatusPill>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: '8px' }}>
+        {summary.items.slice(0, 8).map(item => (
+          <div key={item.id} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px 12px' }}>
+            <div style={{ alignItems: 'start', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 850 }}>
+                  {item.description || item.category || 'Vendor line'}
+                </div>
+                <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
+                  {[item.vendor, item.invoice_number, item.invoice_date].filter(Boolean).join(' · ') || 'Imported invoice line'}
+                </div>
+              </div>
+              <div style={{ color: COLORS.gold, fontSize: '14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                {formatMoney(Number(item.amount || 0))}
+              </div>
+            </div>
+          </div>
+        ))}
+        {summary.items.length > 8 && (
+          <div style={{ color: COLORS.muted, fontSize: '12px' }}>
+            +{summary.items.length - 8} more vendor cost line{summary.items.length - 8 === 1 ? '' : 's'}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -690,13 +954,13 @@ function shiftedSpanForStage(job: Job, targetStage: Station) {
 }
 
 function searchableJobText(job: Job) {
-  const variantText = Array.isArray(job.variants)
-    ? job.variants.map(variant => [
+  const variantText = jobRecords(job.variants)
+    .map(variant => [
         variant.colors,
         variant.quantity,
         variant.run_label,
-      ].filter(Boolean).join(' ')).join(' ')
-    : '';
+      ].filter(Boolean).join(' '))
+    .join(' ');
 
   return [
     value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']),
@@ -904,6 +1168,11 @@ function JobCard({
   const canComplete = station === 'shipping';
   const completeColor = COLORS.red;
   const isStretched = Boolean(stretch && stretch.columns > 1);
+  const vendorSummary = vendorCostSummary(job);
+  const shipments = jobShipments(job);
+  const activeShipments = shipments.filter(isActiveShipment);
+  const headlineShipment = activeShipments[0] || shipments[0];
+  const extraActiveCount = activeShipments.length > 1 ? activeShipments.length - 1 : 0;
 
   return (
     <div
@@ -980,11 +1249,49 @@ function JobCard({
           {speed && <StatusPill color="#B781FF">{speed}</StatusPill>}
           {runLabel && <StatusPill color={COLORS.green}>{runLabel}</StatusPill>}
           {artReady && <StatusPill color={COLORS.green}>Art</StatusPill>}
+          {vendorSummary && <StatusPill color={COLORS.gold}>Vendor {formatMoney(vendorSummary.total)}</StatusPill>}
+          {headlineShipment && (
+            <StatusPill color={shipmentStatusTone(headlineShipment.status)}>
+              {headlineShipment.carrier || 'Ship'} · {shipmentStatusShort(headlineShipment.status)}
+            </StatusPill>
+          )}
+          {extraActiveCount > 0 && <StatusPill color={COLORS.blue}>+{extraActiveCount} tracking</StatusPill>}
           {shipDate && <StatusPill color="#4DA3FF">{shipDate}</StatusPill>}
           {hasVariants
             ? <StatusPill color="#FFB84D">{duplicateCount} variants</StatusPill>
             : duplicateCount > 1 && <StatusPill color="#FFB84D">{duplicateCount} merged</StatusPill>}
         </div>
+
+        {headlineShipment && (
+          <div style={{
+            alignItems: 'center',
+            color: COLORS.muted,
+            display: 'flex',
+            flexWrap: 'wrap',
+            fontSize: compact ? '14px' : '13px',
+            gap: '6px',
+            lineHeight: 1.35,
+            marginTop: '9px',
+          }}>
+            <Truck size={13} color={shipmentStatusTone(headlineShipment.status)} />
+            <span style={{ color: shipmentStatusTone(headlineShipment.status), fontWeight: 850 }}>
+              {headlineShipment.direction === 'outbound' ? 'Outbound' : 'Inbound'}
+            </span>
+            {headlineShipment.tracking_number && (
+              <span style={{ fontFamily: 'monospace' }}>
+                {headlineShipment.tracking_number.length > 18
+                  ? `${headlineShipment.tracking_number.slice(0, 18)}…`
+                  : headlineShipment.tracking_number}
+              </span>
+            )}
+            {headlineShipment.est_delivery && !headlineShipment.status.toLowerCase().includes('delivered') && (
+              <span>ETA {headlineShipment.est_delivery}</span>
+            )}
+            {headlineShipment.delivered_date && (
+              <span>Delivered {headlineShipment.delivered_date}</span>
+            )}
+          </div>
+        )}
 
         {notes && (
           <div style={{
@@ -1554,6 +1861,7 @@ function JobDrawer({
   onStageSpanSave,
   onSplitJob,
   onRecordsPressedSave,
+  onShipmentsChanged,
 }: {
   job: Job;
   onClose: () => void;
@@ -1562,6 +1870,7 @@ function JobDrawer({
   onStageSpanSave: (job: Job, span: Station[]) => Promise<void>;
   onSplitJob: (job: Job, payload: { stage: Station; quantity: string }) => Promise<void>;
   onRecordsPressedSave: (job: Job, recordsPressed: number | null) => Promise<void>;
+  onShipmentsChanged?: () => Promise<void> | void;
 }) {
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
@@ -1613,7 +1922,7 @@ function JobDrawer({
     setSpanError('');
   }, [currentSpanStart, currentSpanEnd, job]);
 
-  const variants = Array.isArray(job.variants) ? job.variants : [];
+  const variants = jobRecords(job.variants);
   const details = [
     ['Station', jobStage === 'completed' ? 'Completed' : meta.label],
     ['Run', runLabel],
@@ -1762,7 +2071,8 @@ function JobDrawer({
           {savingRush ? 'Saving Rush...' : rushed ? 'Rush Order On' : 'Rush Order'}
         </button>
 
-        <JobLogisticsPanel job={job} />
+        <JobLogisticsPanel job={job} onShipmentsChanged={onShipmentsChanged} />
+        <VendorCostsPanel job={job} />
 
         {station === 'now_pressing' && quantityTotal > 0 && (
           <div style={{
@@ -2414,6 +2724,335 @@ function BugReportControl({ isMobile }: { isMobile: boolean }) {
   );
 }
 
+function VendorInvoiceImportControl({
+  isMobile,
+  onApplied,
+}: {
+  isMobile: boolean;
+  onApplied: () => Promise<void>;
+}) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [vendorHint, setVendorHint] = useState('');
+  const [categoryHint, setCategoryHint] = useState('');
+  const [parseResult, setParseResult] = useState<VendorInvoiceParseResult | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [status, setStatus] = useState('');
+  const [invoiceError, setInvoiceError] = useState('');
+
+  const setInvoiceFile = (incoming: FileList | File[]) => {
+    const nextFile = Array.from(incoming).find(candidate => candidate.size > 0);
+    if (!nextFile) return;
+    setFile(nextFile);
+    setParseResult(null);
+    setStatus('');
+    setInvoiceError('');
+  };
+
+  const updateLine = (lineId: string, updates: Partial<VendorInvoiceLine>) => {
+    setParseResult(current => {
+      if (!current) return current;
+      return {
+        ...current,
+        line_items: current.line_items.map(line => line.id === lineId ? { ...line, ...updates } : line),
+      };
+    });
+  };
+
+  const parseInvoice = async () => {
+    if (!file) {
+      setInvoiceError('Attach an invoice file first.');
+      return;
+    }
+
+    setParsing(true);
+    setStatus('');
+    setInvoiceError('');
+
+    const formData = new FormData();
+    formData.set('file', file, file.name);
+    formData.set('vendor', vendorHint.trim());
+    formData.set('category', categoryHint.trim());
+
+    try {
+      const response = await fetch('/api/staff/vendor-invoices/parse', {
+        method: 'POST',
+        body: formData,
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || `Invoice parse failed (${response.status})`);
+      setParseResult(body as VendorInvoiceParseResult);
+      setStatus('Review extracted lines before applying.');
+    } catch (error) {
+      setInvoiceError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const applyInvoice = async () => {
+    if (!parseResult) return;
+    const confirmedRows = parseResult.line_items.filter(line => !line.skipped && line.amount);
+    if (!confirmedRows.length) {
+      setInvoiceError('Keep at least one line with an amount before applying.');
+      return;
+    }
+
+    setApplying(true);
+    setInvoiceError('');
+    setStatus('');
+
+    try {
+      const response = await fetch('/api/staff/vendor-invoices/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoice: parseResult.invoice,
+          rows: confirmedRows,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || `Invoice apply failed (${response.status})`);
+      await onApplied();
+      setStatus(`Applied ${body.created_count || 0} line${body.created_count === 1 ? '' : 's'}${body.skipped_count ? `, skipped ${body.skipped_count} duplicate${body.skipped_count === 1 ? '' : 's'}` : ''}.`);
+      setParseResult(null);
+      setFile(null);
+      setOpen(false);
+    } catch (error) {
+      setInvoiceError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const confirmedTotal = (parseResult?.line_items || [])
+    .filter(line => !line.skipped)
+    .reduce((sum, line) => sum + Number(line.amount || 0), 0);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+          setStatus('');
+          setInvoiceError('');
+        }}
+        style={{
+          alignItems: 'center',
+          background: COLORS.panel,
+          border: `1px solid ${COLORS.gold}77`,
+          borderRadius: '8px',
+          color: COLORS.text,
+          cursor: 'pointer',
+          display: 'flex',
+          font: 'inherit',
+          fontSize: isMobile ? '15px' : '24px',
+          fontWeight: 900,
+          gap: '8px',
+          justifyContent: 'center',
+          lineHeight: 1,
+          minHeight: isMobile ? '44px' : '56px',
+          padding: isMobile ? '0 14px' : '0 18px',
+          whiteSpace: 'nowrap',
+          width: isMobile ? '100%' : undefined,
+        }}
+      >
+        <Paperclip size={isMobile ? 16 : 24} color={COLORS.gold} />
+        Import Invoice
+      </button>
+      {status && !open && (
+        <div style={{ color: COLORS.green, fontSize: '12px', fontWeight: 850, whiteSpace: 'nowrap' }}>
+          {status}
+        </div>
+      )}
+
+      {open && (
+        <>
+          <div
+            onClick={() => setOpen(false)}
+            style={{ background: '#000000AA', inset: 0, position: 'fixed', zIndex: 130 }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="vendor-invoice-title"
+            onDragOver={event => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'copy';
+            }}
+            onDrop={event => {
+              event.preventDefault();
+              setInvoiceFile(event.dataTransfer.files);
+            }}
+            style={{
+              background: COLORS.panel,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: '10px',
+              boxShadow: '0 24px 80px #000000CC',
+              left: '50%',
+              maxHeight: 'min(840px, calc(100vh - 32px))',
+              maxWidth: 'min(980px, calc(100vw - 28px))',
+              overflowY: 'auto',
+              padding: '20px',
+              position: 'fixed',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '100%',
+              zIndex: 131,
+            }}
+          >
+            <div style={{ alignItems: 'flex-start', display: 'flex', gap: '16px', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div>
+                <div id="vendor-invoice-title" style={{ color: COLORS.text, fontSize: '20px', fontWeight: 950 }}>
+                  Import Vendor Invoice
+                </div>
+                <div style={{ color: COLORS.muted, fontSize: '13px', lineHeight: 1.4, marginTop: '5px' }}>
+                  Upload first, review/edit extracted lines, then apply confirmed rows to Airtable.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: COLORS.muted, cursor: 'pointer', fontSize: '28px', lineHeight: 1 }}
+              >
+                x
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr 1fr' }}>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  alignItems: 'center',
+                  background: COLORS.card,
+                  border: `1px dashed ${COLORS.border}`,
+                  borderRadius: '8px',
+                  color: COLORS.muted,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  gap: '8px',
+                  minHeight: '72px',
+                  padding: '12px',
+                }}
+              >
+                <Paperclip size={18} />
+                <span style={{ fontSize: '13px', fontWeight: 850, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {file ? `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB` : 'Drop invoice PDF/text or click to attach'}
+                </span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.txt,.csv,text/*,application/pdf"
+                  onChange={event => {
+                    if (event.target.files) setInvoiceFile(event.target.files);
+                    event.currentTarget.value = '';
+                  }}
+                  style={{ display: 'none' }}
+                />
+              </div>
+              <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Vendor Hint
+                <input value={vendorHint} onChange={event => setVendorHint(event.target.value)} placeholder="Optional" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} />
+              </label>
+              <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Category Hint
+                <input value={categoryHint} onChange={event => setCategoryHint(event.target.value)} placeholder="Jackets, labels, stampers..." style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} />
+              </label>
+            </div>
+
+            <div style={{ alignItems: 'center', display: 'flex', gap: '12px', justifyContent: 'space-between', marginTop: '14px' }}>
+              <div style={{ color: invoiceError ? COLORS.red : COLORS.muted, fontSize: '12px', lineHeight: 1.35 }}>
+                {invoiceError || status || 'Parse does not write to production. Airtable writes happen only after Apply.'}
+              </div>
+              <button
+                type="button"
+                disabled={parsing}
+                onClick={parseInvoice}
+                style={{
+                  background: parsing ? COLORS.elevated : COLORS.gold,
+                  border: `1px solid ${parsing ? COLORS.border : COLORS.gold}`,
+                  borderRadius: '7px',
+                  color: parsing ? COLORS.muted : '#050505',
+                  cursor: parsing ? 'default' : 'pointer',
+                  flexShrink: 0,
+                  fontSize: '13px',
+                  fontWeight: 950,
+                  padding: '10px 14px',
+                }}
+              >
+                {parsing ? 'Parsing...' : 'Parse Invoice'}
+              </button>
+            </div>
+
+            {parseResult && (
+              <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: '16px', paddingTop: '16px' }}>
+                <div style={{ alignItems: 'center', display: 'flex', gap: '12px', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div>
+                    <div style={{ color: COLORS.text, fontSize: '15px', fontWeight: 900 }}>
+                      {parseResult.invoice.vendor || vendorHint || 'Vendor'} {parseResult.invoice.invoice_number ? `#${parseResult.invoice.invoice_number}` : ''}
+                    </div>
+                    <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
+                      {(parseResult.matches?.matched || 0)} matched · {(parseResult.matches?.unmatched || 0)} unmatched · Confirmed total {formatMoney(confirmedTotal)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={applying}
+                    onClick={applyInvoice}
+                    style={{
+                      background: applying ? COLORS.elevated : COLORS.green,
+                      border: `1px solid ${applying ? COLORS.border : COLORS.green}`,
+                      borderRadius: '7px',
+                      color: applying ? COLORS.muted : '#050505',
+                      cursor: applying ? 'default' : 'pointer',
+                      flexShrink: 0,
+                      fontSize: '13px',
+                      fontWeight: 950,
+                      padding: '10px 14px',
+                    }}
+                  >
+                    {applying ? 'Applying...' : 'Apply Confirmed'}
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {parseResult.line_items.map(line => (
+                    <div key={line.id} style={{ background: line.skipped ? '#161616' : COLORS.card, border: `1px solid ${line.skipped ? COLORS.border : `${COLORS.gold}44`}`, borderRadius: '8px', display: 'grid', gap: '8px', opacity: line.skipped ? 0.62 : 1, padding: '10px' }}>
+                      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
+                        <div style={{ color: line.matched_job ? COLORS.green : COLORS.gold, fontSize: '12px', fontWeight: 850 }}>
+                          {line.matched_job
+                            ? `Matched ${line.matched_job.matrix || line.matched_job.job_id}${line.matched_job.customer ? ` · ${line.matched_job.customer}` : ''}`
+                            : 'No job match yet'}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updateLine(line.id, { skipped: !line.skipped })}
+                          style={{ background: 'transparent', border: 'none', color: line.skipped ? COLORS.green : COLORS.red, cursor: 'pointer', fontSize: '12px', fontWeight: 900 }}
+                        >
+                          {line.skipped ? 'Keep' : 'Skip'}
+                        </button>
+                      </div>
+                      <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: isMobile ? '1fr' : '1.5fr 0.7fr 0.7fr 0.5fr' }}>
+                        <input value={line.description} onChange={event => updateLine(line.id, { description: event.target.value })} placeholder="Description" style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '7px', color: COLORS.text, font: 'inherit', fontSize: '13px', padding: '9px' }} />
+                        <input value={line.matrix} onChange={event => updateLine(line.id, { matrix: event.target.value })} placeholder="Matrix" style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '7px', color: COLORS.text, font: 'inherit', fontSize: '13px', padding: '9px' }} />
+                        <input value={line.category} onChange={event => updateLine(line.id, { category: event.target.value })} placeholder="Category" style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '7px', color: COLORS.text, font: 'inherit', fontSize: '13px', padding: '9px' }} />
+                        <input type="number" step="0.01" value={line.amount} onChange={event => updateLine(line.id, { amount: Number(event.target.value || 0) })} placeholder="Amount" style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '7px', color: COLORS.text, font: 'inherit', fontSize: '13px', padding: '9px' }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 export default function DashboardClient({ jobs: initialJobs }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs ?? []);
   const [loading, setLoading] = useState(true);
@@ -2423,8 +3062,9 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const isMobile = useMediaQuery('(max-width: 760px)');
 
-  useEffect(() => {
-    fetch('/api/norp-jobs')
+  const refreshJobs = async () => {
+    setLoading(true);
+    await fetch('/api/norp-jobs')
       .then(response => response.json())
       .then(data => {
         if (data.error) setError(data.error);
@@ -2433,6 +3073,10 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       })
       .catch(err => setError(String(err)))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    void refreshJobs();
   }, []);
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -2675,6 +3319,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
               {visibleActiveJobs.length} shown
             </div>
           )}
+          <VendorInvoiceImportControl isMobile={isMobile} onApplied={refreshJobs} />
           <BugReportControl isMobile={isMobile} />
           <a
             href={AIRTABLE_DATABASE_URL}
@@ -2780,6 +3425,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
           onStageSpanSave={saveStageSpan}
           onSplitJob={splitJob}
           onRecordsPressedSave={saveRecordsPressed}
+          onShipmentsChanged={refreshJobs}
         />
       )}
     </main>

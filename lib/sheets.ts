@@ -25,7 +25,7 @@ export const TAB_HEADERS: Record<string, string[]> = {
   email_log: ['email_id','timestamp','inbox','from','subject','classification','confidence','summary','action_taken','job_id','bill_id'],
   compound_alerts: ['timestamp','mbr1_value','wlk_value','oln_value','cl1_value','alert_level','message'],
   briefings: ['date','briefing_text','source','cash_total','ar_total','ap_total','active_jobs_count','low_inventory_count','days_to_next_payroll','next_payroll_amount','payroll_covered'],
-  shipments: ['tracking_number','job_id','carrier','service','weight_lbs','dimensions','shipped_date','est_delivery','actual_delivery','status','last_status_update','total_cost','base_cost','fuel_surcharge','accessorials','notes'],
+  shipments: ['tracking_number','job_id','carrier','service','weight_lbs','dimensions','shipped_date','est_delivery','actual_delivery','status','last_status_update','total_cost','base_cost','fuel_surcharge','accessorials','notes','matrix','customer','direction','supply_type','source_subject'],
   payroll: ['pay_period_start','pay_period_end','check_date','gross_pay','employer_taxes','employer_benefits','total_employer_cost','employee_count','hours_total','status','notes'],
   employees: ['gusto_employee_id','name','role','employment_type','hourly_rate','annual_salary','start_date','active','notes'],
   qbo_cache: ['key','value','updated_at'],
@@ -64,6 +64,27 @@ async function ensureTabs() {
   } catch (e) {
     console.error('ensureTabs error:', e);
   }
+}
+
+export async function ensureCanonicalHeaders(tabName: keyof typeof TAB_HEADERS) {
+  await ensureTabs();
+  const sheets = getSheetsClient();
+  const canonical = TAB_HEADERS[tabName];
+  if (!canonical?.length) return;
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEETS_DB_ID,
+    range: `${tabName}!1:1`,
+  });
+  const current = (res.data.values?.[0] || []) as string[];
+  if (current.join('\t') === canonical.join('\t')) return;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEETS_DB_ID,
+    range: `${tabName}!A1`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [canonical] },
+  });
 }
 
 export async function getSheet(tabName: string, maxRows?: number): Promise<Record<string, string>[]> {

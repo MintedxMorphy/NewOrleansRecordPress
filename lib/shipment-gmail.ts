@@ -150,7 +150,7 @@ function headerValue(headers: Array<{ name?: string; value?: string }> | undefin
   return headers?.find(header => header.name?.toLowerCase() === name.toLowerCase())?.value || '';
 }
 
-export function buildShippingGmailQuery(afterEpochSeconds: number) {
+export function buildShippingGmailQuery(afterEpochSeconds: number, beforeEpochSeconds?: number) {
   const senders = [
     'ups.com',
     'fedex.com',
@@ -162,7 +162,11 @@ export function buildShippingGmailQuery(afterEpochSeconds: number) {
     'ontrac.com',
   ];
   const fromClause = senders.map(sender => `from:${sender}`).join(' OR ');
-  return `after:${afterEpochSeconds} (${fromClause} OR subject:(tracking OR shipment OR shipped OR delivery))`;
+  const dateClause = [
+    `after:${afterEpochSeconds}`,
+    beforeEpochSeconds ? `before:${beforeEpochSeconds}` : '',
+  ].filter(Boolean).join(' ');
+  return `${dateClause} (${fromClause} OR subject:(tracking OR shipment OR shipped OR delivery))`;
 }
 
 export async function fetchShipmentEmails(
@@ -170,8 +174,9 @@ export async function fetchShipmentEmails(
   inbox: string,
   afterEpochSeconds: number,
   maxResults = 50,
+  beforeEpochSeconds?: number,
 ): Promise<ShipmentEmail[]> {
-  const query = buildShippingGmailQuery(afterEpochSeconds);
+  const query = buildShippingGmailQuery(afterEpochSeconds, beforeEpochSeconds);
   const list = await gmail.users.messages.list({
     userId: 'me',
     q: query,

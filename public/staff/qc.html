@@ -102,7 +102,8 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
 .log-tab{appearance:none;background:transparent;border:none;border-bottom:2px solid transparent;color:#6a6858;font:inherit;font-size:13px;font-weight:700;padding:8px 16px;cursor:pointer;margin-bottom:-1px;transition:all .2s}
 .log-tab.active{color:#5DCAA5;border-bottom-color:#5DCAA5}
 .log-tab.press-tab.active{color:#F2A623;border-bottom-color:#F2A623}
-.entry-card{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:16px;position:relative;overflow:hidden;flex-shrink:0}
+.entry-card{background:#14161b;border:1px solid #2a2c33;border-radius:12px;padding:16px;position:relative;overflow:hidden;flex-shrink:0;cursor:pointer;transition:border-color .2s,transform .2s,background .2s}
+.entry-card:hover{border-color:#4a4c53;background:#171a20;transform:translateY(-1px)}
 .entry-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#7F77DD,#5DCAA5);border-radius:12px 12px 0 0}
 .entry-card.press-card::before{background:linear-gradient(90deg,#F2A623,#E8593C)}
 .entry-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:10px}
@@ -123,6 +124,21 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
 .metric-label{font-family:'Space Mono',monospace;color:#6a6858;font-size:10px;text-transform:uppercase;margin-top:2px}
 .notes{color:#c4c2b8;line-height:1.5;margin-top:10px;white-space:pre-wrap;font-size:14px}
 .show-more{appearance:none;background:transparent;border:0;color:#5DCAA5;font:inherit;font-size:13px;font-weight:700;cursor:pointer;padding:4px 0 0}
+.detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:20px;z-index:1000}
+.detail-overlay.open{display:flex}
+.detail-modal{width:min(760px,100%);max-height:88vh;overflow:auto;background:#14161b;border:1px solid #3a3c43;border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.55)}
+.detail-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:20px 22px;border-bottom:1px solid #2a2c33;position:sticky;top:0;background:#14161b;z-index:1}
+.detail-title{font-size:20px;font-weight:800;color:#f5f3e8;margin-bottom:4px}
+.detail-subtitle{font-family:'Space Mono',monospace;color:#8a8878;font-size:12px}
+.detail-close{appearance:none;background:#1a1d24;border:1px solid #2a2c33;color:#e4e2d8;border-radius:10px;width:38px;height:38px;font-size:22px;line-height:1;cursor:pointer}
+.detail-close:hover{border-color:#5DCAA5;color:#5DCAA5}
+.detail-body{padding:20px 22px;display:grid;gap:14px}
+.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.detail-field{background:#0d0f12;border:1px solid #2a2c33;border-radius:10px;padding:12px}
+.detail-field.full{grid-column:1/-1}
+.detail-label{font-family:'Space Mono',monospace;color:#6a6858;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.detail-value{color:#e4e2d8;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}
+.detail-raw{font-family:'Space Mono',monospace;font-size:12px;color:#9b998c;background:#0a0c0f;border:1px solid #2a2c33;border-radius:10px;padding:12px;white-space:pre-wrap;overflow:auto;max-height:220px}
 .empty,.error,.loading{font-family:'Space Mono',monospace;color:#6a6858;text-align:center;padding:32px 0}
 .error{color:#ff8b7a}
 .spinner{width:24px;height:24px;border:3px solid #2a2c33;border-top-color:#5DCAA5;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
@@ -133,6 +149,7 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
   .grid-main>section{grid-column:1!important;grid-row:auto!important}
   .feed-scroll{height:360px}
   .form-grid{grid-template-columns:1fr}
+  .detail-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -365,6 +382,19 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
   </div><!-- end grid-main -->
 </main>
 
+<div class="detail-overlay" id="entryDetailOverlay" aria-hidden="true">
+  <div class="detail-modal" role="dialog" aria-modal="true" aria-labelledby="entryDetailTitle">
+    <div class="detail-top">
+      <div>
+        <div class="detail-title" id="entryDetailTitle">Log Detail</div>
+        <div class="detail-subtitle" id="entryDetailSubtitle"></div>
+      </div>
+      <button class="detail-close" id="entryDetailClose" type="button" aria-label="Close detail">&times;</button>
+    </div>
+    <div class="detail-body" id="entryDetailBody"></div>
+  </div>
+</div>
+
 <script>
 (function() {
   const state = {
@@ -382,6 +412,7 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
   function esc(v) {
     return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+  function attr(v) { return esc(v); }
   function fmtDT(v) {
     if (!v) return '';
     return new Date(v).toLocaleString([], { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
@@ -448,7 +479,7 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
       const notes = e.notes || '';
       const long = notes.length > 200;
       const nId = `note-${e.id}`;
-      return `<article class="entry-card">
+      return `<article class="entry-card" data-entry-type="qc" data-entry-id="${attr(e.id)}" title="Click for full QC log detail">
         <div class="entry-head">
           <div class="worker">${esc(e.worker_name)}${e.is_director?'<span class="badge" style="border-color:#5DCAA5;color:#5DCAA5;background:#0a1a15">QC Dir</span>':''}</div>
           <div class="meta">${fmtDT(e.created_at)}</div>
@@ -482,7 +513,7 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
       const notes = e.notes || '';
       const long = notes.length > 200;
       const nId = `pnote-${e.id}`;
-      return `<article class="entry-card press-card">
+      return `<article class="entry-card press-card" data-entry-type="press" data-entry-id="${attr(e.id)}" title="Click for full press log detail">
         <div class="entry-head">
           <div class="worker">${esc(e.operator_name)}${e.press_id?`<span class="badge press">${esc(e.press_id)}</span>`:''}</div>
           <div class="meta">${fmtDT(e.created_at)}</div>
@@ -507,6 +538,78 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
 
   function renderFeed() {
     state.activeFeed === 'qc' ? renderQcFeed() : renderPressFeed();
+  }
+
+  function formatDetailValue(value) {
+    if (value === null || value === undefined || value === '') return '—';
+    if (Array.isArray(value)) return value.length ? value.join(', ') : '—';
+    if (typeof value === 'object') return JSON.stringify(value, null, 2);
+    return String(value);
+  }
+
+  function detailField(label, value, full=false) {
+    return `<div class="detail-field ${full ? 'full' : ''}">
+      <div class="detail-label">${esc(label)}</div>
+      <div class="detail-value">${esc(formatDetailValue(value))}</div>
+    </div>`;
+  }
+
+  function openEntryDetail(type, id) {
+    const entry = (type === 'press' ? state.pressEntries : state.qcEntries).find(e => String(e.id) === String(id));
+    if (!entry) return;
+    const overlay = document.getElementById('entryDetailOverlay');
+    const title = document.getElementById('entryDetailTitle');
+    const subtitle = document.getElementById('entryDetailSubtitle');
+    const body = document.getElementById('entryDetailBody');
+
+    if (type === 'press') {
+      title.textContent = `Press Log — ${entry.operator_name || 'Unknown operator'}`;
+      subtitle.textContent = fmtDT(entry.created_at);
+      body.innerHTML = `<div class="detail-grid">
+        ${detailField('Operator', entry.operator_name)}
+        ${detailField('Shift', entry.shift)}
+        ${detailField('Press', entry.press_id)}
+        ${detailField('Date / Time Recorded', fmtDT(entry.created_at))}
+        ${detailField('Job / Matrix', entry.job_ref, true)}
+        ${detailField('Records Pressed', entry.records_pressed)}
+        ${detailField('Duration Hours', entry.duration_hours)}
+        ${detailField('Downtime Minutes', entry.downtime_minutes)}
+        ${detailField('Compound', entry.compound)}
+        ${detailField('Issues', entry.issues, true)}
+        ${detailField('Notes', entry.notes, true)}
+      </div>
+      <div>
+        <div class="detail-label">Raw Record</div>
+        <pre class="detail-raw">${esc(JSON.stringify(entry, null, 2))}</pre>
+      </div>`;
+    } else {
+      title.textContent = `QC Log — ${entry.worker_name || 'Unknown worker'}`;
+      subtitle.textContent = fmtDT(entry.created_at);
+      body.innerHTML = `<div class="detail-grid">
+        ${detailField('Worker', entry.worker_name)}
+        ${detailField('Shift', entry.shift)}
+        ${detailField('QC Director', entry.is_director ? 'Yes' : 'No')}
+        ${detailField('Date / Time Recorded', fmtDT(entry.created_at))}
+        ${detailField('Job / Matrix', entry.job_ref, true)}
+        ${detailField('Task Types', entry.task_types, true)}
+        ${detailField('Duration Hours', entry.duration_hours)}
+        ${detailField('Units', entry.quantity)}
+        ${detailField('Notes', entry.notes, true)}
+      </div>
+      <div>
+        <div class="detail-label">Raw Record</div>
+        <pre class="detail-raw">${esc(JSON.stringify(entry, null, 2))}</pre>
+      </div>`;
+    }
+
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeEntryDetail() {
+    const overlay = document.getElementById('entryDetailOverlay');
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
   }
 
   // ── Messages ──
@@ -589,12 +692,27 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
   // ── Show more/less ──
   document.getElementById('feed').addEventListener('click', e => {
     const btn = e.target.closest('.show-more');
-    if (!btn) return;
-    const note = document.getElementById(btn.dataset.note);
-    const exp = btn.dataset.expanded === 'true';
-    note.textContent = exp ? note.dataset.short : note.dataset.full;
-    btn.textContent = exp ? 'Show more' : 'Show less';
-    btn.dataset.expanded = exp ? 'false' : 'true';
+    if (btn) {
+      e.stopPropagation();
+      const note = document.getElementById(btn.dataset.note);
+      const exp = btn.dataset.expanded === 'true';
+      note.textContent = exp ? note.dataset.short : note.dataset.full;
+      btn.textContent = exp ? 'Show more' : 'Show less';
+      btn.dataset.expanded = exp ? 'false' : 'true';
+      return;
+    }
+    const card = e.target.closest('.entry-card');
+    if (card?.dataset.entryType && card?.dataset.entryId) {
+      openEntryDetail(card.dataset.entryType, card.dataset.entryId);
+    }
+  });
+
+  document.getElementById('entryDetailClose').addEventListener('click', closeEntryDetail);
+  document.getElementById('entryDetailOverlay').addEventListener('click', e => {
+    if (e.target.id === 'entryDetailOverlay') closeEntryDetail();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeEntryDetail();
   });
 
   document.getElementById('workerFilter').addEventListener('change', renderFeed);

@@ -7,6 +7,19 @@ type Props = {
   showPasswordField?: boolean;
 };
 
+type PipelineRunResponse = {
+  ok?: boolean;
+  extracted?: unknown[];
+  created?: unknown[];
+  skipped_existing?: unknown[];
+  polled?: unknown[];
+  errors?: unknown[];
+};
+
+function countItems(value: unknown) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
 export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswordField = true }: Props) {
   const [password, setPassword] = useState(passwordProp);
   const [apiKey, setApiKey] = useState('');
@@ -14,6 +27,7 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
   const [status, setStatus] = useState<Record<string, unknown> | null>(null);
   const [result, setResult] = useState('');
   const [lastAction, setLastAction] = useState('No run yet');
+  const [batchProgress, setBatchProgress] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -21,6 +35,15 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
   }, [passwordProp]);
 
   const effectivePassword = passwordProp || password;
+
+  const ensurePassword = () => {
+    if (!effectivePassword) {
+      setResult('Admin password required');
+      setLastAction('Blocked');
+      return false;
+    }
+    return true;
+  };
 
   const loadStatus = async () => {
     try {
@@ -40,26 +63,104 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
     void loadStatus();
   }, []);
 
-  const call = async (body: Record<string, unknown>) => {
-    if (!effectivePassword) {
-      setResult('Admin password required');
-      setLastAction('Blocked');
-      return;
+  const postAdmin = async (body: Record<string, unknown>) => {
+    const res = await fetch('/api/admin/shipment-tracking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: effectivePassword, ...body }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
     }
+    return data as PipelineRunResponse;
+  };
+
+  const call = async (body: Record<string, unknown>) => {
+    if (!ensurePassword()) return;
     setLoading(true);
+    setBatchProgress('');
     setLastAction(String(body.action || 'run'));
     setResult('Running...');
     try {
-      const res = await fetch('/api/admin/shipment-tracking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: effectivePassword, ...body }),
-      });
-      const data = await res.json();
+      const data = await postAdmin(body);
       setResult(JSON.stringify(data, null, 2));
       await loadStatus();
     } catch (error) {
       setResult(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runBatchedBackfill = async (dryRun: boolean) => {
+    if (!ensurePassword()) return;
+
+    const backfillDays = 30;
+    const batchDays = 5;
+    const batchCount = Math.ceil(backfillDays / batchDays);
+    const batchAnchor = Math.floor(Date.now() / 1000);
+    const batches: PipelineRunResponse[] = [];
+    const totals = {
+      extracted: 0,
+      created: 0,
+      skipped_existing: 0,
+      polled: 0,
+      errors: 0,
+    };
+
+    setLoading(true);
+    setLastAction(`${dryRun ? 'Dry run' : 'Live run'} ${backfillDays}d in ${batchDays}d batches`);
+    setBatchProgress(`Preparing ${batchCount} batches...`);
+    setResult('Running batched backfill...');
+
+    try {
+      for (let batchIndex = 0; batchIndex < batchCount; batchIndex += 1) {
+        const progress = `Batch ${batchIndex + 1}/${batchCount}`;
+        setBatchProgress(`${progress} running...`);
+        setResult(JSON.stringify({
+          status: `${progress} running...`,
+          dry_run: dryRun,
+          backfill_days: backfillDays,
+          batch_days: batchDays,
+          totals,
+          completed_batches: batches.length,
+          total_batches: batchCount,
+        }, null, 2));
+
+        const data = await postAdmin({
+          action: 'run',
+          dry_run: dryRun,
+          backfill: backfillDays,
+          batch_days: batchDays,
+          batch_index: batchIndex,
+          batch_anchor: batchAnchor,
+        });
+
+        batches.push(data);
+        totals.extracted += countItems(data.extracted);
+        totals.created += countItems(data.created);
+        totals.skipped_existing += countItems(data.skipped_existing);
+        totals.polled += countItems(data.polled);
+        totals.errors += countItems(data.errors);
+
+        setResult(JSON.stringify({
+          ok: batches.every(batch => batch.ok !== false),
+          dry_run: dryRun,
+          backfill_days: backfillDays,
+          batch_days: batchDays,
+          completed_batches: batches.length,
+          total_batches: batchCount,
+          totals,
+          batches,
+        }, null, 2));
+      }
+
+      setBatchProgress('Batched scan complete');
+      await loadStatus();
+    } catch (error) {
+      setBatchProgress('Batched scan stopped');
+      setResult(previous => `${previous}\n\nError: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
     }
@@ -72,7 +173,7 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
         <code style={{ background: '#1a1a1a', padding: '1px 4px', borderRadius: 3 }}>shipments</code> tab in NORP_OPS_DB.
       </p>
 
-      {status?.deploy_pending && (
+      {Boolean(status?.deploy_pending) && (
         <div style={{ background: '#2a2200', border: '1px solid #665500', borderRadius: 8, color: '#FFB800', fontSize: 13, marginBottom: 12, padding: '10px 12px' }}>
           Deploy still in progress — this panel is in the latest code but the API route is not live yet. Refresh in a minute or two.
         </div>
@@ -126,11 +227,14 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
         <button type="button" disabled={loading} onClick={() => void call({ action: 'run', dry_run: true, lookback_hours: 36 })} style={{ background: '#1A53FF22', border: '1px solid #1A53FF66', borderRadius: 8, color: '#1A53FF', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>
           {loading ? 'Running...' : 'Dry Run (36h)'}
         </button>
-        <button type="button" disabled={loading} onClick={() => void call({ action: 'run', dry_run: true, backfill: 30 })} style={{ background: '#1A53FF22', border: '1px solid #1A53FF66', borderRadius: 8, color: '#1A53FF', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>
-          {loading ? 'Running...' : 'Dry Run (30d)'}
+        <button type="button" disabled={loading} onClick={() => void runBatchedBackfill(true)} style={{ background: '#1A53FF22', border: '1px solid #1A53FF66', borderRadius: 8, color: '#1A53FF', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>
+          {loading ? 'Running...' : 'Dry Run (30d / 5d batches)'}
         </button>
         <button type="button" disabled={loading} onClick={() => void call({ action: 'run', dry_run: false, lookback_hours: 36 })} style={{ background: '#2a2200', border: '1px solid #665500', borderRadius: 8, color: '#FFB800', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>
           {loading ? 'Running...' : 'Run Live (36h)'}
+        </button>
+        <button type="button" disabled={loading} onClick={() => void runBatchedBackfill(false)} style={{ background: '#2a2200', border: '1px solid #665500', borderRadius: 8, color: '#FFB800', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>
+          {loading ? 'Running...' : 'Run Live (30d / 5d batches)'}
         </button>
       </div>
 
@@ -138,11 +242,11 @@ export function ShipmentTrackingAdmin({ password: passwordProp = '', showPasswor
         <div style={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
           <strong style={{ color: '#F0ECE2', fontSize: 14 }}>Run Output</strong>
           <span style={{ color: loading ? '#FFB800' : '#888', fontSize: 12 }}>
-            {loading ? 'Running now...' : lastAction}
+            {loading ? batchProgress || 'Running now...' : lastAction}
           </span>
         </div>
         <pre style={{ background: '#0a0a0a', border: '1px solid #2a2a2a', borderRadius: 6, color: '#F0ECE2', fontSize: 11, margin: 0, maxHeight: 420, minHeight: 72, overflow: 'auto', padding: 10, whiteSpace: 'pre-wrap' }}>
-          {result || 'No run yet. Click Dry Run (36h) to scan recent shipping emails without creating AfterShip trackings.'}
+          {result || 'No run yet. Click Dry Run (36h) for a quick check, or Dry Run (30d / 5d batches) to scan the larger backfill without one long request.'}
         </pre>
       </div>
 
