@@ -56,6 +56,7 @@ export type AirtableInventoryItem = {
   tableName: string;
   section: 'compound' | 'jackets' | 'inserts' | 'labels' | 'sleeves' | 'stampers' | 'testPresses';
   sectionTitle: string;
+  category?: string;
   item: string;
   artist: string;
   matrix: string;
@@ -1199,6 +1200,27 @@ const COMPOUND_FIELD_ALIASES = {
   regrindOnOrder: ['Regrind On Order (lbs)', 'Regrind Compound On Order (lbs)', 'Regrind Ordered'],
 };
 
+// The Compound Inventory tab stores the item name in one of three category
+// columns; whichever column has a value determines the compound's category.
+const COMPOUND_CATEGORY_COLUMNS: Array<{ aliases: string[]; category: string }> = [
+  { aliases: ['Primary Colors', 'Primary Color'], category: 'Primary Colors' },
+  { aliases: ['High Disperse Additives', 'High Disperse', 'Hi-Disperse', 'Hi Disperse'], category: 'High Disperse' },
+  { aliases: ['Smoke & Swirl', 'Smoke and Swirl', 'Smoke/Swirl', 'Smoke & Swirl List'], category: 'Smoke & Swirl' },
+];
+
+// Some rows are section headers/dividers inside the tab (e.g. "SMOKE / SWIRL LIST",
+// "Hi-Disperse LIST") rather than real inventory. Those get skipped.
+function compoundCategory(fields: Record<string, unknown>): { name: string; category: string } | null {
+  for (const { aliases, category } of COMPOUND_CATEGORY_COLUMNS) {
+    const raw = field(fields, aliases).trim();
+    if (!raw || isAirtableRecordId(raw)) continue;
+    const normalized = raw.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!normalized || normalized.endsWith('list')) return null;
+    return { name: raw, category };
+  }
+  return null;
+}
+
 function isAirtableRecordId(value: string) {
   return /^rec[a-zA-Z0-9]{10,}$/.test(value.trim());
 }
@@ -1281,6 +1303,10 @@ function inventoryTypeText(fields: Record<string, unknown>) {
 }
 
 function inventoryRecordBelongsToSection(sectionKey: AirtableInventoryItem['section'], fields: Record<string, unknown>) {
+  if (sectionKey === 'compound') {
+    return Boolean(compoundCategory(fields));
+  }
+
   if (sectionKey === 'jackets') {
     const type = inventoryTypeText(fields);
     return !type || type.includes('jacket');
@@ -1321,8 +1347,10 @@ function compoundInventoryFields(fields: Record<string, unknown>) {
   const regrind = inventoryNumber(rawField(fields, COMPOUND_FIELD_ALIASES.regrind));
   const virginOnOrder = inventoryNumber(rawField(fields, COMPOUND_FIELD_ALIASES.virginOnOrder));
   const regrindOnOrder = inventoryNumber(rawField(fields, COMPOUND_FIELD_ALIASES.regrindOnOrder));
+  const detected = compoundCategory(fields);
   return {
-    color: humanInventoryField(fields, COMPOUND_FIELD_ALIASES.color) || 'Unlabeled compound',
+    color: detected?.name || humanInventoryField(fields, COMPOUND_FIELD_ALIASES.color) || 'Unlabeled compound',
+    category: detected?.category || 'Primary Colors',
     onHand: virgin + regrind,
     onOrder: virginOnOrder + regrindOnOrder,
     details: [
@@ -1402,6 +1430,7 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
         tableName: table.name,
         section: section.key,
         sectionTitle: section.title,
+        category: compound.category,
         item: compound.color,
         artist: '',
         matrix: '',

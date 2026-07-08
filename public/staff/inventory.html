@@ -47,6 +47,12 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
 .item-card.low{background:linear-gradient(135deg,rgba(255,77,77,.16),var(--card) 54%);border-color:rgba(255,77,77,.72);border-left-color:var(--red)}
 .compound .section-dot,.compound .item-card{border-left-color:var(--green)}
 .compound .section-dot{background:var(--green)}
+.compound-primary .section-dot,.compound-primary .item-card{border-left-color:var(--green)}
+.compound-primary .section-dot{background:var(--green)}
+.compound-hidisperse .section-dot,.compound-hidisperse .item-card{border-left-color:var(--gold)}
+.compound-hidisperse .section-dot{background:var(--gold)}
+.compound-smokeswirl .section-dot,.compound-smokeswirl .item-card{border-left-color:var(--purple)}
+.compound-smokeswirl .section-dot{background:var(--purple)}
 .print .section-dot,.print .item-card{border-left-color:var(--gold)}
 .print .section-dot{background:var(--gold)}
 .labels .section-dot,.labels .item-card{border-left-color:var(--blue)}
@@ -100,7 +106,9 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
 <script>
 (function() {
   const DISPLAY_SECTIONS = [
-    { key: 'compound', title: 'Compound Inventory', sub: 'PVC compound measured in pounds', sections: ['compound'], unit: 'lbs' },
+    { key: 'compound-primary', title: 'Primary Colors', sub: 'Primary color PVC compound measured in pounds', sections: ['compound'], category: 'Primary Colors', unit: 'lbs' },
+    { key: 'compound-hidisperse', title: 'High Disperse', sub: 'High disperse additive compounds measured in pounds', sections: ['compound'], category: 'High Disperse', unit: 'lbs' },
+    { key: 'compound-smokeswirl', title: 'Smoke & Swirl', sub: 'Smoke & swirl compounds measured in pounds', sections: ['compound'], category: 'Smoke & Swirl', unit: 'lbs' },
     { key: 'print', title: 'Jackets & Inserts', sub: 'Printed jackets, inserts, stickers, and related print stock', sections: ['jackets', 'inserts'], unit: 'items' },
     { key: 'sleeves', title: 'Sleeves & Poly', sub: 'Inner sleeves, poly sleeves, and protective bags', sections: ['sleeves'], unit: 'items' },
     { key: 'labels', title: 'Center Labels', sub: 'Center label shelf inventory', sections: ['labels'], unit: 'items' },
@@ -208,10 +216,10 @@ h1{font-size:38px;line-height:1.05;margin:0;color:var(--text)}
 
     const sections = DISPLAY_SECTIONS.map(section => {
       const sectionItems = visibleItems
-        .filter(item => section.sections.includes(item.section))
+        .filter(item => section.sections.includes(item.section) && (!section.category || item.category === section.category))
         .sort((a, b) => String(a.item || a.artist || '').localeCompare(String(b.item || b.artist || '')));
       const isOpen = openSections.has(section.key) || Boolean(query.trim());
-      const sectionTotal = section.key === 'compound'
+      const sectionTotal = section.unit === 'lbs'
         ? sectionItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
         : sectionItems.length;
       const locationCount = new Set(sectionItems.map(item => item.location || 'Unassigned')).size;
