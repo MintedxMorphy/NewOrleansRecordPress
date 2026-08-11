@@ -1,5 +1,6 @@
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
+import { MarketingTheme } from "@/components/hoxton/marketing-theme"
+import { Header } from "@/components/hoxton/header"
+import { Footer } from "@/components/hoxton/footer"
 import { ResourcesPage } from "@/components/resources-page"
 
 export const metadata = {
@@ -10,12 +11,12 @@ export const metadata = {
 
 export default function ResourcesRoutePage() {
   return (
-    <>
+    <MarketingTheme>
       <Header />
-      <main className="pt-24 pb-20 bg-background">
+      <main className="pt-40 pb-20 bg-background">
         <ResourcesPage />
       </main>
       <Footer />
-    </>
+    </MarketingTheme>
   )
 }
