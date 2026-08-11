@@ -4,7 +4,9 @@ import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Sparkles } from "lucide-react"
-import { Header } from "@/components/header"
+import { MarketingTheme } from "@/components/hoxton/marketing-theme"
+import { Header } from "@/components/hoxton/header"
+import { Footer } from "@/components/hoxton/footer"
 
 const SUPABASE_URL = "https://ihqnczpjjtvtjdtwwzre.supabase.co/storage/v1/object/public/Vinyl-Colors/record-images"
 
@@ -216,10 +218,10 @@ export default function VinylColorsPage() {
   const currentCategory = categories.find(c => c.id === activeCategory)
   
   return (
-    <div className="min-h-screen bg-background">
+    <MarketingTheme>
       <Header />
 
-      <main className="pt-24 pb-20">
+      <main className="pt-40 pb-20">
         <div className="max-w-7xl mx-auto px-6">
           {/* Hero */}
           <div className="mb-12">
@@ -253,7 +255,7 @@ export default function VinylColorsPage() {
           </div>
 
           {/* Category Tabs */}
-          <div className="sticky top-[73px] z-40 bg-background/95 backdrop-blur-sm border-b border-border -mx-6 px-6 mb-8">
+          <div className="sticky top-[128px] z-40 bg-background/95 backdrop-blur-sm border-b border-border -mx-6 px-6 mb-8">
             <div className="flex gap-1 overflow-x-auto py-4 scrollbar-hide">
               {categories.map((category) => (
                 <button
@@ -335,13 +337,15 @@ export default function VinylColorsPage() {
             Get started on your vinyl project today. Our team is ready to help bring your music to life.
           </p>
           <Link
-            href="/#contact"
+            href="/quote"
             className="inline-flex px-8 py-4 bg-primary text-primary-foreground font-bold uppercase tracking-wider text-sm hover:bg-primary/90 transition-colors"
           >
             Get a Quote
           </Link>
         </div>
       </section>
-    </div>
+
+      <Footer />
+    </MarketingTheme>
   )
 }

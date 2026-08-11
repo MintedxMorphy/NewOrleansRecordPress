@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Header } from '@/components/header'
+import { MarketingTheme } from '@/components/hoxton/marketing-theme'
+import { Header } from '@/components/hoxton/header'
+import { Footer } from '@/components/hoxton/footer'
 import { getTeamMembers } from '@/lib/team-data'
 
 export const metadata: Metadata = {
@@ -15,9 +17,9 @@ export default async function TeamPage() {
   const members = await getTeamMembers()
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <MarketingTheme>
       <Header />
-      <div className="h-16" />
+      <div className="h-40" />
 
       {/* Hero block */}
       <div className="border-b border-border px-6 md:px-16 lg:px-32 py-12 md:py-16 max-w-none">
@@ -69,6 +71,7 @@ export default async function TeamPage() {
           </Link>
         </div>
       </div>
-    </div>
+      <Footer />
+    </MarketingTheme>
   )
 }

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Header } from '@/components/header'
+import { MarketingTheme } from '@/components/hoxton/marketing-theme'
+import { Header } from '@/components/hoxton/header'
+import { Footer } from '@/components/hoxton/footer'
 
 export const metadata: Metadata = {
   title: 'Our Story | New Orleans Record Press',
@@ -9,10 +11,10 @@ export const metadata: Metadata = {
 
 export default function StoryPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <MarketingTheme>
       <Header />
       {/* Spacer for fixed header */}
-      <div className="h-16" />
+      <div className="h-40" />
 
       {/* Hero block */}
       <div className="border-b border-border px-6 md:px-16 lg:px-32 py-20 md:py-32 max-w-none">
@@ -67,6 +69,7 @@ export default function StoryPage() {
           </Link>
         </div>
       </div>
-    </div>
+      <Footer />
+    </MarketingTheme>
   )
 }
