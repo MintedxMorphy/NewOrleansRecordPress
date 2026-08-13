@@ -1067,14 +1067,45 @@ function persistDashNotes(job: Job, dashNotes: string) {
   });
 }
 
+function isStationDroppable(id: string): id is Station {
+  return STATIONS.includes(id as Station);
+}
+
 function orderForInsertion(list: Job[], index: number) {
   const previous = index > 0 ? dashboardOrder(list[index - 1]) : undefined;
   const next = index < list.length - 1 ? dashboardOrder(list[index + 1]) : undefined;
 
-  if (previous !== undefined && next !== undefined) return (previous + next) / 2;
+  if (previous !== undefined && next !== undefined) {
+    if (next > previous) return (previous + next) / 2;
+    return previous + 1;
+  }
   if (previous !== undefined) return previous + 1;
-  if (next !== undefined) return Math.max(0.5, next - 1);
+  if (next !== undefined) {
+    // Insert strictly above the current first card. A 0.5 floor made every
+    // later "move to top" collide with the existing #1 job, so sortJobs fell
+    // back to customer/matrix name and the card snapped back.
+    if (next > 0) return next / 2;
+    return next - 1;
+  }
   return 1;
+}
+
+function withSequentialOrders(list: Job[]) {
+  return list.map((job, index) => ({
+    ...job,
+    dashboard_order: String(index + 1),
+  }));
+}
+
+function jobKeysMatch(a: Job[], b: Job[]) {
+  return a.length === b.length && a.every((job, index) => jobKey(job) === jobKey(b[index]));
+}
+
+function insertionSortsIntoPlace(list: Job[], index: number, order: number) {
+  const nextList = list.map((job, jobIndex) => (
+    jobIndex === index ? { ...job, dashboard_order: String(order) } : job
+  ));
+  return jobKeysMatch(nextList, sortJobs(nextList));
 }
 
 function StatusPill({ children, color }: { children: React.ReactNode; color: string }) {
@@ -1451,6 +1482,7 @@ function Pipeline({
   const [confirmCompleteJob, setConfirmCompleteJob] = useState<Job | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStation, setDragOverStation] = useState<Station | null>(null);
+  const lastStationDropRef = useRef<{ droppableId: Station; index: number } | null>(null);
   useEffect(() => setMounted(true), []);
 
   const saveMovedJob = async (job: Job, stage: DashboardStage, order: number) => {
@@ -1470,25 +1502,32 @@ function Pipeline({
 
   const onDragStart = (start: { draggableId: string }) => {
     setDraggingId(start.draggableId);
+    lastStationDropRef.current = null;
   };
 
   const onDragUpdate = (update: DragUpdate) => {
-    const destinationId = update.destination?.droppableId;
-    if (destinationId && STATIONS.includes(destinationId as Station)) {
-      setDragOverStation(destinationId as Station);
+    const destination = update.destination;
+    if (destination && isStationDroppable(destination.droppableId)) {
+      setDragOverStation(destination.droppableId);
+      lastStationDropRef.current = {
+        droppableId: destination.droppableId,
+        index: destination.index,
+      };
     }
   };
 
   const onDragEnd = async (result: DropResult) => {
     const hoveredStation = dragOverStation;
+    const lastStationDrop = lastStationDropRef.current;
     setDraggingId(null);
     setDragOverStation(null);
-    if (!result.destination) return;
+    lastStationDropRef.current = null;
+    if (result.reason === 'CANCEL') return;
 
-    let toId = result.destination.droppableId;
-    let destinationIndex = result.destination.index;
     const fromId = result.source.droppableId;
     const fromStretched = fromId === STRETCHED_DROPPABLE_ID;
+    let toId = result.destination?.droppableId;
+    let destinationIndex = result.destination?.index ?? 0;
     let toStretched = toId === STRETCHED_DROPPABLE_ID;
     const activeJobs = jobs.filter(job => stationOf(job) !== 'completed');
     const visibleActiveJobs = visibleJobs.filter(job => stationOf(job) !== 'completed');
@@ -1502,14 +1541,22 @@ function Pipeline({
       stationJobs(visibleActiveJobs, station).filter(job => isMobile || !activeSpanKeys.has(jobKey(job)))
     );
 
-    if (toStretched && !fromStretched) {
-      const fallbackStation = hoveredStation
-        ?? (STATIONS.includes(fromId as Station) ? (fromId as Station) : null);
+    // The stretched-job overlay sits at the TOP of every column. Drops there
+    // used to come through as the overlay (or as no destination, because that
+    // overlay is drop-disabled) and were either ignored or appended at the
+    // bottom — so a card dragged to #1 snapped back to its old spot.
+    if ((!result.destination || toStretched) && !fromStretched) {
+      const fallbackStation = lastStationDrop?.droppableId ?? hoveredStation;
       if (!fallbackStation) return;
       toId = fallbackStation;
       toStretched = false;
-      destinationIndex = visibleColumnJobs(fallbackStation).length;
+      destinationIndex = lastStationDrop?.droppableId === fallbackStation
+        ? lastStationDrop.index
+        : 0;
     }
+
+    if (!toId) return;
+    if (fromId === toId && destinationIndex === result.source.index) return;
 
     const sourceList = fromStretched ? stretchedJobs(visibleActiveJobs) : visibleColumnJobs(fromId as Station);
     const destinationList = fromId === toId
@@ -1520,6 +1567,9 @@ function Pipeline({
     const [moved] = sourceList.splice(result.source.index, 1);
 
     if (!moved) return;
+
+    const insertList = fromId === toId ? sourceList : destinationList;
+    destinationIndex = Math.max(0, Math.min(destinationIndex, insertList.length));
 
     const targetStage = toStretched ? stationOf(moved) : (toId as Station);
     const rawDashNotes = value(moved, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
@@ -1541,22 +1591,38 @@ function Pipeline({
       destinationList.splice(destinationIndex, 0, movedNext);
     }
 
-    const destinationAfterMove = fromId === toId ? sourceList : destinationList;
+    let destinationAfterMove = fromId === toId ? sourceList : destinationList;
     const movedOrder = orderForInsertion(destinationAfterMove, destinationIndex);
-    const movedPersisted = { ...movedNext, dashboard_order: String(movedOrder) };
-    const rebuilt = activeJobs.map(job => {
-      const key = jobKey(job);
-      const replacement = key === jobKey(moved) ? movedPersisted : undefined;
-      return replacement ?? job;
-    });
+    let persistColumn = false;
+    if (insertionSortsIntoPlace(destinationAfterMove, destinationIndex, movedOrder)) {
+      destinationAfterMove = destinationAfterMove.map((job, index) => (
+        index === destinationIndex ? { ...movedNext, dashboard_order: String(movedOrder) } : job
+      ));
+    } else {
+      destinationAfterMove = withSequentialOrders(
+        destinationAfterMove.map((job, index) => (index === destinationIndex ? movedNext : job))
+      );
+      persistColumn = true;
+    }
 
+    const replacements = new Map(destinationAfterMove.map(job => [jobKey(job), job]));
+    const rebuilt = activeJobs.map(job => replacements.get(jobKey(job)) ?? job);
     const nextJobs = [...rebuilt, ...hiddenJobs];
+    const movedPersisted = replacements.get(jobKey(moved)) ?? { ...movedNext, dashboard_order: String(movedOrder) };
 
     onJobsChange(nextJobs);
     onError('');
 
     try {
-      await saveMovedJob(movedPersisted, targetStage, movedOrder);
+      if (persistColumn) {
+        const response = await persistReorder(destinationAfterMove);
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.error || `Airtable save failed (${response.status})`);
+        }
+      } else {
+        await saveMovedJob(movedPersisted, targetStage, dashboardOrder(movedPersisted));
+      }
       if (nextDashNotes !== undefined) {
         const notesResponse = await persistDashNotes(movedPersisted, nextDashNotes);
         if (!notesResponse.ok) {
@@ -1676,71 +1742,69 @@ function Pipeline({
           const reservedSpanHeight = isMobile ? 0 : reservedSpanHeightForStation(spanLayout, station);
 
           return (
-            <section
-              id={stationAnchor(station)}
-              key={station}
-              style={{
-                background: COLORS.panel,
-                border: `1px solid ${isNowPressing ? `${meta.color}88` : COLORS.border}`,
-                borderRadius: '8px',
-                minHeight: isMobile ? 'auto' : '620px',
-                minWidth: 0,
-                overflow: 'visible',
-                padding: isMobile ? '10px' : '8px',
-                position: 'relative',
-                scrollMarginTop: isMobile ? '96px' : '112px',
-                zIndex: 1,
-              }}
-            >
-              <div style={{ borderBottom: `1px solid ${COLORS.border}`, marginBottom: '8px', paddingBottom: '9px' }}>
-                <div style={{ alignItems: 'center', display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
-                  <div style={{ alignItems: 'center', display: 'flex', gap: '8px', minWidth: 0 }}>
-                    <StationIcon station={station} size={16} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{
-                        color: meta.color,
-                        fontSize: isMobile ? '19px' : isNowPressing ? '14px' : '13px',
-                        fontWeight: 950,
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        whiteSpace: 'normal',
-                        lineHeight: 1.1,
-                      }}>
-                        {meta.label}
+            <Droppable droppableId={station} key={station}>
+              {(provided, snapshot) => (
+                <section
+                  id={stationAnchor(station)}
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  style={{
+                    background: snapshot.isDraggingOver ? `${meta.color}14` : COLORS.panel,
+                    border: `1px solid ${isNowPressing ? `${meta.color}88` : COLORS.border}`,
+                    borderRadius: '8px',
+                    minHeight: isMobile ? 'auto' : '620px',
+                    minWidth: 0,
+                    overflow: 'visible',
+                    padding: isMobile ? '10px' : '8px',
+                    position: 'relative',
+                    scrollMarginTop: isMobile ? '96px' : '112px',
+                    transition: 'background 0.15s',
+                    zIndex: 1,
+                  }}
+                >
+                  <div style={{ borderBottom: `1px solid ${COLORS.border}`, marginBottom: '8px', paddingBottom: '9px' }}>
+                    <div style={{ alignItems: 'center', display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
+                      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', minWidth: 0 }}>
+                        <StationIcon station={station} size={16} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{
+                            color: meta.color,
+                            fontSize: isMobile ? '19px' : isNowPressing ? '14px' : '13px',
+                            fontWeight: 950,
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
+                            whiteSpace: 'normal',
+                            lineHeight: 1.1,
+                          }}>
+                            {meta.label}
+                          </div>
+                          <div style={{ color: COLORS.faint, fontSize: isMobile ? '15px' : '13px', marginTop: '3px', lineHeight: 1.15 }}>
+                            {meta.description}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ color: COLORS.faint, fontSize: isMobile ? '15px' : '13px', marginTop: '3px', lineHeight: 1.15 }}>
-                        {meta.description}
+                      <div style={{
+                        background: `${meta.color}22`,
+                        border: `1px solid ${meta.color}66`,
+                        borderRadius: '999px',
+                        color: meta.color,
+                        fontSize: '14px',
+                        fontWeight: 900,
+                        minWidth: '28px',
+                        padding: '2px 7px',
+                        textAlign: 'center',
+                        flexShrink: 0,
+                      }}>
+                        {stationVisualJobs(visibleJobs, station).length}
                       </div>
                     </div>
                   </div>
-                  <div style={{
-                    background: `${meta.color}22`,
-                    border: `1px solid ${meta.color}66`,
-                    borderRadius: '999px',
-                    color: meta.color,
-                    fontSize: '14px',
-                    fontWeight: 900,
-                    minWidth: '28px',
-                    padding: '2px 7px',
-                    textAlign: 'center',
-                    flexShrink: 0,
-                  }}>
-                    {stationVisualJobs(visibleJobs, station).length}
-                  </div>
-                </div>
-              </div>
 
-              <Droppable droppableId={station}>
-                {(provided, snapshot) => (
                   <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
                     style={{
-                      background: snapshot.isDraggingOver ? `${meta.color}14` : 'transparent',
                       borderRadius: '8px',
                       minHeight: isMobile ? '72px' : '540px',
                       paddingTop: reservedSpanHeight ? `${reservedSpanHeight}px` : undefined,
-                      transition: 'background 0.15s',
                     }}
                   >
                     {list.map((job, index) => (
@@ -1770,9 +1834,9 @@ function Pipeline({
                     ))}
                     {provided.placeholder}
                   </div>
-                )}
-              </Droppable>
-            </section>
+                </section>
+              )}
+            </Droppable>
           );
         })}
       </div>
