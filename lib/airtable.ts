@@ -1001,6 +1001,7 @@ export async function updateAirtableJobPosition(jobId: string, stage: string, or
     headers: airtableHeaders(),
     body: JSON.stringify({
       fields,
+      typecast: true,
     }),
   });
   const data = await res.json() as { error?: { message?: string } };
