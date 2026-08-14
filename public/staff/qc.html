@@ -436,6 +436,14 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
     const p = d.split('-').map(Number), now = new Date();
     return new Date(p[0],p[1]-1,p[2],now.getHours(),now.getMinutes(),now.getSeconds()).toISOString();
   }
+  function notifyProductionBoard() {
+    try {
+      const channel = new BroadcastChannel('norp-production-sync');
+      channel.postMessage({ type: 'production-updated', at: Date.now() });
+      channel.close();
+    } catch (e) {}
+    try { localStorage.setItem('norp-production-sync', String(Date.now())); } catch (e) {}
+  }
   function optionHtml(name) {
     return `<option value="${esc(name)}">${esc(name === 'Sarah' ? 'Sarah' : name)}</option>`;
   }
@@ -744,6 +752,7 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
       document.getElementById('taskTypes').querySelectorAll('.active').forEach(b => b.classList.remove('active'));
       otherInput.style.display = 'none'; otherInput.value = '';
       initDefaults();
+      notifyProductionBoard();
       await fetchQcEntries();
     } catch(err) { alert('Could not submit QC entry. Check DB tables.'); }
     finally { btn.disabled = false; btn.textContent = 'Submit QC Entry'; }
@@ -780,6 +789,7 @@ textarea{min-height:72px;resize:vertical;line-height:1.45}
       if (!r.ok) throw new Error('Failed');
       document.getElementById('pressForm').reset();
       initDefaults();
+      notifyProductionBoard();
       await fetchPressEntries();
     } catch(err) { alert('Could not submit press entry. Check DB tables.'); }
     finally { btn.disabled = false; btn.textContent = 'Submit Press Entry'; }

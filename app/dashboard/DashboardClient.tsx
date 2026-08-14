@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { DragDropContext, Draggable, Droppable, DraggableProvidedDragHandleProps, DropResult, DragUpdate } from '@hello-pangea/dnd';
 import { packSkyline } from '@/lib/dashboard-pack';
+import { createClient as createBrowserSupabase } from '@/lib/supabase/client';
+import { PRODUCTION_LOG_HEARTBEAT_MS, PRODUCTION_SYNC_POLL_MS, notifyProductionSync, subscribeProductionSync } from '@/lib/production-sync';
 import {
   BadgeCheck,
   Boxes,
@@ -217,6 +219,22 @@ function formatPressHorizon(days: number) {
   }
   const n = Math.max(1, Math.round(days / 30));
   return `${n} month${n === 1 ? '' : 's'} out`;
+}
+
+function boardSyncSignature(jobs: Job[]) {
+  return jobs.map(job => [
+    jobKey(job),
+    stationOf(job),
+    dashboardOrder(job),
+    value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']),
+    displayedRecordsPressed(job),
+    value(job, ['records_pressed', 'Records Pressed']),
+    value(job, ['records_pressed_baseline_at']),
+    job.records_pressed_source || '',
+    job.press_log_count || '',
+    value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']),
+    value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']),
+  ].join('\t')).join('\n');
 }
 
 function recordsPressedSinceBaseline(job: Job) {
@@ -1556,6 +1574,7 @@ function Pipeline({
   onJobsChange,
   onJobOpen,
   onError,
+  onBusyChange,
   isMobile = false,
 }: {
   jobs: Job[];
@@ -1563,6 +1582,7 @@ function Pipeline({
   onJobsChange: (jobs: Job[]) => void;
   onJobOpen: (job: Job) => void;
   onError: (message: string) => void;
+  onBusyChange?: (busy: boolean) => void;
   isMobile?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
@@ -1634,6 +1654,7 @@ function Pipeline({
   };
 
   const onDragStart = (start: { draggableId: string }) => {
+    onBusyChange?.(true);
     setDraggingId(start.draggableId);
     lastStationDropRef.current = null;
   };
@@ -1655,6 +1676,7 @@ function Pipeline({
     setDraggingId(null);
     setDragOverStation(null);
     lastStationDropRef.current = null;
+    try {
     if (result.reason === 'CANCEL') return;
 
     const fromId = result.source.droppableId;
@@ -1770,12 +1792,16 @@ function Pipeline({
     } catch (error) {
       onError(`Move shown locally, but Airtable save failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+    } finally {
+      onBusyChange?.(false);
+    }
   };
 
   const completeJob = async (job: Job) => {
     const current = stationOf(job);
     if (current !== 'shipping') return;
     const target = 'completed';
+    onBusyChange?.(true);
     const nextJobs = jobs.map(candidate => (
       jobKey(candidate) === jobKey(job) ? { ...candidate, stage: target, dashboard_order: '999999' } : candidate
     ));
@@ -1792,6 +1818,8 @@ function Pipeline({
     } catch (error) {
       onJobsChange(jobs);
       onError(error instanceof Error ? error.message : String(error));
+    } finally {
+      onBusyChange?.(false);
     }
   };
 
@@ -3393,24 +3421,233 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   const [error, setError] = useState('');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [boardReady, setBoardReady] = useState(false);
   const isMobile = useMediaQuery('(max-width: 760px)');
+  const syncPausedRef = useRef(false);
+  const queuedRefreshRef = useRef(false);
+  const inFlightRef = useRef<Promise<void> | null>(null);
+  const localMutationAtRef = useRef(0);
+  const lastSyncSignatureRef = useRef('');
+  const refreshJobsRef = useRef<(options?: { silent?: boolean }) => Promise<void>>(async () => {});
+  const logStampRef = useRef('');
 
-  const refreshJobs = async () => {
-    setLoading(true);
-    await fetch('/api/norp-jobs')
-      .then(response => response.json())
-      .then(data => {
-        if (data.error) setError(data.error);
-        if (data.jobs) setJobs(data.jobs);
+  const applyRemoteJobs = useCallback((nextJobs: Job[], startedAt: number) => {
+    if (syncPausedRef.current || startedAt < localMutationAtRef.current) {
+      queuedRefreshRef.current = true;
+      return false;
+    }
+    const signature = boardSyncSignature(nextJobs);
+    if (signature === lastSyncSignatureRef.current) return true;
+    lastSyncSignatureRef.current = signature;
+    setJobs(nextJobs);
+    setSelectedJob(current => {
+      if (!current) return current;
+      const next = nextJobs.find(job => jobKey(job) === jobKey(current));
+      if (!next) return current;
+      const pressChanged =
+        displayedRecordsPressed(current) !== displayedRecordsPressed(next) ||
+        jobQuantity(current) !== jobQuantity(next) ||
+        stationOf(current) !== stationOf(next);
+      if (!pressChanged) return current;
+      return {
+        ...current,
+        quantity: next.quantity,
+        Quantity: next.Quantity,
+        stage: next.stage,
+        records_pressed_total: next.records_pressed_total,
+        records_pressed_source: next.records_pressed_source,
+        records_pressed_from_logs: next.records_pressed_from_logs,
+        records_pressed_since_baseline: next.records_pressed_since_baseline,
+        records_pressed_baseline: next.records_pressed_baseline,
+        press_log_count: next.press_log_count,
+        latest_press_log_at: next.latest_press_log_at,
+      };
+    });
+    return true;
+  }, []);
+
+  const refreshJobs = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (inFlightRef.current) {
+      queuedRefreshRef.current = true;
+      await inFlightRef.current;
+      return;
+    }
+
+    const startedAt = Date.now();
+    if (!silent) setLoading(true);
+
+    const run = (async () => {
+      try {
+        const response = await fetch('/api/norp-jobs', { cache: 'no-store' });
+        const data = await response.json();
+        if (!silent && data.error) setError(data.error);
         if (data.source) setSource(data.source);
-      })
-      .catch(err => setError(String(err)))
-      .finally(() => setLoading(false));
-  };
+        if (Array.isArray(data.jobs)) applyRemoteJobs(data.jobs, startedAt);
+      } catch (err) {
+        if (!silent) setError(String(err));
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    })();
+
+    inFlightRef.current = run;
+    try {
+      await run;
+    } finally {
+      inFlightRef.current = null;
+      if (queuedRefreshRef.current && !syncPausedRef.current) {
+        queuedRefreshRef.current = false;
+        void refreshJobsRef.current({ silent: true });
+      }
+    }
+  }, [applyRemoteJobs]);
+
+  refreshJobsRef.current = refreshJobs;
+
+  const markLocalMutation = useCallback(() => {
+    localMutationAtRef.current = Date.now();
+  }, []);
+
+  const setJobsFromBoard = useCallback((nextJobs: Job[]) => {
+    markLocalMutation();
+    lastSyncSignatureRef.current = boardSyncSignature(nextJobs);
+    setJobs(nextJobs);
+    notifyProductionSync();
+  }, [markLocalMutation]);
+
+  const setSyncBusy = useCallback((busy: boolean) => {
+    syncPausedRef.current = busy;
+    if (busy) {
+      markLocalMutation();
+      return;
+    }
+    if (queuedRefreshRef.current) {
+      queuedRefreshRef.current = false;
+      void refreshJobsRef.current({ silent: true });
+    }
+  }, [markLocalMutation]);
+
+  const patchJobs = useCallback((updateJob: (job: Job) => Job) => {
+    markLocalMutation();
+    setJobs(current => {
+      const next = current.map(updateJob);
+      lastSyncSignatureRef.current = boardSyncSignature(next);
+      return next;
+    });
+    notifyProductionSync();
+  }, [markLocalMutation]);
 
   useEffect(() => {
-    void refreshJobs();
+    let cancelled = false;
+    const readLogStamp = async () => {
+      const response = await fetch('/api/production-sync', { cache: 'no-store' });
+      const data = await response.json();
+      return `${data.press_log_at || ''}|${data.qc_log_at || ''}`;
+    };
+
+    void (async () => {
+      try {
+        let before = '';
+        try {
+          before = await readLogStamp();
+          if (!cancelled) logStampRef.current = before;
+        } catch {
+          // Board fetch still runs even if the log heartbeat is down.
+        }
+        if (cancelled) return;
+        await refreshJobsRef.current({ silent: false });
+        if (cancelled) return;
+        try {
+          const after = await readLogStamp();
+          if (cancelled) return;
+          logStampRef.current = after;
+          if (after && before && after !== before) {
+            await refreshJobsRef.current({ silent: true });
+          }
+        } catch {
+          // The 15s board poll still covers Airtable.
+        }
+      } finally {
+        if (!cancelled) setBoardReady(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  useEffect(() => {
+    if (!boardReady) return undefined;
+
+    let debounce: number | undefined;
+    const pull = () => {
+      window.clearTimeout(debounce);
+      debounce = window.setTimeout(() => {
+        if (document.visibilityState !== 'visible') return;
+        void refreshJobsRef.current({ silent: true });
+      }, 300);
+    };
+
+    const unsubscribe = subscribeProductionSync(pull);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') pull();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', pull);
+    const timer = window.setInterval(pull, PRODUCTION_SYNC_POLL_MS);
+
+    const pollLogs = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const response = await fetch('/api/production-sync', { cache: 'no-store' });
+        const data = await response.json();
+        const nextStamp = `${data.press_log_at || ''}|${data.qc_log_at || ''}`;
+        if (!nextStamp.replace(/\|/g, '')) return;
+        if (!logStampRef.current) {
+          logStampRef.current = nextStamp;
+          return;
+        }
+        if (nextStamp !== logStampRef.current) {
+          logStampRef.current = nextStamp;
+          pull();
+        }
+      } catch {
+        // Keep the last known stamp; the full board poll still runs.
+      }
+    };
+    const logTimer = window.setInterval(() => {
+      void pollLogs();
+    }, PRODUCTION_LOG_HEARTBEAT_MS);
+
+    let cleanupRealtime = () => {};
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      try {
+        const supabase = createBrowserSupabase();
+        const channel = supabase
+          .channel('production-log-sync')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'press_log' }, pull)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'qc_log' }, pull)
+          .subscribe();
+        cleanupRealtime = () => {
+          void supabase.removeChannel(channel);
+        };
+      } catch {
+        cleanupRealtime = () => {};
+      }
+    }
+
+    return () => {
+      unsubscribe();
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', pull);
+      window.clearInterval(timer);
+      window.clearInterval(logTimer);
+      window.clearTimeout(debounce);
+      cleanupRealtime();
+    };
+  }, [boardReady]);
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const visibleJobs = useMemo(() => (
@@ -3447,7 +3684,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     const updateJob = (candidate: Job) => (
       jobKey(candidate) === key ? { ...candidate, dash_notes: dashNotes, 'Dash Notes': dashNotes } : candidate
     );
-    setJobs(current => current.map(updateJob));
+    patchJobs(updateJob);
     setSelectedJob(null);
     setError('');
   };
@@ -3470,7 +3707,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     const updateJob = (candidate: Job) => (
       jobKey(candidate) === key ? { ...candidate, dash_notes: nextDashNotes, 'Dash Notes': nextDashNotes } : candidate
     );
-    setJobs(current => current.map(updateJob));
+    patchJobs(updateJob);
     setSelectedJob(current => current && jobKey(current) === key ? updateJob(current) : current);
     setError('');
   };
@@ -3495,7 +3732,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     const updateJob = (candidate: Job) => (
       jobKey(candidate) === key ? { ...candidate, dash_notes: nextDashNotes, 'Dash Notes': nextDashNotes } : candidate
     );
-    setJobs(current => current.map(updateJob));
+    patchJobs(updateJob);
     setSelectedJob(current => current && jobKey(current) === key ? updateJob(current) : current);
     setError('');
   };
@@ -3514,12 +3751,11 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     }
 
     if (body.job) {
-      setJobs(current => current.map(candidate => (
-        jobKey(candidate) === key ? body.job : candidate
-      )));
+      patchJobs(candidate => (jobKey(candidate) === key ? body.job : candidate));
     }
     setSelectedJob(null);
     setError('');
+    void refreshJobsRef.current({ silent: true });
   };
 
   const saveRecordsPressed = async (job: Job, recordsPressed: number | null) => {
@@ -3567,9 +3803,10 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       }
       return next;
     };
-    setJobs(current => current.map(updateJob));
+    patchJobs(updateJob);
     setSelectedJob(current => current && jobKey(current) === key ? updateJob(current) : current);
     setError('');
+    void refreshJobsRef.current({ silent: true });
   };
 
   return (
@@ -3798,9 +4035,10 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
         <Pipeline
           jobs={jobs}
           visibleJobs={visibleJobs}
-          onJobsChange={setJobs}
+          onJobsChange={setJobsFromBoard}
           onJobOpen={setSelectedJob}
           onError={setError}
+          onBusyChange={setSyncBusy}
           isMobile={isMobile}
         />
       </div>
@@ -3814,7 +4052,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
           onStageSpanSave={saveStageSpan}
           onSplitJob={splitJob}
           onRecordsPressedSave={saveRecordsPressed}
-          onShipmentsChanged={refreshJobs}
+          onShipmentsChanged={() => refreshJobs({ silent: true })}
         />
       )}
     </main>
