@@ -845,34 +845,35 @@ function stretchedJobs(jobs: Job[]) {
   return sortJobs(jobs.filter(job => stationOf(job) !== 'completed' && stageSpanForJob(job).length > 1));
 }
 
-type SpanLayoutEntry = {
+type BoardLayoutEntry = {
   job: Job;
   startIndex: number;
   endIndex: number;
   row: number;
   top: number;
+  stretched: boolean;
 };
 
-function layoutStretchedJobs(jobs: Job[]) {
+type SpanLayoutEntry = Omit<BoardLayoutEntry, 'stretched'>;
+
+function layoutBoard(jobs: Job[]): BoardLayoutEntry[] {
   const occupiedRows: boolean[][] = [];
-  const normalStationHasJobs = STATIONS.map(station =>
-    stationJobs(jobs, station).some(job => stageSpanForJob(job).length < 2)
-  );
+  const packed: Array<Omit<BoardLayoutEntry, 'top'>> = [];
 
-  const entries = stretchedJobs(jobs).map(job => {
+  for (const job of sortJobs(jobs.filter(candidate => stationOf(candidate) !== 'completed'))) {
     const span = stageSpanForJob(job);
-    const startIndex = STATIONS.indexOf(span[0]);
-    const endIndex = STATIONS.indexOf(span[span.length - 1]);
+    const stretched = span.length > 1;
+    const startIndex = stretched
+      ? STATIONS.indexOf(span[0])
+      : STATIONS.indexOf(stationOf(job) as Station);
+    const endIndex = stretched
+      ? STATIONS.indexOf(span[span.length - 1])
+      : startIndex;
 
-    if (startIndex < 0 || endIndex < 0) {
-      return { job, startIndex, endIndex, row: 0, top: 0 };
-    }
+    if (startIndex < 0 || endIndex < 0) continue;
 
     let row = 0;
-
-    while (
-      occupiedRows[row]?.slice(startIndex, endIndex + 1).some(Boolean)
-    ) {
+    while (occupiedRows[row]?.slice(startIndex, endIndex + 1).some(Boolean)) {
       row += 1;
     }
 
@@ -881,28 +882,18 @@ function layoutStretchedJobs(jobs: Job[]) {
       occupiedRows[row][index] = true;
     }
 
-    const entry: SpanLayoutEntry = {
-      job,
-      startIndex,
-      endIndex,
-      row,
-      top: 0,
-    };
-
-    return entry;
-  }).filter(entry => entry.startIndex >= 0 && entry.endIndex >= 0);
+    packed.push({ job, startIndex, endIndex, row, stretched });
+  }
 
   const heightForStationRow = (stationIndex: number, row: number) => {
-    if (entries.some(entry => (
+    const item = packed.find(entry => (
       entry.row === row && stationIndex >= entry.startIndex && stationIndex <= entry.endIndex
-    ))) {
-      return SPAN_DEFAULT_HEIGHT;
-    }
-
-    return normalStationHasJobs[stationIndex] ? NORMAL_ROW_HEIGHT : 0;
+    ));
+    if (!item) return 0;
+    return item.stretched ? SPAN_DEFAULT_HEIGHT : NORMAL_ROW_HEIGHT;
   };
 
-  return entries.map(entry => {
+  return packed.map(entry => {
     const top = STATIONS
       .slice(entry.startIndex, entry.endIndex + 1)
       .map((_, offset) => {
@@ -920,18 +911,25 @@ function layoutStretchedJobs(jobs: Job[]) {
   });
 }
 
-function reservedSpanHeightForStation(layout: SpanLayoutEntry[], station: Station) {
+function layoutStretchedJobs(jobs: Job[]): SpanLayoutEntry[] {
+  return layoutBoard(jobs)
+    .filter(entry => entry.stretched)
+    .map(({ stretched: _stretched, ...entry }) => entry);
+}
+
+function reservedSpanHeightForStation(board: BoardLayoutEntry[], station: Station) {
   const stationIndex = STATIONS.indexOf(station);
-  const occupiedRows = new Set(layout
-    .filter(entry => stationIndex >= entry.startIndex && stationIndex <= entry.endIndex)
-    .map(entry => entry.row));
+  const firstNormal = board
+    .filter(entry => !entry.stretched && entry.startIndex === stationIndex)
+    .sort((a, b) => a.row - b.row)[0];
 
-  let reservedRows = 0;
-  while (occupiedRows.has(reservedRows)) {
-    reservedRows += 1;
-  }
+  return firstNormal?.top ? firstNormal.top + 4 : 0;
+}
 
-  return reservedRows ? reservedRows * (SPAN_DEFAULT_HEIGHT + SPAN_GAP) + 4 : 0;
+function jobsSpanningStation(jobs: Job[], station: Station) {
+  return sortJobs(jobs.filter(job => (
+    stationOf(job) !== 'completed' && stageSpanForJob(job).includes(station)
+  )));
 }
 
 function shiftedSpanForStage(job: Job, targetStage: Station) {
@@ -1106,6 +1104,43 @@ function insertionSortsIntoPlace(list: Job[], index: number, order: number) {
     jobIndex === index ? { ...job, dashboard_order: String(order) } : job
   ));
   return jobKeysMatch(nextList, sortJobs(nextList));
+}
+
+function orderAboveJobs(jobs: Job[]) {
+  const orders = jobs.map(dashboardOrder);
+  if (!orders.length) return 1;
+  const min = Math.min(...orders);
+  return min > 0 ? min / 2 : min - 1;
+}
+
+function resolveColumnDropFromPoint(
+  x: number,
+  y: number,
+  draggingId: string,
+): { droppableId: Station; index: number } | null {
+  if (typeof document === 'undefined') return null;
+
+  const section = document.elementsFromPoint(x, y).find((node): node is Element => (
+    node instanceof Element && node.hasAttribute('data-station')
+  ));
+  const stationId = section?.getAttribute('data-station') || '';
+  if (!section || !isStationDroppable(stationId)) return null;
+
+  const draggingKey = draggingId.replace(/^span-/, '');
+  const cards = [...section.querySelectorAll('[data-column-job-key]')].filter((node): node is HTMLElement => (
+    node instanceof HTMLElement && node.dataset.columnJobKey !== draggingKey
+  ));
+
+  let index = cards.length;
+  for (let cardIndex = 0; cardIndex < cards.length; cardIndex += 1) {
+    const rect = cards[cardIndex].getBoundingClientRect();
+    if (y < rect.top + rect.height / 2) {
+      index = cardIndex;
+      break;
+    }
+  }
+
+  return { droppableId: stationId, index };
 }
 
 function StatusPill({ children, color }: { children: React.ReactNode; color: string }) {
@@ -1483,7 +1518,17 @@ function Pipeline({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStation, setDragOverStation] = useState<Station | null>(null);
   const lastStationDropRef = useRef<{ droppableId: Station; index: number } | null>(null);
+  const pointerRef = useRef({ x: 0, y: 0 });
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!draggingId) return undefined;
+    const onPointerMove = (event: PointerEvent) => {
+      pointerRef.current = { x: event.clientX, y: event.clientY };
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    return () => window.removeEventListener('pointermove', onPointerMove);
+  }, [draggingId]);
 
   const saveMovedJob = async (job: Job, stage: DashboardStage, order: number) => {
     const response = await persistJobPosition(job, stage, order);
@@ -1526,9 +1571,12 @@ function Pipeline({
 
     const fromId = result.source.droppableId;
     const fromStretched = fromId === STRETCHED_DROPPABLE_ID;
-    let toId = result.destination?.droppableId;
-    let destinationIndex = result.destination?.index ?? 0;
-    let toStretched = toId === STRETCHED_DROPPABLE_ID;
+    const hitDrop = fromStretched
+      ? null
+      : resolveColumnDropFromPoint(pointerRef.current.x, pointerRef.current.y, result.draggableId);
+    let toId = hitDrop?.droppableId ?? result.destination?.droppableId;
+    let destinationIndex = hitDrop?.index ?? result.destination?.index ?? 0;
+    let toStretched = !hitDrop && toId === STRETCHED_DROPPABLE_ID;
     const activeJobs = jobs.filter(job => stationOf(job) !== 'completed');
     const visibleActiveJobs = visibleJobs.filter(job => stationOf(job) !== 'completed');
     const hiddenJobs = jobs.filter(job => stationOf(job) === 'completed');
@@ -1545,7 +1593,7 @@ function Pipeline({
     // used to come through as the overlay (or as no destination, because that
     // overlay is drop-disabled) and were either ignored or appended at the
     // bottom — so a card dragged to #1 snapped back to its old spot.
-    if ((!result.destination || toStretched) && !fromStretched) {
+    if (!hitDrop && (!result.destination || toStretched) && !fromStretched) {
       const fallbackStation = lastStationDrop?.droppableId ?? hoveredStation;
       if (!fallbackStation) return;
       toId = fallbackStation;
@@ -1556,7 +1604,18 @@ function Pipeline({
     }
 
     if (!toId) return;
-    if (fromId === toId && destinationIndex === result.source.index) return;
+    if (fromId === toId && destinationIndex === result.source.index) {
+      const droppingAboveStretched = isStationDroppable(fromId)
+        && jobsSpanningStation(visibleActiveJobs, fromId)
+          .filter(job => stageSpanForJob(job).length > 1)
+          .some(job => {
+            const el = document.querySelector(`[data-span-job-key="${jobKey(job)}"]`);
+            if (!(el instanceof HTMLElement)) return false;
+            const rect = el.getBoundingClientRect();
+            return pointerRef.current.y < rect.top + rect.height / 2;
+          });
+      if (!droppingAboveStretched) return;
+    }
 
     const sourceList = fromStretched ? stretchedJobs(visibleActiveJobs) : visibleColumnJobs(fromId as Station);
     const destinationList = fromId === toId
@@ -1592,7 +1651,23 @@ function Pipeline({
     }
 
     let destinationAfterMove = fromId === toId ? sourceList : destinationList;
-    const movedOrder = orderForInsertion(destinationAfterMove, destinationIndex);
+    let movedOrder = orderForInsertion(destinationAfterMove, destinationIndex);
+    if (destinationIndex === 0 && toId && isStationDroppable(toId)) {
+      const aboveStretched = jobsSpanningStation(visibleActiveJobs, toId)
+        .filter(job => jobKey(job) !== jobKey(moved) && stageSpanForJob(job).length > 1)
+        .filter(job => {
+          const el = document.querySelector(`[data-span-job-key="${jobKey(job)}"]`);
+          if (!(el instanceof HTMLElement)) return true;
+          const rect = el.getBoundingClientRect();
+          return pointerRef.current.y < rect.top + rect.height / 2;
+        });
+      if (aboveStretched.length) {
+        movedOrder = orderAboveJobs([
+          ...aboveStretched,
+          ...destinationAfterMove.slice(1),
+        ]);
+      }
+    }
     let persistColumn = false;
     if (insertionSortsIntoPlace(destinationAfterMove, destinationIndex, movedOrder)) {
       destinationAfterMove = destinationAfterMove.map((job, index) => (
@@ -1662,7 +1737,8 @@ function Pipeline({
     return <div style={{ color: COLORS.muted, padding: '24px' }}>Loading board...</div>;
   }
 
-  const spanLayout = isMobile ? [] : layoutStretchedJobs(visibleJobs);
+  const boardLayout = isMobile ? [] : layoutBoard(visibleJobs);
+  const spanLayout = boardLayout.filter(entry => entry.stretched);
   const renderedSpanKeys = new Set(spanLayout.map(entry => jobKey(entry.job)).filter(Boolean));
   const spanLayerHeight = spanLayout.length
     ? Math.max(...spanLayout.map(entry => entry.top + SPAN_DEFAULT_HEIGHT + SPAN_GAP))
@@ -1678,68 +1754,86 @@ function Pipeline({
         position: 'relative',
       }}>
         {!isMobile && spanLayout.length > 0 && (
-          <Droppable droppableId={STRETCHED_DROPPABLE_ID} isDropDisabled>
-            {provided => (
-              <div
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                aria-label="Stretched production jobs"
-                style={{
-                  display: 'grid',
-                  gap: '10px',
-                  gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-                  height: `${spanLayerHeight}px`,
-                  left: 0,
-                  pointerEvents: 'none',
-                  position: 'absolute',
-                  right: 0,
-                  top: '96px',
-                  zIndex: 20,
-                }}>
-                {spanLayout.map((entry, index) => {
-                  const { job, startIndex, endIndex, row } = entry;
-                  const key = jobKey(job);
-                  const stretch = stretchForJob(job, isMobile);
-                  const isDraggingNormalJob = Boolean(draggingId && !draggingId.startsWith('span-'));
-                  const isThisStretchedCard = draggingId === `span-${key}`;
-                  return (
-                    <Draggable key={`span-${key}`} draggableId={`span-${key}`} index={index}>
-                      {(dragProvided, dragSnapshot) => (
-                        <div
-                          ref={dragProvided.innerRef}
-                          {...dragProvided.draggableProps}
-                          style={{
-                            ...dragProvided.draggableProps.style,
-                            gridColumn: `${startIndex + 1} / ${endIndex + 2}`,
-                            gridRow: `${row + 1}`,
-                            minWidth: 0,
-                            opacity: dragSnapshot.isDragging ? 0.88 : 1,
-                            pointerEvents: isDraggingNormalJob && !isThisStretchedCard ? 'none' : 'auto',
-                          }}
-                          data-job-key={key}
-                        >
-                          <JobCard
-                            job={job}
-                            onOpen={() => onJobOpen(job)}
-                            onComplete={() => setConfirmCompleteJob(job)}
-                            dragHandleProps={dragProvided.dragHandleProps}
-                            stretch={stretch}
-                          />
-                        </div>
-                      )}
-                    </Draggable>
-                  );
-                })}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
+          <div
+            aria-label="Stretched production jobs"
+            style={{
+              display: 'grid',
+              gap: '10px',
+              gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+              gridTemplateRows: `${Math.max(spanLayerHeight, SPAN_DEFAULT_HEIGHT)}px`,
+              height: `${spanLayerHeight}px`,
+              left: 0,
+              pointerEvents: 'none',
+              position: 'absolute',
+              right: 0,
+              top: '96px',
+              zIndex: 20,
+            }}
+          >
+            <Droppable droppableId={STRETCHED_DROPPABLE_ID} isDropDisabled>
+              {provided => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  style={{ display: 'contents' }}
+                >
+                  {spanLayout.map((entry, index) => {
+                    const { job, startIndex, endIndex } = entry;
+                    const key = jobKey(job);
+                    const stretch = stretchForJob(job, isMobile);
+                    const isDraggingNormalJob = Boolean(draggingId && !draggingId.startsWith('span-'));
+                    const isThisStretchedCard = draggingId === `span-${key}`;
+                    return (
+                      <Draggable key={`span-${key}`} draggableId={`span-${key}`} index={index}>
+                        {(dragProvided, dragSnapshot) => (
+                          <div
+                            ref={dragProvided.innerRef}
+                            {...dragProvided.draggableProps}
+                            style={{
+                              ...dragProvided.draggableProps.style,
+                              alignSelf: 'start',
+                              gridColumn: `${startIndex + 1} / ${endIndex + 2}`,
+                              gridRow: '1',
+                              height: SPAN_DEFAULT_HEIGHT,
+                              marginTop: entry.top,
+                              minWidth: 0,
+                              opacity: dragSnapshot.isDragging ? 0.88 : 1,
+                              pointerEvents: isDraggingNormalJob && !isThisStretchedCard ? 'none' : 'auto',
+                            }}
+                            data-job-key={key}
+                            data-span-job-key={key}
+                          >
+                            <JobCard
+                              job={job}
+                              onOpen={() => onJobOpen(job)}
+                              onComplete={() => setConfirmCompleteJob(job)}
+                              dragHandleProps={dragProvided.dragHandleProps}
+                              stretch={stretch}
+                            />
+                          </div>
+                        )}
+                      </Draggable>
+                    );
+                  })}
+                  <div style={{
+                    gridColumn: '1',
+                    height: 0,
+                    overflow: 'hidden',
+                    pointerEvents: 'none',
+                    width: 0,
+                  }}>
+                    {provided.placeholder}
+                  </div>
+                </div>
+              )}
+            </Droppable>
+          </div>
         )}
         {STATIONS.map(station => {
           const meta = STATION_META[station];
           const list = stationJobs(visibleJobs, station).filter(job => isMobile || !renderedSpanKeys.has(jobKey(job)));
           const isNowPressing = station === 'now_pressing';
-          const reservedSpanHeight = isMobile ? 0 : reservedSpanHeightForStation(spanLayout, station);
+          const reservedSpanHeight = isMobile ? 0 : reservedSpanHeightForStation(boardLayout, station);
 
           return (
             <Droppable droppableId={station} key={station}>
@@ -1748,6 +1842,7 @@ function Pipeline({
                   id={stationAnchor(station)}
                   ref={provided.innerRef}
                   {...provided.droppableProps}
+                  data-station={station}
                   style={{
                     background: snapshot.isDraggingOver ? `${meta.color}14` : COLORS.panel,
                     border: `1px solid ${isNowPressing ? `${meta.color}88` : COLORS.border}`,
@@ -1818,6 +1913,7 @@ function Pipeline({
                               opacity: dragSnapshot.isDragging ? 0.88 : 1,
                             }}
                             data-job-key={jobKey(job)}
+                            data-column-job-key={jobKey(job)}
                           >
                             <JobCard
                               job={job}
