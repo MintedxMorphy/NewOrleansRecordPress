@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { DragDropContext, Draggable, Droppable, DraggableProvidedDragHandleProps, DropResult, DragUpdate } from '@hello-pangea/dnd';
+import { packSkyline } from '@/lib/dashboard-pack';
 import {
   BadgeCheck,
   Boxes,
@@ -112,9 +113,6 @@ const RUSH_MARKER = '[Rush Order]';
 const STAGE_SPAN_MARKER_RE = /\[Stage\s+Span:\s*([^\]]+)\]/i;
 const STAGE_SPAN_MARKER_GLOBAL_RE = /\[Stage\s+Span:\s*[^\]]+\]/gi;
 const STRETCHED_DROPPABLE_ID = '__stretched_jobs__';
-const SPAN_GAP = 10;
-const SPAN_DEFAULT_HEIGHT = 240;
-const NORMAL_ROW_HEIGHT = 430;
 
 function value(job: Job, keys: string[]) {
   for (const key of keys) {
@@ -849,87 +847,92 @@ type BoardLayoutEntry = {
   job: Job;
   startIndex: number;
   endIndex: number;
-  row: number;
   top: number;
+  height: number;
   stretched: boolean;
 };
 
 type SpanLayoutEntry = Omit<BoardLayoutEntry, 'stretched'>;
+type ColumnSlot =
+  | { kind: 'gap'; height: number }
+  | { kind: 'span'; height: number; entry: BoardLayoutEntry }
+  | { kind: 'job'; entry: BoardLayoutEntry };
 
-function layoutBoard(jobs: Job[]): BoardLayoutEntry[] {
-  const occupiedRows: boolean[][] = [];
-  const packed: Array<Omit<BoardLayoutEntry, 'top'>> = [];
-
-  for (const job of sortJobs(jobs.filter(candidate => stationOf(candidate) !== 'completed'))) {
-    const span = stageSpanForJob(job);
-    const stretched = span.length > 1;
-    const startIndex = stretched
-      ? STATIONS.indexOf(span[0])
-      : STATIONS.indexOf(stationOf(job) as Station);
-    const endIndex = stretched
-      ? STATIONS.indexOf(span[span.length - 1])
-      : startIndex;
-
-    if (startIndex < 0 || endIndex < 0) continue;
-
-    let row = 0;
-    while (occupiedRows[row]?.slice(startIndex, endIndex + 1).some(Boolean)) {
-      row += 1;
-    }
-
-    if (!occupiedRows[row]) occupiedRows[row] = STATIONS.map(() => false);
-    for (let index = startIndex; index <= endIndex; index += 1) {
-      occupiedRows[row][index] = true;
-    }
-
-    packed.push({ job, startIndex, endIndex, row, stretched });
-  }
-
-  const heightForStationRow = (stationIndex: number, row: number) => {
-    const item = packed.find(entry => (
-      entry.row === row && stationIndex >= entry.startIndex && stationIndex <= entry.endIndex
-    ));
-    if (!item) return 0;
-    return item.stretched ? SPAN_DEFAULT_HEIGHT : NORMAL_ROW_HEIGHT;
-  };
-
-  return packed.map(entry => {
-    const top = STATIONS
-      .slice(entry.startIndex, entry.endIndex + 1)
-      .map((_, offset) => {
-        const stationIndex = entry.startIndex + offset;
-        let stationTop = 0;
-        for (let row = 0; row < entry.row; row += 1) {
-          const rowHeight = heightForStationRow(stationIndex, row);
-          if (rowHeight > 0) stationTop += rowHeight + SPAN_GAP;
-        }
-        return stationTop;
-      })
-      .reduce((max, stationTop) => Math.max(max, stationTop), 0);
-
-    return { ...entry, top };
-  });
+function estimateCardHeight(job: Job) {
+  const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
+  const notes = value(job, ['notes', 'Notes', 'Project Notes', 'Production Notes']);
+  const dashNotes = visibleDashNotes(rawDashNotes);
+  const quantity = numericValue(value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']));
+  const shipments = jobShipments(job);
+  const stretched = stageSpanForJob(job).length > 1;
+  let height = 128;
+  if (stretched) height += 10;
+  if (notes || dashNotes) height += 44;
+  if (shipments.length) height += 32;
+  if (stationOf(job) === 'now_pressing' && quantity > 0) height += 72;
+  if (stationOf(job) === 'shipping') height += 44;
+  if (isRushOrder(rawDashNotes)) height += 6;
+  return height;
 }
 
-function layoutStretchedJobs(jobs: Job[]): SpanLayoutEntry[] {
-  return layoutBoard(jobs)
+function layoutBoard(jobs: Job[], heightByKey: Record<string, number> = {}): BoardLayoutEntry[] {
+  const items = jobs
+    .filter(candidate => stationOf(candidate) !== 'completed')
+    .map(job => {
+      const span = stageSpanForJob(job);
+      const stretched = span.length > 1;
+      const startIndex = stretched
+        ? STATIONS.indexOf(span[0])
+        : STATIONS.indexOf(stationOf(job) as Station);
+      const endIndex = stretched
+        ? STATIONS.indexOf(span[span.length - 1])
+        : startIndex;
+      const key = jobKey(job);
+      return {
+        id: key,
+        start: startIndex,
+        end: endIndex,
+        height: heightByKey[key] || estimateCardHeight(job),
+        sort: dashboardOrder(job),
+        tiebreak: key,
+        job,
+        stretched,
+      };
+    })
+    .filter(item => item.start >= 0 && item.end >= item.start);
+
+  return packSkyline(items, STATIONS.length, 0).map(entry => ({
+    job: entry.job,
+    startIndex: entry.start,
+    endIndex: entry.end,
+    top: entry.top,
+    height: entry.height,
+    stretched: entry.stretched,
+  }));
+}
+
+function layoutStretchedJobs(jobs: Job[], heightByKey: Record<string, number> = {}): SpanLayoutEntry[] {
+  return layoutBoard(jobs, heightByKey)
     .filter(entry => entry.stretched)
     .map(({ stretched: _stretched, ...entry }) => entry);
 }
 
-function reservedSpanHeightForStation(board: BoardLayoutEntry[], station: Station) {
+function columnSlots(board: BoardLayoutEntry[], station: Station): ColumnSlot[] {
   const stationIndex = STATIONS.indexOf(station);
-  const firstNormal = board
-    .filter(entry => !entry.stretched && entry.startIndex === stationIndex)
-    .sort((a, b) => a.row - b.row)[0];
+  const occupying = board
+    .filter(entry => stationIndex >= entry.startIndex && stationIndex <= entry.endIndex)
+    .sort((a, b) => a.top - b.top || jobKey(a.job).localeCompare(jobKey(b.job)));
 
-  return firstNormal?.top ? firstNormal.top + 4 : 0;
-}
-
-function jobsSpanningStation(jobs: Job[], station: Station) {
-  return sortJobs(jobs.filter(job => (
-    stationOf(job) !== 'completed' && stageSpanForJob(job).includes(station)
-  )));
+  const slots: ColumnSlot[] = [];
+  let cursor = 0;
+  for (const entry of occupying) {
+    const hole = entry.top - cursor;
+    if (hole > 1) slots.push({ kind: 'gap', height: hole });
+    if (entry.stretched) slots.push({ kind: 'span', height: entry.height, entry });
+    else slots.push({ kind: 'job', entry });
+    cursor = entry.top + entry.height;
+  }
+  return slots;
 }
 
 function shiftedSpanForStage(job: Job, targetStage: Station) {
@@ -1127,13 +1130,24 @@ function resolveColumnDropFromPoint(
   if (!section || !isStationDroppable(stationId)) return null;
 
   const draggingKey = draggingId.replace(/^span-/, '');
-  const cards = [...section.querySelectorAll('[data-column-job-key]')].filter((node): node is HTMLElement => (
-    node instanceof HTMLElement && node.dataset.columnJobKey !== draggingKey
-  ));
+  const cards = [
+    ...section.querySelectorAll('[data-column-job-key]'),
+    ...document.querySelectorAll(`[data-span-stations~="${stationId}"]`),
+  ].filter((node): node is HTMLElement => node instanceof HTMLElement);
 
-  let index = cards.length;
-  for (let cardIndex = 0; cardIndex < cards.length; cardIndex += 1) {
-    const rect = cards[cardIndex].getBoundingClientRect();
+  const unique: HTMLElement[] = [];
+  const seen = new Set<string>();
+  for (const card of cards) {
+    const key = card.dataset.columnJobKey || card.dataset.spanJobKey || '';
+    if (!key || key === draggingKey || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(card);
+  }
+  unique.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+
+  let index = unique.length;
+  for (let cardIndex = 0; cardIndex < unique.length; cardIndex += 1) {
+    const rect = unique[cardIndex].getBoundingClientRect();
     if (y < rect.top + rect.height / 2) {
       index = cardIndex;
       break;
@@ -1519,6 +1533,9 @@ function Pipeline({
   const [dragOverStation, setDragOverStation] = useState<Station | null>(null);
   const lastStationDropRef = useRef<{ droppableId: Station; index: number } | null>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const [cardHeights, setCardHeights] = useState<Record<string, number>>({});
+  const [overlayTop, setOverlayTop] = useState(96);
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -1529,6 +1546,39 @@ function Pipeline({
     window.addEventListener('pointermove', onPointerMove);
     return () => window.removeEventListener('pointermove', onPointerMove);
   }, [draggingId]);
+
+  const rememberCardHeight = useCallback((key: string, height: number) => {
+    if (!key || height < 8) return;
+    setCardHeights(current => {
+      if (Math.abs((current[key] || 0) - height) < 2) return current;
+      return { ...current, [key]: height };
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    const board = boardRef.current;
+    if (!board) return undefined;
+
+    const cardArea = board.querySelector('[data-station-cards]');
+    if (cardArea instanceof HTMLElement) {
+      const nextTop = cardArea.getBoundingClientRect().top - board.getBoundingClientRect().top;
+      if (Math.abs(nextTop - overlayTop) > 1) setOverlayTop(nextTop);
+    }
+
+    const syncHeights = () => {
+      board.querySelectorAll<HTMLElement>('[data-height-key]').forEach(node => {
+        if (draggingId && (node.dataset.heightKey === draggingId || draggingId === `span-${node.dataset.heightKey}`)) {
+          return;
+        }
+        rememberCardHeight(node.dataset.heightKey || '', node.getBoundingClientRect().height);
+      });
+    };
+
+    const observer = new ResizeObserver(syncHeights);
+    board.querySelectorAll('[data-height-key]').forEach(node => observer.observe(node));
+    syncHeights();
+    return () => observer.disconnect();
+  }, [draggingId, overlayTop, rememberCardHeight, visibleJobs]);
 
   const saveMovedJob = async (job: Job, stage: DashboardStage, order: number) => {
     const response = await persistJobPosition(job, stage, order);
@@ -1571,9 +1621,7 @@ function Pipeline({
 
     const fromId = result.source.droppableId;
     const fromStretched = fromId === STRETCHED_DROPPABLE_ID;
-    const hitDrop = fromStretched
-      ? null
-      : resolveColumnDropFromPoint(pointerRef.current.x, pointerRef.current.y, result.draggableId);
+    const hitDrop = resolveColumnDropFromPoint(pointerRef.current.x, pointerRef.current.y, result.draggableId);
     let toId = hitDrop?.droppableId ?? result.destination?.droppableId;
     let destinationIndex = hitDrop?.index ?? result.destination?.index ?? 0;
     let toStretched = !hitDrop && toId === STRETCHED_DROPPABLE_ID;
@@ -1581,7 +1629,7 @@ function Pipeline({
     const visibleActiveJobs = visibleJobs.filter(job => stationOf(job) !== 'completed');
     const hiddenJobs = jobs.filter(job => stationOf(job) === 'completed');
     const activeSpanKeys = new Set(
-      (isMobile ? [] : layoutStretchedJobs(visibleJobs))
+      (isMobile ? [] : layoutStretchedJobs(visibleJobs, cardHeights))
         .map(entry => jobKey(entry.job))
         .filter(Boolean)
     );
@@ -1589,10 +1637,6 @@ function Pipeline({
       stationJobs(visibleActiveJobs, station).filter(job => isMobile || !activeSpanKeys.has(jobKey(job)))
     );
 
-    // The stretched-job overlay sits at the TOP of every column. Drops there
-    // used to come through as the overlay (or as no destination, because that
-    // overlay is drop-disabled) and were either ignored or appended at the
-    // bottom — so a card dragged to #1 snapped back to its old spot.
     if (!hitDrop && (!result.destination || toStretched) && !fromStretched) {
       const fallbackStation = lastStationDrop?.droppableId ?? hoveredStation;
       if (!fallbackStation) return;
@@ -1603,37 +1647,27 @@ function Pipeline({
         : 0;
     }
 
-    if (!toId) return;
-    if (fromId === toId && destinationIndex === result.source.index) {
-      const droppingAboveStretched = isStationDroppable(fromId)
-        && jobsSpanningStation(visibleActiveJobs, fromId)
-          .filter(job => stageSpanForJob(job).length > 1)
-          .some(job => {
-            const el = document.querySelector(`[data-span-job-key="${jobKey(job)}"]`);
-            if (!(el instanceof HTMLElement)) return false;
-            const rect = el.getBoundingClientRect();
-            return pointerRef.current.y < rect.top + rect.height / 2;
-          });
-      if (!droppingAboveStretched) return;
-    }
-
-    const sourceList = fromStretched ? stretchedJobs(visibleActiveJobs) : visibleColumnJobs(fromId as Station);
-    const destinationList = fromId === toId
-      ? sourceList
-      : toStretched
-        ? stretchedJobs(visibleActiveJobs)
-        : visibleColumnJobs(toId as Station);
+    const sourceList = fromStretched
+      ? stretchedJobs(visibleActiveJobs)
+      : isStationDroppable(fromId)
+        ? visibleColumnJobs(fromId)
+        : [];
     const [moved] = sourceList.splice(result.source.index, 1);
-
     if (!moved) return;
 
-    const insertList = fromId === toId ? sourceList : destinationList;
-    destinationIndex = Math.max(0, Math.min(destinationIndex, insertList.length));
+    const dropStation = toId && isStationDroppable(toId)
+      ? toId
+      : fromStretched && hoveredStation
+        ? hoveredStation
+        : null;
+    if (!dropStation) return;
 
-    const targetStage = toStretched ? stationOf(moved) : (toId as Station);
+    const currentSpan = stageSpanForJob(moved);
+    const keepStretch = fromStretched && currentSpan.includes(dropStation);
+    const targetStage = keepStretch ? stationOf(moved) : dropStation;
     const rawDashNotes = value(moved, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
-    const preservedSpan = fromStretched && !toStretched
-      ? shiftedSpanForStage(moved, targetStage as Station)
+    const preservedSpan = fromStretched && !keepStretch
+      ? shiftedSpanForStage(moved, dropStation)
       : undefined;
     const nextDashNotes = preservedSpan
       ? dashNotesWithDashboardMarkers(rawDashNotes, visibleDashNotes(rawDashNotes), { stageSpanOverride: preservedSpan })
@@ -1644,29 +1678,21 @@ function Pipeline({
       ...(nextDashNotes !== undefined ? { dash_notes: nextDashNotes, 'Dash Notes': nextDashNotes } : {}),
     };
 
-    if (fromId === toId) {
-      sourceList.splice(destinationIndex, 0, movedNext);
-    } else {
-      destinationList.splice(destinationIndex, 0, movedNext);
-    }
+    const destinationAfterVisual = stationVisualJobs(visibleActiveJobs, dropStation)
+      .filter(job => jobKey(job) !== jobKey(moved));
+    destinationIndex = Math.max(0, Math.min(destinationIndex, destinationAfterVisual.length));
+    const previousVisualIndex = stationVisualJobs(visibleActiveJobs, dropStation)
+      .findIndex(job => jobKey(job) === jobKey(moved));
+    const sameVisualColumn = keepStretch || fromId === dropStation;
+    if (sameVisualColumn && previousVisualIndex === destinationIndex && !nextDashNotes) return;
 
-    let destinationAfterMove = fromId === toId ? sourceList : destinationList;
+    destinationAfterVisual.splice(destinationIndex, 0, movedNext);
+
+    let destinationAfterMove = destinationAfterVisual;
     let movedOrder = orderForInsertion(destinationAfterMove, destinationIndex);
-    if (destinationIndex === 0 && toId && isStationDroppable(toId)) {
-      const aboveStretched = jobsSpanningStation(visibleActiveJobs, toId)
-        .filter(job => jobKey(job) !== jobKey(moved) && stageSpanForJob(job).length > 1)
-        .filter(job => {
-          const el = document.querySelector(`[data-span-job-key="${jobKey(job)}"]`);
-          if (!(el instanceof HTMLElement)) return true;
-          const rect = el.getBoundingClientRect();
-          return pointerRef.current.y < rect.top + rect.height / 2;
-        });
-      if (aboveStretched.length) {
-        movedOrder = orderAboveJobs([
-          ...aboveStretched,
-          ...destinationAfterMove.slice(1),
-        ]);
-      }
+    const neighborsToBeat = destinationAfterMove.slice(destinationIndex + 1);
+    if (neighborsToBeat.length && destinationIndex === 0) {
+      movedOrder = orderAboveJobs(neighborsToBeat);
     }
     let persistColumn = false;
     if (insertionSortsIntoPlace(destinationAfterMove, destinationIndex, movedOrder)) {
@@ -1674,9 +1700,7 @@ function Pipeline({
         index === destinationIndex ? { ...movedNext, dashboard_order: String(movedOrder) } : job
       ));
     } else {
-      destinationAfterMove = withSequentialOrders(
-        destinationAfterMove.map((job, index) => (index === destinationIndex ? movedNext : job))
-      );
+      destinationAfterMove = withSequentialOrders(destinationAfterMove);
       persistColumn = true;
     }
 
@@ -1737,22 +1761,24 @@ function Pipeline({
     return <div style={{ color: COLORS.muted, padding: '24px' }}>Loading board...</div>;
   }
 
-  const boardLayout = isMobile ? [] : layoutBoard(visibleJobs);
+  const boardLayout = isMobile ? [] : layoutBoard(visibleJobs, cardHeights);
   const spanLayout = boardLayout.filter(entry => entry.stretched);
-  const renderedSpanKeys = new Set(spanLayout.map(entry => jobKey(entry.job)).filter(Boolean));
   const spanLayerHeight = spanLayout.length
-    ? Math.max(...spanLayout.map(entry => entry.top + SPAN_DEFAULT_HEIGHT + SPAN_GAP))
+    ? Math.max(...spanLayout.map(entry => entry.top + entry.height))
     : 0;
 
   return (
     <DragDropContext onDragStart={onDragStart} onDragUpdate={onDragUpdate} onDragEnd={onDragEnd}>
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(0, 1fr))',
-        gap: isMobile ? '14px' : '10px',
-        paddingBottom: '12px',
-        position: 'relative',
-      }}>
+      <div
+        ref={boardRef}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(0, 1fr))',
+          gap: isMobile ? '14px' : '10px',
+          paddingBottom: '12px',
+          position: 'relative',
+        }}
+      >
         {!isMobile && spanLayout.length > 0 && (
           <div
             aria-label="Stretched production jobs"
@@ -1760,13 +1786,13 @@ function Pipeline({
               display: 'grid',
               gap: '10px',
               gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-              gridTemplateRows: `${Math.max(spanLayerHeight, SPAN_DEFAULT_HEIGHT)}px`,
+              gridTemplateRows: `${Math.max(spanLayerHeight, 1)}px`,
               height: `${spanLayerHeight}px`,
               left: 0,
               pointerEvents: 'none',
               position: 'absolute',
               right: 0,
-              top: '96px',
+              top: `${overlayTop}px`,
               zIndex: 20,
             }}
           >
@@ -1794,7 +1820,6 @@ function Pipeline({
                               alignSelf: 'start',
                               gridColumn: `${startIndex + 1} / ${endIndex + 2}`,
                               gridRow: '1',
-                              height: SPAN_DEFAULT_HEIGHT,
                               marginTop: entry.top,
                               minWidth: 0,
                               opacity: dragSnapshot.isDragging ? 0.88 : 1,
@@ -1802,6 +1827,8 @@ function Pipeline({
                             }}
                             data-job-key={key}
                             data-span-job-key={key}
+                            data-span-stations={stageSpanForJob(job).join(' ')}
+                            data-height-key={key}
                           >
                             <JobCard
                               job={job}
@@ -1831,9 +1858,12 @@ function Pipeline({
         )}
         {STATIONS.map(station => {
           const meta = STATION_META[station];
-          const list = stationJobs(visibleJobs, station).filter(job => isMobile || !renderedSpanKeys.has(jobKey(job)));
+          const slots = isMobile
+            ? stationJobs(visibleJobs, station).map(job => ({ kind: 'job' as const, entry: { job, startIndex: 0, endIndex: 0, top: 0, height: 0, stretched: false } }))
+            : columnSlots(boardLayout, station);
           const isNowPressing = station === 'now_pressing';
-          const reservedSpanHeight = isMobile ? 0 : reservedSpanHeightForStation(boardLayout, station);
+          const visualQueue = station === 'press_queue' ? stationVisualJobs(visibleJobs, station) : [];
+          let jobDragIndex = 0;
 
           return (
             <Droppable droppableId={station} key={station}>
@@ -1896,38 +1926,55 @@ function Pipeline({
                   </div>
 
                   <div
+                    data-station-cards="true"
                     style={{
                       borderRadius: '8px',
                       minHeight: isMobile ? '72px' : '540px',
-                      paddingTop: reservedSpanHeight ? `${reservedSpanHeight}px` : undefined,
                     }}
                   >
-                    {list.map((job, index) => (
-                      <Draggable key={jobKey(job)} draggableId={jobKey(job)} index={index}>
-                        {(dragProvided, dragSnapshot) => (
+                    {slots.map((slot, slotIndex) => {
+                      if (slot.kind === 'gap' || slot.kind === 'span') {
+                        return (
                           <div
-                            ref={dragProvided.innerRef}
-                            {...dragProvided.draggableProps}
-                            style={{
-                              ...dragProvided.draggableProps.style,
-                              opacity: dragSnapshot.isDragging ? 0.88 : 1,
-                            }}
-                            data-job-key={jobKey(job)}
-                            data-column-job-key={jobKey(job)}
-                          >
-                            <JobCard
-                              job={job}
-                              onOpen={() => onJobOpen(job)}
-                              onComplete={() => setConfirmCompleteJob(job)}
-                              dragHandleProps={dragProvided.dragHandleProps}
-                              compact={isMobile}
-                              queueRank={station === 'press_queue' ? index + 1 : undefined}
-                              stretch={stretchForJob(job, isMobile)}
-                            />
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
+                            key={`${station}-${slot.kind}-${slotIndex}`}
+                            aria-hidden="true"
+                            style={{ height: slot.height, pointerEvents: 'none' }}
+                          />
+                        );
+                      }
+
+                      const job = slot.entry.job;
+                      const index = jobDragIndex;
+                      jobDragIndex += 1;
+                      const visualIndex = visualQueue.findIndex(candidate => jobKey(candidate) === jobKey(job));
+                      return (
+                        <Draggable key={jobKey(job)} draggableId={jobKey(job)} index={index}>
+                          {(dragProvided, dragSnapshot) => (
+                            <div
+                              ref={dragProvided.innerRef}
+                              {...dragProvided.draggableProps}
+                              style={{
+                                ...dragProvided.draggableProps.style,
+                                opacity: dragSnapshot.isDragging ? 0.88 : 1,
+                              }}
+                              data-job-key={jobKey(job)}
+                              data-column-job-key={jobKey(job)}
+                              data-height-key={jobKey(job)}
+                            >
+                              <JobCard
+                                job={job}
+                                onOpen={() => onJobOpen(job)}
+                                onComplete={() => setConfirmCompleteJob(job)}
+                                dragHandleProps={dragProvided.dragHandleProps}
+                                compact={isMobile}
+                                queueRank={station === 'press_queue' && visualIndex >= 0 ? visualIndex + 1 : undefined}
+                                stretch={stretchForJob(job, isMobile)}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      );
+                    })}
                     {provided.placeholder}
                   </div>
                 </section>
