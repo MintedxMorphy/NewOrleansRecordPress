@@ -110,6 +110,8 @@ const COLORS = {
 
 const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2QqTZmnF/viwybIIrPi9Pd9Tyo?blocks=hide';
 const RUSH_MARKER = '[Rush Order]';
+const QUANTITY_KEYS = ['quantity', 'Quantity', 'Qty', 'Run Size'];
+const RECORDS_PRESSED_PER_DAY = 350;
 const STAGE_SPAN_MARKER_RE = /\[Stage\s+Span:\s*([^\]]+)\]/i;
 const STAGE_SPAN_MARKER_GLOBAL_RE = /\[Stage\s+Span:\s*[^\]]+\]/gi;
 const STRETCHED_DROPPABLE_ID = '__stretched_jobs__';
@@ -179,6 +181,42 @@ function manualRecordsPressed(job: Job) {
 
 function displayedRecordsPressed(job: Job) {
   return numericValue(value(job, ['records_pressed_total']));
+}
+
+function jobQuantity(job: Job) {
+  return numericValue(value(job, QUANTITY_KEYS));
+}
+
+function recordsLeftToPress(job: Job) {
+  const station = stationOf(job);
+  const qty = jobQuantity(job);
+  if (station === 'pre_production' || station === 'press_queue') return qty;
+  if (station === 'now_pressing') return Math.max(0, qty - displayedRecordsPressed(job));
+  return 0;
+}
+
+function pressBacklog(jobs: Job[]) {
+  const remaining = jobs.reduce((sum, job) => sum + recordsLeftToPress(job), 0);
+  return {
+    remaining,
+    perDay: RECORDS_PRESSED_PER_DAY,
+    days: remaining / RECORDS_PRESSED_PER_DAY,
+  };
+}
+
+function formatPressHorizon(days: number) {
+  if (!Number.isFinite(days) || days <= 0) return 'Caught up';
+  if (days < 1) return 'Under 1 day';
+  if (days < 14) {
+    const n = Math.max(1, Math.round(days));
+    return `${n} day${n === 1 ? '' : 's'} out`;
+  }
+  if (days < 60) {
+    const n = Math.max(1, Math.round(days / 7));
+    return `${n} week${n === 1 ? '' : 's'} out`;
+  }
+  const n = Math.max(1, Math.round(days / 30));
+  return `${n} month${n === 1 ? '' : 's'} out`;
 }
 
 function recordsPressedSinceBaseline(job: Job) {
@@ -3260,6 +3298,94 @@ function VendorInvoiceImportControl({
   );
 }
 
+function PressBacklogStat({
+  remaining,
+  perDay,
+  loading,
+  isMobile,
+}: {
+  remaining: number;
+  perDay: number;
+  loading: boolean;
+  isMobile: boolean;
+}) {
+  const horizon = formatPressHorizon(remaining / perDay);
+  const remainingLabel = loading ? '—' : remaining.toLocaleString();
+
+  return (
+    <div
+      aria-label={loading
+        ? 'Loading records still to press'
+        : `${remainingLabel} records still to press at ${perDay} a day, ${horizon}`}
+      style={{
+        alignItems: 'center',
+        background: COLORS.panel,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: '8px',
+        display: 'flex',
+        gap: isMobile ? '12px' : '16px',
+        minHeight: isMobile ? '52px' : '56px',
+        minWidth: 0,
+        padding: isMobile ? '10px 12px' : '8px 16px',
+        width: isMobile ? '100%' : 'min(440px, 100%)',
+      }}
+    >
+      <div style={{
+        alignItems: 'center',
+        background: `${COLORS.green}18`,
+        border: `1px solid ${COLORS.green}55`,
+        borderRadius: '50%',
+        color: COLORS.green,
+        display: 'grid',
+        flexShrink: 0,
+        height: isMobile ? '34px' : '38px',
+        placeItems: 'center',
+        width: isMobile ? '34px' : '38px',
+      }}>
+        <Disc3 size={isMobile ? 16 : 18} strokeWidth={2.4} />
+      </div>
+      <div style={{ display: 'flex', flex: 1, gap: isMobile ? '12px' : '18px', minWidth: 0 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Still to press
+          </div>
+          <div style={{
+            color: COLORS.green,
+            fontSize: isMobile ? '20px' : '22px',
+            fontVariantNumeric: 'tabular-nums',
+            fontWeight: 900,
+            letterSpacing: '-0.03em',
+            lineHeight: 1.15,
+          }}>
+            {remainingLabel}
+            <span style={{ color: COLORS.faint, fontSize: '12px', fontWeight: 700, letterSpacing: 0, marginLeft: '6px' }}>
+              records
+            </span>
+          </div>
+        </div>
+        <div style={{
+          borderLeft: `1px solid ${COLORS.border}`,
+          minWidth: 0,
+          paddingLeft: isMobile ? '12px' : '16px',
+        }}>
+          <div style={{ color: COLORS.gold, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            {perDay.toLocaleString()} / day
+          </div>
+          <div style={{
+            color: COLORS.text,
+            fontSize: isMobile ? '16px' : '18px',
+            fontWeight: 850,
+            lineHeight: 1.2,
+            whiteSpace: 'nowrap',
+          }}>
+            {loading ? '…' : horizon}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardClient({ jobs: initialJobs }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs ?? []);
   const [loading, setLoading] = useState(true);
@@ -3294,6 +3420,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   ), [jobs, normalizedSearch]);
   const activeJobs = jobs.filter(job => stationOf(job) !== 'completed');
   const visibleActiveJobs = visibleJobs.filter(job => stationOf(job) !== 'completed');
+  const backlog = useMemo(() => pressBacklog(jobs), [jobs]);
   const counts = useMemo(() => Object.fromEntries(
     STATIONS.map(station => [station, stationVisualJobs(visibleJobs, station).length])
   ) as Record<Station, number>, [visibleJobs]);
@@ -3454,15 +3581,15 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       padding: isMobile ? '12px' : '18px',
     }}>
       <header style={{
-        alignItems: isMobile ? 'flex-start' : 'flex-end',
+        alignItems: isMobile ? 'stretch' : 'center',
         display: 'flex',
         flexDirection: isMobile ? 'column' : 'row',
-        gap: isMobile ? '10px' : '18px',
+        gap: isMobile ? '12px' : '18px',
         justifyContent: 'space-between',
         margin: '0 auto 18px',
         maxWidth: '1920px',
       }}>
-        <div>
+        <div style={{ flexShrink: 0 }}>
           <div style={{ color: COLORS.green, fontSize: '12px', fontWeight: 950, letterSpacing: '0.12em', marginBottom: '7px', textTransform: 'uppercase' }}>
             New Orleans Record Press
           </div>
@@ -3470,9 +3597,58 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
             Press Room Production Pipeline
           </h1>
         </div>
-        <div style={{ color: COLORS.muted, fontSize: '12px', textAlign: isMobile ? 'left' : 'right' }}>
-          {loading ? 'Loading Airtable...' : `${activeJobs.length} active jobs`}
-          {source && <div style={{ marginTop: '4px' }}>Source: {source === 'airtable' ? 'Airtable' : 'Sheet fallback'}</div>}
+        <div style={{
+          display: 'flex',
+          flex: isMobile ? undefined : 1,
+          justifyContent: isMobile ? 'stretch' : 'center',
+          minWidth: 0,
+        }}>
+          <PressBacklogStat
+            remaining={backlog.remaining}
+            perDay={backlog.perDay}
+            loading={loading}
+            isMobile={isMobile}
+          />
+        </div>
+        <div style={{
+          alignItems: isMobile ? 'flex-start' : 'flex-end',
+          display: 'flex',
+          flexDirection: 'column',
+          flexShrink: 0,
+          gap: isMobile ? '0' : '8px',
+        }}>
+          <div style={{ color: COLORS.muted, fontSize: '12px', textAlign: isMobile ? 'left' : 'right' }}>
+            {loading ? 'Loading Airtable...' : `${activeJobs.length} active jobs`}
+            {source && <div style={{ marginTop: '4px' }}>Source: {source === 'airtable' ? 'Airtable' : 'Sheet fallback'}</div>}
+          </div>
+          {!isMobile && (
+            <div style={{ alignItems: 'center', display: 'flex', gap: '10px' }}>
+              <VendorInvoiceImportControl isMobile={isMobile} onApplied={refreshJobs} />
+              <BugReportControl isMobile={isMobile} />
+              <a
+                href={AIRTABLE_DATABASE_URL}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  background: COLORS.panel,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '8px',
+                  color: COLORS.text,
+                  fontSize: '24px',
+                  fontWeight: 900,
+                  lineHeight: 1,
+                  minHeight: '56px',
+                  padding: '0 18px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Airtable Database
+              </a>
+            </div>
+          )}
         </div>
       </header>
 
@@ -3514,6 +3690,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
             }}
           />
         </label>
+        {(normalizedSearch || isMobile) && (
         <div style={{
           alignItems: 'center',
           display: 'flex',
@@ -3526,31 +3703,36 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
               {visibleActiveJobs.length} shown
             </div>
           )}
-          <VendorInvoiceImportControl isMobile={isMobile} onApplied={refreshJobs} />
-          <BugReportControl isMobile={isMobile} />
-          <a
-            href={AIRTABLE_DATABASE_URL}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              background: COLORS.panel,
-              border: `1px solid ${COLORS.border}`,
-              borderRadius: '8px',
-              color: COLORS.text,
-              fontSize: isMobile ? '15px' : '24px',
-              fontWeight: 900,
-              lineHeight: 1,
-              minHeight: isMobile ? '44px' : '56px',
-              padding: isMobile ? '0 14px' : '0 18px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Airtable Database
-          </a>
+          {isMobile && (
+            <>
+              <VendorInvoiceImportControl isMobile={isMobile} onApplied={refreshJobs} />
+              <BugReportControl isMobile={isMobile} />
+              <a
+                href={AIRTABLE_DATABASE_URL}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  background: COLORS.panel,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: '8px',
+                  color: COLORS.text,
+                  fontSize: '15px',
+                  fontWeight: 900,
+                  lineHeight: 1,
+                  minHeight: '44px',
+                  padding: '0 14px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Airtable Database
+              </a>
+            </>
+          )}
         </div>
+        )}
       </section>
 
       <section style={{
