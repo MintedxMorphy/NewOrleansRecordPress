@@ -22,6 +22,7 @@ export interface NORPJob {
   jackets_arrived: string;
   ship_date: string;
   order_number: string;
+  invoice_total?: string;
   deposit: string;
   notes: string;
   dash_notes?: string;
