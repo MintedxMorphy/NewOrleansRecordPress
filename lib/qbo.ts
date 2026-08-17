@@ -333,3 +333,74 @@ export async function createDraftBill(params: CreateBillParams): Promise<CreateB
     return { error: e?.message ?? 'Unknown error' };
   }
 }
+
+export type QboInvoice = {
+  id: string;
+  docNumber: string;
+  customerName: string;
+  totalAmt: number;
+  balance: number;
+  amountPaid: number;
+  txnDate: string;
+  dueDate: string;
+  memo: string;
+  searchText: string;
+};
+
+function invoiceSearchText(inv: Record<string, any>) {
+  const customFields = Array.isArray(inv.CustomField)
+    ? inv.CustomField.map((field: any) => `${field?.Name || ''} ${field?.StringValue || ''}`).join(' ')
+    : '';
+  const lines = Array.isArray(inv.Line)
+    ? inv.Line.map((line: any) => `${line?.Description || ''} ${line?.SalesItemLineDetail?.ItemRef?.name || ''}`).join(' ')
+    : '';
+  return [
+    inv.DocNumber,
+    inv.CustomerRef?.name,
+    inv.PrivateNote,
+    inv.CustomerMemo?.value,
+    customFields,
+    lines,
+  ].filter(Boolean).join(' ');
+}
+
+function mapQboInvoice(inv: Record<string, any>): QboInvoice {
+  const totalAmt = parseFloat(inv.TotalAmt ?? '0') || 0;
+  const balance = parseFloat(inv.Balance ?? '0') || 0;
+  return {
+    id: String(inv.Id || ''),
+    docNumber: String(inv.DocNumber || ''),
+    customerName: String(inv.CustomerRef?.name || ''),
+    totalAmt,
+    balance,
+    amountPaid: totalAmt - balance,
+    txnDate: String(inv.TxnDate || ''),
+    dueDate: String(inv.DueDate || ''),
+    memo: String(inv.PrivateNote || inv.CustomerMemo?.value || ''),
+    searchText: invoiceSearchText(inv),
+  };
+}
+
+let invoiceCache: { at: number; invoices: QboInvoice[] } | null = null;
+const INVOICE_CACHE_MS = 5 * 60 * 1000;
+
+export async function listQboInvoices(options?: { force?: boolean }): Promise<QboInvoice[]> {
+  if (!process.env.QBO_CLIENT_ID || !process.env.QBO_REFRESH_TOKEN) return [];
+  if (!options?.force && invoiceCache && Date.now() - invoiceCache.at < INVOICE_CACHE_MS) {
+    return invoiceCache.invoices;
+  }
+
+  try {
+    const invoices: QboInvoice[] = [];
+    const query = encodeURIComponent('SELECT * FROM Invoice MAXRESULTS 1000');
+    const data = await qboFetch(`query?query=${query}&minorversion=65`);
+    const batch = data?.QueryResponse?.Invoice ?? [];
+    for (const inv of batch) invoices.push(mapQboInvoice(inv));
+    invoiceCache = { at: Date.now(), invoices };
+    return invoices;
+  } catch (error) {
+    console.error('[qbo] invoice list failed:', error);
+    return invoiceCache?.invoices || [];
+  }
+}
+

@@ -6,6 +6,15 @@ import { packSkyline } from '@/lib/dashboard-pack';
 import { createClient as createBrowserSupabase } from '@/lib/supabase/client';
 import { PRODUCTION_LOG_HEARTBEAT_MS, PRODUCTION_SYNC_POLL_MS, notifyProductionSync, subscribeProductionSync } from '@/lib/production-sync';
 import {
+  buildJobPnl,
+  estimatePvcCompound,
+  formatPvcRate,
+  PVC_COST_PER_RECORD,
+  PVC_COST_PER_RECORD_CLEAR_SPLATTER,
+  RECORDS_PRESSED_PER_DAY,
+  type JobPnl,
+} from '@/lib/job-pnl';
+import {
   BadgeCheck,
   Boxes,
   Bug,
@@ -113,9 +122,6 @@ const COLORS = {
 const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2QqTZmnF/viwybIIrPi9Pd9Tyo?blocks=hide';
 const RUSH_MARKER = '[Rush Order]';
 const QUANTITY_KEYS = ['quantity', 'Quantity', 'Qty', 'Run Size'];
-const RECORDS_PRESSED_PER_DAY = 350;
-const PVC_COST_PER_RECORD = 0.5;
-const PVC_COST_PER_RECORD_CLEAR_SPLATTER = 0.75;
 const STAGE_SPAN_MARKER_RE = /\[Stage\s+Span:\s*([^\]]+)\]/i;
 const STAGE_SPAN_MARKER_GLOBAL_RE = /\[Stage\s+Span:\s*[^\]]+\]/gi;
 const STRETCHED_DROPPABLE_ID = '__stretched_jobs__';
@@ -328,72 +334,6 @@ type VendorInvoiceParseResult = {
 
 function formatMoney(amount: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
-}
-
-function formatPvcRate(rate: number) {
-  return `$${rate.toFixed(2)} / record`;
-}
-
-function isClearOrSplatterColor(color: string) {
-  const text = color.toLowerCase();
-  return /\bsplatters?\b/.test(text)
-    || /\bsplattered\b/.test(text)
-    || /\bsplats?\b/.test(text)
-    || /\bclears?\b/.test(text)
-    || /\btransparent\b/.test(text);
-}
-
-function pvcRateForColor(color: string) {
-  return isClearOrSplatterColor(color) ? PVC_COST_PER_RECORD_CLEAR_SPLATTER : PVC_COST_PER_RECORD;
-}
-
-type PvcEstimateLine = {
-  label: string;
-  quantity: number;
-  rate: number;
-  cost: number;
-  premium: boolean;
-};
-
-function estimatePvcCompound(job: Job) {
-  const variants = jobRecords(job.variants);
-  const lines: PvcEstimateLine[] = [];
-
-  if (variants.length > 1) {
-    for (const variant of variants) {
-      const quantity = numericValue(String(variant.quantity ?? ''));
-      if (quantity <= 0) continue;
-      const label = String(variant.colors || variant.run_label || 'Variant').trim() || 'Variant';
-      const rate = pvcRateForColor(label);
-      lines.push({
-        label,
-        quantity,
-        rate,
-        cost: quantity * rate,
-        premium: rate === PVC_COST_PER_RECORD_CLEAR_SPLATTER,
-      });
-    }
-  }
-
-  if (!lines.length) {
-    const quantity = jobQuantity(job);
-    if (quantity <= 0) return null;
-    const label = value(job, ['colors', 'Colors', 'color', 'Color', 'Vinyl Color']) || 'Vinyl';
-    const rate = pvcRateForColor(label);
-    lines.push({
-      label,
-      quantity,
-      rate,
-      cost: quantity * rate,
-      premium: rate === PVC_COST_PER_RECORD_CLEAR_SPLATTER,
-    });
-  }
-
-  return {
-    lines,
-    total: lines.reduce((sum, line) => sum + line.cost, 0),
-    quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
-  };
 }
 
 function vendorCostSummary(job: Job): VendorCostSummary | null {
@@ -924,6 +864,113 @@ function PvcCompoundPanel({ job }: { job: Job }) {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function pnlFromJob(job: Job): JobPnl {
+  const raw = job.pnl;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'costTotal' in raw) {
+    return raw as JobPnl;
+  }
+  return buildJobPnl(job);
+}
+
+function JobPnlPanel({ job }: { job: Job }) {
+  const pnl = pnlFromJob(job);
+  const profitColor = pnl.grossProfit === null
+    ? COLORS.muted
+    : pnl.grossProfit >= 0 ? COLORS.green : COLORS.red;
+  const invoiceLabel = pnl.clientInvoiceSource === 'quickbooks'
+    ? 'QuickBooks'
+    : pnl.clientInvoiceSource === 'airtable'
+      ? 'Airtable'
+      : 'Not found';
+
+  return (
+    <div style={{
+      background: COLORS.card,
+      border: `1px solid ${COLORS.border}`,
+      borderRadius: '8px',
+      marginBottom: '22px',
+      padding: '14px',
+    }}>
+      <div style={{ color: COLORS.gold, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', marginBottom: '10px', textTransform: 'uppercase' }}>
+        Job P&L
+      </div>
+
+      <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', marginBottom: '12px' }}>
+        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
+          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Client Invoice</div>
+          <div style={{ color: COLORS.text, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>
+            {pnl.clientInvoice ? formatMoney(pnl.clientInvoice) : '—'}
+          </div>
+          <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>{invoiceLabel}</div>
+        </div>
+        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
+          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            {pnl.grossProfit === null ? 'Need Invoice' : pnl.grossProfit >= 0 ? 'Gross Profit' : 'Gross Loss'}
+          </div>
+          <div style={{ color: profitColor, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>
+            {pnl.grossProfit === null ? '—' : formatMoney(pnl.grossProfit)}
+          </div>
+          <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>
+            {pnl.marginPct === null ? 'Match a client invoice to compare' : `${pnl.marginPct.toFixed(1)}% margin`}
+          </div>
+        </div>
+      </div>
+
+      {pnl.clientInvoices.length > 0 && (
+        <div style={{ display: 'grid', gap: '6px', marginBottom: '12px' }}>
+          {pnl.clientInvoices.map(invoice => (
+            <div key={invoice.id} style={{ color: COLORS.muted, fontSize: '12px', lineHeight: 1.4 }}>
+              {invoice.docNumber ? `INV ${invoice.docNumber}` : 'Invoice'}
+              {invoice.customerName ? ` · ${invoice.customerName}` : ''}
+              {` · ${formatMoney(invoice.totalAmt)}`}
+              {invoice.balance > 0 ? ` · ${formatMoney(invoice.balance)} open` : ' · paid'}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: '8px' }}>
+        {pnl.costs.map(line => (
+          <div
+            key={line.key}
+            style={{
+              alignItems: 'start',
+              background: COLORS.panel,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: '8px',
+              display: 'flex',
+              gap: '10px',
+              justifyContent: 'space-between',
+              padding: '10px 12px',
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 850 }}>{line.label}</div>
+              <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px', lineHeight: 1.4 }}>{line.detail}</div>
+            </div>
+            <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
+              {formatMoney(line.amount)}
+            </div>
+          </div>
+        ))}
+        <div style={{
+          alignItems: 'center',
+          display: 'flex',
+          justifyContent: 'space-between',
+          padding: '4px 4px 0',
+        }}>
+          <div style={{ color: COLORS.muted, fontSize: '12px', fontWeight: 850, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            Projected job cost
+          </div>
+          <div style={{ color: COLORS.gold, fontSize: '16px', fontWeight: 950 }}>
+            {formatMoney(pnl.costTotal)}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2479,6 +2526,7 @@ function JobDrawer({
         </button>
 
         <JobLogisticsPanel job={job} onShipmentsChanged={onShipmentsChanged} />
+        <JobPnlPanel job={job} />
         <PvcCompoundPanel job={job} />
         <VendorCostsPanel job={job} />
 
