@@ -9,7 +9,7 @@ import { ensureCanonicalHeaders, getSheet } from '@/lib/sheets';
 import { matchJobFromShipmentText } from '@/lib/shipment-job-link';
 import { loadProductionJobsForVendorInvoices, type JobContext } from '@/lib/vendor-invoice-import';
 import { listQboInvoices } from '@/lib/qbo';
-import { buildJobPnl, clientInvoicesFromQbo } from '@/lib/job-pnl';
+import { assignClientInvoices, buildJobPnl } from '@/lib/job-pnl';
 
 export const dynamic = 'force-dynamic';
 
@@ -491,11 +491,11 @@ export async function GET() {
       console.error('[norp-jobs] QuickBooks invoice lookup failed:', e);
     }
 
-    const enriched = jobs.map(j => {
+    const withCosts = jobs.map(j => {
       const art = j.matrix ? artIndex[j.matrix] : undefined;
       const vendorCostSummary = vendorCostSummaryForJob(j, vendorCostSummaries);
       const shipments = shipmentsForJob(j, dashboardShipments);
-      const withCosts = {
+      return {
         ...j,
         art_received: !!art,
         art_received_date: art?.receivedDate ?? '',
@@ -515,12 +515,12 @@ export async function GET() {
           vendor_cost_categories: vendorCostSummary.categories,
         } : {}),
       };
-      const clientInvoices = clientInvoicesFromQbo(withCosts, qboInvoices);
-      return {
-        ...withCosts,
-        pnl: buildJobPnl(withCosts, clientInvoices),
-      };
     });
+    const assignedInvoices = assignClientInvoices(withCosts, qboInvoices);
+    const enriched = withCosts.map((job, index) => ({
+      ...job,
+      pnl: buildJobPnl(job, assignedInvoices[index] || []),
+    }));
 
     return NextResponse.json({
       count: enriched.length,

@@ -907,6 +907,11 @@ function JobPnlPanel({ job }: { job: Job }) {
             {pnl.clientInvoice ? formatMoney(pnl.clientInvoice) : '—'}
           </div>
           <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>{invoiceLabel}</div>
+          {pnl.clientInvoiceSource === 'none' && (
+            <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '6px', lineHeight: 1.4 }}>
+              No QuickBooks match yet. The board uses artist/customer, album title, order #, and matrix ID — a matrix ID is not required.
+            </div>
+          )}
         </div>
         <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
           <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
@@ -929,6 +934,9 @@ function JobPnlPanel({ job }: { job: Job }) {
               {invoice.customerName ? ` · ${invoice.customerName}` : ''}
               {` · ${formatMoney(invoice.totalAmt)}`}
               {invoice.balance > 0 ? ` · ${formatMoney(invoice.balance)} open` : ' · paid'}
+              {invoice.matchReason ? (
+                <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '2px' }}>{invoice.matchReason}</div>
+              ) : null}
             </div>
           ))}
         </div>
