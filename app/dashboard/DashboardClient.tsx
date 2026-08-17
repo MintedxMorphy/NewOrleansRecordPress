@@ -114,6 +114,8 @@ const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2
 const RUSH_MARKER = '[Rush Order]';
 const QUANTITY_KEYS = ['quantity', 'Quantity', 'Qty', 'Run Size'];
 const RECORDS_PRESSED_PER_DAY = 350;
+const PVC_COST_PER_RECORD = 0.5;
+const PVC_COST_PER_RECORD_CLEAR_SPLATTER = 0.75;
 const STAGE_SPAN_MARKER_RE = /\[Stage\s+Span:\s*([^\]]+)\]/i;
 const STAGE_SPAN_MARKER_GLOBAL_RE = /\[Stage\s+Span:\s*[^\]]+\]/gi;
 const STRETCHED_DROPPABLE_ID = '__stretched_jobs__';
@@ -326,6 +328,72 @@ type VendorInvoiceParseResult = {
 
 function formatMoney(amount: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
+}
+
+function formatPvcRate(rate: number) {
+  return `$${rate.toFixed(2)} / record`;
+}
+
+function isClearOrSplatterColor(color: string) {
+  const text = color.toLowerCase();
+  return /\bsplatters?\b/.test(text)
+    || /\bsplattered\b/.test(text)
+    || /\bsplats?\b/.test(text)
+    || /\bclears?\b/.test(text)
+    || /\btransparent\b/.test(text);
+}
+
+function pvcRateForColor(color: string) {
+  return isClearOrSplatterColor(color) ? PVC_COST_PER_RECORD_CLEAR_SPLATTER : PVC_COST_PER_RECORD;
+}
+
+type PvcEstimateLine = {
+  label: string;
+  quantity: number;
+  rate: number;
+  cost: number;
+  premium: boolean;
+};
+
+function estimatePvcCompound(job: Job) {
+  const variants = jobRecords(job.variants);
+  const lines: PvcEstimateLine[] = [];
+
+  if (variants.length > 1) {
+    for (const variant of variants) {
+      const quantity = numericValue(String(variant.quantity ?? ''));
+      if (quantity <= 0) continue;
+      const label = String(variant.colors || variant.run_label || 'Variant').trim() || 'Variant';
+      const rate = pvcRateForColor(label);
+      lines.push({
+        label,
+        quantity,
+        rate,
+        cost: quantity * rate,
+        premium: rate === PVC_COST_PER_RECORD_CLEAR_SPLATTER,
+      });
+    }
+  }
+
+  if (!lines.length) {
+    const quantity = jobQuantity(job);
+    if (quantity <= 0) return null;
+    const label = value(job, ['colors', 'Colors', 'color', 'Color', 'Vinyl Color']) || 'Vinyl';
+    const rate = pvcRateForColor(label);
+    lines.push({
+      label,
+      quantity,
+      rate,
+      cost: quantity * rate,
+      premium: rate === PVC_COST_PER_RECORD_CLEAR_SPLATTER,
+    });
+  }
+
+  return {
+    lines,
+    total: lines.reduce((sum, line) => sum + line.cost, 0),
+    quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+  };
 }
 
 function vendorCostSummary(job: Job): VendorCostSummary | null {
@@ -788,6 +856,74 @@ function VendorCostsPanel({ job }: { job: Job }) {
             +{summary.items.length - 8} more vendor cost line{summary.items.length - 8 === 1 ? '' : 's'}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function PvcCompoundPanel({ job }: { job: Job }) {
+  const estimate = estimatePvcCompound(job);
+  if (!estimate) return null;
+
+  return (
+    <div style={{
+      background: COLORS.card,
+      border: `1px solid ${COLORS.border}`,
+      borderRadius: '8px',
+      marginBottom: '22px',
+      padding: '14px',
+    }}>
+      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', marginBottom: '10px' }}>
+        <Boxes size={16} color={COLORS.green} />
+        <div style={{ color: COLORS.green, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          PVC Compound Estimate
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', marginBottom: '12px' }}>
+        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
+          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Projected PVC</div>
+          <div style={{ color: COLORS.green, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{formatMoney(estimate.total)}</div>
+        </div>
+        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
+          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Records</div>
+          <div style={{ color: COLORS.text, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{estimate.quantity.toLocaleString()}</div>
+        </div>
+      </div>
+
+      <div style={{ color: COLORS.muted, fontSize: '12px', lineHeight: 1.4, marginBottom: '12px' }}>
+        Standard vinyl {formatPvcRate(PVC_COST_PER_RECORD)}. Clear and splatter {formatPvcRate(PVC_COST_PER_RECORD_CLEAR_SPLATTER)}.
+      </div>
+
+      <div style={{ display: 'grid', gap: '8px' }}>
+        {estimate.lines.map((line, index) => (
+          <div
+            key={`${line.label}-${index}`}
+            style={{
+              alignItems: 'start',
+              background: COLORS.panel,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: '8px',
+              display: 'flex',
+              gap: '10px',
+              justifyContent: 'space-between',
+              padding: '10px 12px',
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 850 }}>
+                {line.label}
+              </div>
+              <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
+                {line.quantity.toLocaleString()} records · {formatPvcRate(line.rate)}
+                {line.premium ? ' · clear/splatter' : ''}
+              </div>
+            </div>
+            <div style={{ color: COLORS.green, fontSize: '14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
+              {formatMoney(line.cost)}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1304,7 +1440,6 @@ function JobCard({
   const canComplete = station === 'shipping';
   const completeColor = COLORS.red;
   const isStretched = Boolean(stretch && stretch.columns > 1);
-  const vendorSummary = vendorCostSummary(job);
   const shipments = jobShipments(job);
   const activeShipments = shipments.filter(isActiveShipment);
   const headlineShipment = activeShipments[0] || shipments[0];
@@ -1385,7 +1520,6 @@ function JobCard({
           {speed && <StatusPill color="#B781FF">{speed}</StatusPill>}
           {runLabel && <StatusPill color={COLORS.green}>{runLabel}</StatusPill>}
           {artReady && <StatusPill color={COLORS.green}>Art</StatusPill>}
-          {vendorSummary && <StatusPill color={COLORS.gold}>Vendor {formatMoney(vendorSummary.total)}</StatusPill>}
           {headlineShipment && (
             <StatusPill color={shipmentStatusTone(headlineShipment.status)}>
               {headlineShipment.carrier || 'Ship'} · {shipmentStatusShort(headlineShipment.status)}
@@ -2345,6 +2479,7 @@ function JobDrawer({
         </button>
 
         <JobLogisticsPanel job={job} onShipmentsChanged={onShipmentsChanged} />
+        <PvcCompoundPanel job={job} />
         <VendorCostsPanel job={job} />
 
         {station === 'now_pressing' && quantityTotal > 0 && (
