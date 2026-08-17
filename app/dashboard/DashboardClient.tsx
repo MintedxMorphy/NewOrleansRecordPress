@@ -24,6 +24,7 @@ import {
   Paperclip,
   SearchCheck,
   Truck,
+  ChevronDown,
 } from 'lucide-react';
 
 type JobRecord = Record<string, string | number | boolean | null | undefined>;
@@ -142,6 +143,28 @@ function jobRecords(value: unknown): JobRecord[] {
 
 function jobKey(job: Job) {
   return value(job, ['airtable_record_id', 'job_id', 'matrix', 'MATRIX']);
+}
+
+function preservedFinance(job: Job) {
+  return {
+    pnl: job.pnl,
+    vendor_cost_summary: job.vendor_cost_summary,
+    vendor_cost_total: job.vendor_cost_total,
+    vendor_cost_count: job.vendor_cost_count,
+    vendor_cost_categories: job.vendor_cost_categories,
+  };
+}
+
+function withFinanceDetails(job: Job, extra?: Record<string, unknown> | null) {
+  if (!extra) return job;
+  return {
+    ...job,
+    pnl: extra.pnl,
+    vendor_cost_summary: extra.vendor_cost_summary,
+    vendor_cost_total: extra.vendor_cost_total,
+    vendor_cost_count: extra.vendor_cost_count,
+    vendor_cost_categories: extra.vendor_cost_categories,
+  };
 }
 
 function mergedRecordIds(job: Job) {
@@ -442,8 +465,9 @@ function supplyTypeLabel(supplyType = '', direction: LogisticsShipment['directio
 }
 
 function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsChanged?: () => Promise<void> | void }) {
+  const [open, setOpen] = useState(false);
   const [data, setData] = useState<JobLogisticsState | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [direction, setDirection] = useState<'inbound' | 'outbound'>('inbound');
@@ -485,6 +509,7 @@ function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsC
   };
 
   useEffect(() => {
+    if (!open) return;
     if (embeddedShipments.length) {
       setData({
         shipments: embeddedShipments,
@@ -495,7 +520,7 @@ function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsC
       return;
     }
     void loadLogistics();
-  }, [job]);
+  }, [job, open]);
 
   const addShipment = async () => {
     setSaving(true);
@@ -605,127 +630,147 @@ function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsC
       border: `1px solid ${COLORS.border}`,
       borderRadius: '8px',
       marginBottom: '22px',
-      padding: '14px',
+      padding: '0',
     }}>
-      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', marginBottom: '10px' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(current => !current)}
+        style={{
+          alignItems: 'center',
+          background: 'transparent',
+          border: 'none',
+          color: COLORS.blue,
+          cursor: 'pointer',
+          display: 'flex',
+          font: 'inherit',
+          gap: '8px',
+          letterSpacing: '0.08em',
+          padding: '14px',
+          textTransform: 'uppercase',
+          width: '100%',
+        }}
+      >
         <Truck size={16} color={COLORS.blue} />
-        <div style={{ color: COLORS.blue, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          Logistics
-        </div>
-      </div>
+        <span style={{ flex: 1, fontSize: '11px', fontWeight: 900, textAlign: 'left' }}>Logistics</span>
+        <ChevronDown size={16} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms ease' }} />
+      </button>
 
-      {loading ? (
-        <div style={{ color: COLORS.muted, fontSize: '13px' }}>Loading shipments...</div>
-      ) : (
-        <>
-          <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: '14px' }}>
-            {[
-              ['Inbound', data?.totals.inbound_cost || 0],
-              ['Outbound', data?.totals.outbound_cost || 0],
-              ['Total', data?.totals.all_cost || 0],
-            ].map(([label, amount]) => (
-              <div key={String(label)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
-                <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</div>
-                <div style={{ color: COLORS.gold, fontSize: '18px', fontWeight: 900, marginTop: '4px' }}>{formatMoney(Number(amount))}</div>
+      {open && (
+        <div style={{ padding: '0 14px 14px' }}>
+          {loading ? (
+            <div style={{ color: COLORS.muted, fontSize: '13px' }}>Loading shipments...</div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: '14px' }}>
+                {[
+                  ['Inbound', data?.totals.inbound_cost || 0],
+                  ['Outbound', data?.totals.outbound_cost || 0],
+                  ['Total', data?.totals.all_cost || 0],
+                ].map(([label, amount]) => (
+                  <div key={String(label)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
+                    <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</div>
+                    <div style={{ color: COLORS.gold, fontSize: '18px', fontWeight: 900, marginTop: '4px' }}>{formatMoney(Number(amount))}</div>
+                  </div>
+                ))}
               </div>
-            ))}
+
+              {inbound.length > 0 && (
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 850, letterSpacing: '0.05em', marginBottom: '8px', textTransform: 'uppercase' }}>
+                    Inbound to NORP
+                  </div>
+                  <div style={{ display: 'grid', gap: '8px' }}>{inbound.map(renderShipment)}</div>
+                </div>
+              )}
+
+              {outbound.length > 0 && (
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 850, letterSpacing: '0.05em', marginBottom: '8px', textTransform: 'uppercase' }}>
+                    Outbound to client
+                  </div>
+                  <div style={{ display: 'grid', gap: '8px' }}>{outbound.map(renderShipment)}</div>
+                </div>
+              )}
+
+              {!inbound.length && !outbound.length && (
+                <div style={{ color: COLORS.muted, fontSize: '13px', lineHeight: 1.4, marginBottom: '12px' }}>
+                  No shipments linked yet. AfterShip auto-tracking appears here when a package matches matrix ID ({value(job, ['matrix', 'MATRIX']) || 'none'}), job ID, or customer name. You can also add one manually below.
+                </div>
+              )}
+            </>
+          )}
+
+          <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: '12px', paddingTop: '12px' }}>
+            <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 850, letterSpacing: '0.05em', marginBottom: '10px', textTransform: 'uppercase' }}>
+              Add Shipment
+            </div>
+            <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+              <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Direction
+                <select value={direction} onChange={event => setDirection(event.target.value as 'inbound' | 'outbound')} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }}>
+                  <option value="inbound">Inbound to NORP</option>
+                  <option value="outbound">Outbound to client</option>
+                </select>
+              </label>
+              <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Supply / Package
+                <select value={supplyType} onChange={event => setSupplyType(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }}>
+                  <option value="pvc">PVC</option>
+                  <option value="inner_sleeves">Inner Sleeves</option>
+                  <option value="jackets">Jackets</option>
+                  <option value="labels">Labels</option>
+                  <option value="stampers">Stampers</option>
+                  <option value="finished_goods">Finished Goods</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Tracking Number
+                <input value={trackingNumber} onChange={event => setTrackingNumber(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="Optional for now" />
+              </label>
+              <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Carrier
+                <input value={carrier} onChange={event => setCarrier(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="UPS, FedEx, USPS, R&L..." />
+              </label>
+              <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Status
+                <input value={status} onChange={event => setStatus(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} />
+              </label>
+              <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Total Cost
+                <input type="number" min={0} step="0.01" value={totalCost} onChange={event => setTotalCost(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="0.00" />
+              </label>
+              <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase', gridColumn: '1 / -1' }}>
+                Notes
+                <input value={notes} onChange={event => setNotes(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="Invoice #, vendor, pallet count..." />
+              </label>
+            </div>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={addShipment}
+              style={{
+                background: COLORS.blue,
+                border: 'none',
+                borderRadius: '8px',
+                color: '#041018',
+                cursor: saving ? 'default' : 'pointer',
+                fontSize: '13px',
+                fontWeight: 900,
+                marginTop: '12px',
+                opacity: saving ? 0.7 : 1,
+                padding: '10px 12px',
+                width: '100%',
+              }}
+            >
+              {saving ? 'Saving shipment...' : 'Add Shipment'}
+            </button>
           </div>
 
-          {inbound.length > 0 && (
-            <div style={{ marginBottom: '12px' }}>
-              <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 850, letterSpacing: '0.05em', marginBottom: '8px', textTransform: 'uppercase' }}>
-                Inbound to NORP
-              </div>
-              <div style={{ display: 'grid', gap: '8px' }}>{inbound.map(renderShipment)}</div>
-            </div>
+          {error && (
+            <div style={{ color: COLORS.red, fontSize: '12px', lineHeight: 1.4, marginTop: '10px' }}>{error}</div>
           )}
-
-          {outbound.length > 0 && (
-            <div style={{ marginBottom: '12px' }}>
-              <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 850, letterSpacing: '0.05em', marginBottom: '8px', textTransform: 'uppercase' }}>
-                Outbound to client
-              </div>
-              <div style={{ display: 'grid', gap: '8px' }}>{outbound.map(renderShipment)}</div>
-            </div>
-          )}
-
-          {!inbound.length && !outbound.length && (
-            <div style={{ color: COLORS.muted, fontSize: '13px', lineHeight: 1.4, marginBottom: '12px' }}>
-              No shipments linked yet. AfterShip auto-tracking appears here when a package matches matrix ID ({value(job, ['matrix', 'MATRIX']) || 'none'}), job ID, or customer name. You can also add one manually below.
-            </div>
-          )}
-        </>
-      )}
-
-      <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: '12px', paddingTop: '12px' }}>
-        <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 850, letterSpacing: '0.05em', marginBottom: '10px', textTransform: 'uppercase' }}>
-          Add Shipment
         </div>
-        <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            Direction
-            <select value={direction} onChange={event => setDirection(event.target.value as 'inbound' | 'outbound')} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }}>
-              <option value="inbound">Inbound to NORP</option>
-              <option value="outbound">Outbound to client</option>
-            </select>
-          </label>
-          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            Supply / Package
-            <select value={supplyType} onChange={event => setSupplyType(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }}>
-              <option value="pvc">PVC</option>
-              <option value="inner_sleeves">Inner Sleeves</option>
-              <option value="jackets">Jackets</option>
-              <option value="labels">Labels</option>
-              <option value="stampers">Stampers</option>
-              <option value="finished_goods">Finished Goods</option>
-              <option value="other">Other</option>
-            </select>
-          </label>
-          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            Tracking Number
-            <input value={trackingNumber} onChange={event => setTrackingNumber(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="Optional for now" />
-          </label>
-          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            Carrier
-            <input value={carrier} onChange={event => setCarrier(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="UPS, FedEx, USPS, R&L..." />
-          </label>
-          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            Status
-            <input value={status} onChange={event => setStatus(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} />
-          </label>
-          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            Total Cost
-            <input type="number" min={0} step="0.01" value={totalCost} onChange={event => setTotalCost(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="0.00" />
-          </label>
-          <label style={{ color: COLORS.muted, display: 'grid', fontSize: '11px', fontWeight: 850, gap: '6px', letterSpacing: '0.05em', textTransform: 'uppercase', gridColumn: '1 / -1' }}>
-            Notes
-            <input value={notes} onChange={event => setNotes(event.target.value)} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', color: COLORS.text, font: 'inherit', fontSize: '14px', padding: '10px' }} placeholder="Invoice #, vendor, pallet count..." />
-          </label>
-        </div>
-        <button
-          type="button"
-          disabled={saving}
-          onClick={addShipment}
-          style={{
-            background: COLORS.blue,
-            border: 'none',
-            borderRadius: '8px',
-            color: '#041018',
-            cursor: saving ? 'default' : 'pointer',
-            fontSize: '13px',
-            fontWeight: 900,
-            marginTop: '12px',
-            opacity: saving ? 0.7 : 1,
-            padding: '10px 12px',
-            width: '100%',
-          }}
-        >
-          {saving ? 'Saving shipment...' : 'Add Shipment'}
-        </button>
-      </div>
-
-      {error && (
-        <div style={{ color: COLORS.red, fontSize: '12px', lineHeight: 1.4, marginTop: '10px' }}>{error}</div>
       )}
     </div>
   );
@@ -877,7 +922,7 @@ function pnlFromJob(job: Job): JobPnl {
   return buildJobPnl(job);
 }
 
-function JobPnlPanel({ job }: { job: Job }) {
+function JobPnlPanel({ job, financeLoaded = false }: { job: Job; financeLoaded?: boolean }) {
   const pnl = pnlFromJob(job);
   const profitColor = pnl.grossProfit === null
     ? COLORS.muted
@@ -886,7 +931,7 @@ function JobPnlPanel({ job }: { job: Job }) {
     ? 'QuickBooks'
     : pnl.clientInvoiceSource === 'airtable'
       ? 'Airtable'
-      : 'Not found';
+      : financeLoaded ? 'Not found' : 'Looking up QuickBooks...';
 
   return (
     <div style={{
@@ -907,7 +952,7 @@ function JobPnlPanel({ job }: { job: Job }) {
             {pnl.clientInvoice ? formatMoney(pnl.clientInvoice) : '—'}
           </div>
           <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>{invoiceLabel}</div>
-          {pnl.clientInvoiceSource === 'none' && (
+          {pnl.clientInvoiceSource === 'none' && financeLoaded && (
             <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '6px', lineHeight: 1.4 }}>
               No QuickBooks match yet. The board uses artist/customer, album title, order #, and matrix ID — a matrix ID is not required.
             </div>
@@ -2324,6 +2369,7 @@ function JobDrawer({
   onSplitJob,
   onRecordsPressedSave,
   onShipmentsChanged,
+  financeLoaded = false,
 }: {
   job: Job;
   onClose: () => void;
@@ -2333,6 +2379,7 @@ function JobDrawer({
   onSplitJob: (job: Job, payload: { stage: Station; quantity: string }) => Promise<void>;
   onRecordsPressedSave: (job: Job, recordsPressed: number | null) => Promise<void>;
   onShipmentsChanged?: () => Promise<void> | void;
+  financeLoaded?: boolean;
 }) {
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
@@ -2533,8 +2580,7 @@ function JobDrawer({
           {savingRush ? 'Saving Rush...' : rushed ? 'Rush Order On' : 'Rush Order'}
         </button>
 
-        <JobLogisticsPanel job={job} onShipmentsChanged={onShipmentsChanged} />
-        <JobPnlPanel job={job} />
+        <JobPnlPanel job={job} financeLoaded={financeLoaded} />
         <PvcCompoundPanel job={job} />
         <VendorCostsPanel job={job} />
 
@@ -2903,6 +2949,8 @@ function JobDrawer({
             </div>
           </div>
         </div>
+
+        <JobLogisticsPanel job={job} onShipmentsChanged={onShipmentsChanged} />
       </aside>
     </>
   );
@@ -3662,6 +3710,7 @@ function PressBacklogStat({
 export default function DashboardClient({ jobs: initialJobs }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs ?? []);
   const [loading, setLoading] = useState(true);
+  const [financeLoaded, setFinanceLoaded] = useState(false);
   const [source, setSource] = useState('');
   const [error, setError] = useState('');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -3676,7 +3725,9 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   const localMutationAtRef = useRef(0);
   const lastSyncSignatureRef = useRef('');
   const refreshJobsRef = useRef<(options?: { silent?: boolean }) => Promise<void>>(async () => {});
+  const refreshJobDetailsRef = useRef<() => Promise<void>>(async () => {});
   const logStampRef = useRef('');
+  const financeLoadedRef = useRef(false);
 
   const applyRemoteJobs = useCallback((nextJobs: Job[], startedAt: number) => {
     if (syncPausedRef.current || startedAt < localMutationAtRef.current) {
@@ -3686,7 +3737,14 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     const signature = boardSyncSignature(nextJobs);
     if (signature === lastSyncSignatureRef.current) return true;
     lastSyncSignatureRef.current = signature;
-    setJobs(nextJobs);
+    setJobs(current => {
+      const previous = new Map(current.map(job => [jobKey(job), job]));
+      return nextJobs.map(job => {
+        const existing = previous.get(jobKey(job));
+        if (existing?.pnl && !job.pnl) return { ...job, ...preservedFinance(existing) };
+        return job;
+      });
+    });
     setSelectedJob(current => {
       if (!current) return current;
       const next = nextJobs.find(job => jobKey(job) === jobKey(current));
@@ -3743,6 +3801,9 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       await run;
     } finally {
       inFlightRef.current = null;
+      if (!silent || !financeLoadedRef.current) {
+        void refreshJobDetailsRef.current();
+      }
       if (queuedRefreshRef.current && !syncPausedRef.current) {
         queuedRefreshRef.current = false;
         void refreshJobsRef.current({ silent: true });
@@ -3750,7 +3811,27 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     }
   }, [applyRemoteJobs]);
 
+  const refreshJobDetails = useCallback(async () => {
+    try {
+      const response = await fetch('/api/norp-jobs?details=1', { cache: 'no-store' });
+      const data = await response.json();
+      if (!Array.isArray(data.jobs)) return;
+      const byKey = new Map(
+        data.jobs.map((row: Record<string, unknown>) => [String(row.detail_key || ''), row]),
+      );
+      const apply = (job: Job) => withFinanceDetails(job, byKey.get(jobKey(job)) || byKey.get(String(job.detail_key || '')));
+      setJobs(current => current.map(apply));
+      setSelectedJob(current => (current ? apply(current) : current));
+    } catch {
+      // PVC and payroll still render from the job card while QuickBooks is unavailable.
+    } finally {
+      financeLoadedRef.current = true;
+      setFinanceLoaded(true);
+    }
+  }, []);
+
   refreshJobsRef.current = refreshJobs;
+  refreshJobDetailsRef.current = refreshJobDetails;
 
   const markLocalMutation = useCallback(() => {
     localMutationAtRef.current = Date.now();
@@ -4312,7 +4393,9 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
 
       {selectedJob && (
         <JobDrawer
+          key={jobKey(selectedJob)}
           job={selectedJob}
+          financeLoaded={financeLoaded}
           onClose={() => setSelectedJob(null)}
           onDashNotesSave={saveDashNotes}
           onRushToggle={toggleRushOrder}

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getNORPJobs } from '@/lib/norp-sheet';
 import { getNORPArtFiles } from '@/lib/norp-drive';
 import { getAirtableJobs, isAirtableConfigured } from '@/lib/airtable';
@@ -453,75 +453,113 @@ function jobsToLinkContext(jobs: any[]): JobContext[] {
   })).filter(job => job.job_id || job.matrix || job.customer);
 }
 
-export async function GET() {
+function jobDetailKey(job: Record<string, any>) {
+  return stringValue(job.airtable_record_id || job.job_id || job.matrix || job.MATRIX);
+}
+
+async function loadCoreJobs() {
+  const source = isAirtableConfigured() ? 'airtable' : 'google_sheet';
+  const baseJobs = source === 'airtable' ? await getAirtableJobs({ syncCompleted: false }) : await getNORPJobs();
+  let jobs = baseJobs;
   try {
-    const source = isAirtableConfigured() ? 'airtable' : 'google_sheet';
-    const baseJobs = source === 'airtable' ? await getAirtableJobs({ syncCompleted: true }) : await getNORPJobs();
-    let jobs = baseJobs;
-    try {
-      jobs = await applyProductionLogInferences(baseJobs);
-    } catch (e) {
-      console.error('[norp-jobs] production log inference failed:', e);
-    }
-    jobs = dedupeJobs(jobs);
+    jobs = await applyProductionLogInferences(baseJobs);
+  } catch (e) {
+    console.error('[norp-jobs] production log inference failed:', e);
+  }
+  return { source, jobs: dedupeJobs(jobs) };
+}
 
-    // Best-effort enrichment with art file index. If Drive call fails,
-    // jobs still return — we just skip art status.
-    let artIndex: Awaited<ReturnType<typeof getNORPArtFiles>> = {};
-    try {
-      artIndex = await getNORPArtFiles();
-    } catch (e) {
-      console.error('[norp-jobs] art index lookup failed:', e);
-    }
-
-    let vendorCostSummaries = new Map<string, VendorCostSummary>();
-    if (source === 'airtable') {
-      try {
-        vendorCostSummaries = await getVendorCostSummariesByMatrix();
-      } catch (e) {
-        console.error('[norp-jobs] vendor cost summary lookup failed:', e);
-      }
-    }
-
-    const dashboardShipments = await loadDashboardShipments(source, jobsToLinkContext(jobs));
-    let qboInvoices: Awaited<ReturnType<typeof listQboInvoices>> = [];
-    try {
-      qboInvoices = await listQboInvoices();
-    } catch (e) {
-      console.error('[norp-jobs] QuickBooks invoice lookup failed:', e);
-    }
-
-    const withCosts = jobs.map(j => {
-      const art = j.matrix ? artIndex[j.matrix] : undefined;
-      const vendorCostSummary = vendorCostSummaryForJob(j, vendorCostSummaries);
-      const shipments = shipmentsForJob(j, dashboardShipments);
-      return {
-        ...j,
-        art_received: !!art,
-        art_received_date: art?.receivedDate ?? '',
-        art_sides: art ? art.sides.join('+') : '',
-        ...(shipments.length ? {
-          shipments,
-          shipment_count: shipments.length,
-          active_shipment_count: shipments.filter(shipment => {
-            const status = shipment.status.toLowerCase();
-            return status && !status.includes('delivered') && !status.includes('returned');
-          }).length,
-        } : {}),
-        ...(vendorCostSummary ? {
-          vendor_cost_summary: vendorCostSummary,
-          vendor_cost_total: vendorCostSummary.total,
-          vendor_cost_count: vendorCostSummary.count,
-          vendor_cost_categories: vendorCostSummary.categories,
-        } : {}),
-      };
-    });
-    const assignedInvoices = assignClientInvoices(withCosts, qboInvoices);
-    const enriched = withCosts.map((job, index) => ({
+function withBoardExtras(jobs: any[], artIndex: Awaited<ReturnType<typeof getNORPArtFiles>>, dashboardShipments: DashboardShipment[]) {
+  return jobs.map(job => {
+    const art = job.matrix ? artIndex[job.matrix] : undefined;
+    const shipments = shipmentsForJob(job, dashboardShipments);
+    return {
       ...job,
-      pnl: buildJobPnl(job, assignedInvoices[index] || []),
-    }));
+      detail_key: jobDetailKey(job),
+      art_received: !!art,
+      art_received_date: art?.receivedDate ?? '',
+      art_sides: art ? art.sides.join('+') : '',
+      ...(shipments.length ? {
+        shipments,
+        shipment_count: shipments.length,
+        active_shipment_count: shipments.filter(shipment => {
+          const status = shipment.status.toLowerCase();
+          return status && !status.includes('delivered') && !status.includes('returned');
+        }).length,
+      } : {}),
+    };
+  });
+}
 
+function financePayload(
+  jobs: any[],
+  vendorCostSummaries: Map<string, VendorCostSummary>,
+  qboInvoices: Awaited<ReturnType<typeof listQboInvoices>>,
+) {
+  const withVendor = jobs.map(job => {
+    const vendorCostSummary = vendorCostSummaryForJob(job, vendorCostSummaries);
+    if (!vendorCostSummary) return job;
+    return {
+      ...job,
+      vendor_cost_summary: vendorCostSummary,
+      vendor_cost_total: vendorCostSummary.total,
+      vendor_cost_count: vendorCostSummary.count,
+      vendor_cost_categories: vendorCostSummary.categories,
+    };
+  });
+  const assignedInvoices = assignClientInvoices(withVendor, qboInvoices);
+  return withVendor.map((job, index) => ({
+    detail_key: jobDetailKey(job),
+    pnl: buildJobPnl(job, assignedInvoices[index] || []),
+    vendor_cost_summary: job.vendor_cost_summary || null,
+    vendor_cost_total: job.vendor_cost_total || 0,
+    vendor_cost_count: job.vendor_cost_count || 0,
+    vendor_cost_categories: job.vendor_cost_categories || {},
+  }));
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const detailsOnly = request.nextUrl.searchParams.get('details') === '1';
+    const { source, jobs } = await loadCoreJobs();
+
+    if (detailsOnly) {
+      if (source === 'airtable') {
+        void getAirtableJobs({ syncCompleted: true }).catch(error => {
+          console.error('[norp-jobs] completed production sync failed:', error);
+        });
+      }
+
+      const [vendorCostSummaries, qboInvoices] = await Promise.all([
+        source === 'airtable'
+          ? getVendorCostSummariesByMatrix().catch(error => {
+              console.error('[norp-jobs] vendor cost summary lookup failed:', error);
+              return new Map<string, VendorCostSummary>();
+            })
+          : Promise.resolve(new Map<string, VendorCostSummary>()),
+        listQboInvoices().catch(error => {
+          console.error('[norp-jobs] QuickBooks invoice lookup failed:', error);
+          return [] as Awaited<ReturnType<typeof listQboInvoices>>;
+        }),
+      ]);
+
+      const details = financePayload(jobs, vendorCostSummaries, qboInvoices);
+      return NextResponse.json({
+        count: details.length,
+        jobs: details,
+        source,
+      });
+    }
+
+    const [artIndex, dashboardShipments] = await Promise.all([
+      getNORPArtFiles().catch(error => {
+        console.error('[norp-jobs] art index lookup failed:', error);
+        return {} as Awaited<ReturnType<typeof getNORPArtFiles>>;
+      }),
+      loadDashboardShipments(source, jobsToLinkContext(jobs)),
+    ]);
+
+    const enriched = withBoardExtras(jobs, artIndex, dashboardShipments);
     return NextResponse.json({
       count: enriched.length,
       jobs: enriched,
