@@ -3330,83 +3330,137 @@ function PressBacklogStat({
   remaining,
   perDay,
   loading,
-  isMobile,
+  compact = false,
 }: {
   remaining: number;
   perDay: number;
   loading: boolean;
-  isMobile: boolean;
+  compact?: boolean;
 }) {
   const horizon = formatPressHorizon(remaining / perDay);
   const remainingLabel = loading ? '—' : remaining.toLocaleString();
 
   return (
     <div
+      className="norp-press-backlog"
       aria-label={loading
         ? 'Loading records still to press'
         : `${remainingLabel} records still to press at ${perDay} a day, ${horizon}`}
       style={{
-        alignItems: 'center',
         background: COLORS.panel,
         border: `1px solid ${COLORS.border}`,
         borderRadius: '8px',
-        display: 'flex',
-        gap: isMobile ? '12px' : '16px',
-        minHeight: isMobile ? '52px' : '56px',
+        boxSizing: 'border-box',
         minWidth: 0,
-        padding: isMobile ? '10px 12px' : '8px 16px',
-        width: isMobile ? '100%' : 'min(440px, 100%)',
+        overflow: 'hidden',
+        padding: compact ? '8px 12px' : '8px 16px',
+        width: '100%',
       }}
     >
-      <div style={{
-        alignItems: 'center',
-        background: `${COLORS.green}18`,
-        border: `1px solid ${COLORS.green}55`,
-        borderRadius: '50%',
-        color: COLORS.green,
-        display: 'grid',
-        flexShrink: 0,
-        height: isMobile ? '34px' : '38px',
-        placeItems: 'center',
-        width: isMobile ? '34px' : '38px',
-      }}>
-        <Disc3 size={isMobile ? 16 : 18} strokeWidth={2.4} />
-      </div>
-      <div style={{ display: 'flex', flex: 1, gap: isMobile ? '12px' : '18px', minWidth: 0 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            Still to press
-          </div>
-          <div style={{
-            color: COLORS.green,
-            fontSize: isMobile ? '20px' : '22px',
-            fontVariantNumeric: 'tabular-nums',
-            fontWeight: 900,
-            letterSpacing: '-0.03em',
-            lineHeight: 1.15,
-          }}>
-            {remainingLabel}
-            <span style={{ color: COLORS.faint, fontSize: '12px', fontWeight: 700, letterSpacing: 0, marginLeft: '6px' }}>
-              records
-            </span>
-          </div>
+      <style>{`
+        .norp-press-backlog {
+          container-type: inline-size;
+        }
+        .norp-press-backlog__row {
+          align-items: center;
+          display: flex;
+          gap: 12px;
+          min-width: 0;
+        }
+        .norp-press-backlog__icon {
+          align-items: center;
+          background: ${COLORS.green}18;
+          border: 1px solid ${COLORS.green}55;
+          border-radius: 50%;
+          color: ${COLORS.green};
+          display: grid;
+          flex: 0 0 auto;
+          height: 38px;
+          place-items: center;
+          width: 38px;
+        }
+        .norp-press-backlog__stats {
+          display: flex;
+          flex: 1 1 auto;
+          gap: 16px;
+          min-width: 0;
+        }
+        .norp-press-backlog__block {
+          min-width: 0;
+        }
+        .norp-press-backlog__pace {
+          border-left: 1px solid ${COLORS.border};
+          min-width: 0;
+          padding-left: 16px;
+        }
+        .norp-press-backlog__label {
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+        .norp-press-backlog__value {
+          font-variant-numeric: tabular-nums;
+          letter-spacing: -0.03em;
+          line-height: 1.15;
+          overflow-wrap: anywhere;
+        }
+        @container (max-width: 380px) {
+          .norp-press-backlog__icon {
+            height: 30px;
+            width: 30px;
+          }
+          .norp-press-backlog__stats {
+            gap: 10px;
+          }
+          .norp-press-backlog__pace {
+            padding-left: 10px;
+          }
+        }
+        @container (max-width: 300px) {
+          .norp-press-backlog__icon { display: none; }
+          .norp-press-backlog__stats {
+            flex-direction: column;
+            gap: 8px;
+          }
+          .norp-press-backlog__pace {
+            border-left: none;
+            border-top: 1px solid ${COLORS.border};
+            padding-left: 0;
+            padding-top: 8px;
+          }
+        }
+      `}</style>
+      <div className="norp-press-backlog__row">
+        <div className="norp-press-backlog__icon" aria-hidden="true">
+          <Disc3 size={compact ? 16 : 18} strokeWidth={2.4} />
         </div>
-        <div style={{
-          borderLeft: `1px solid ${COLORS.border}`,
-          minWidth: 0,
-          paddingLeft: isMobile ? '12px' : '16px',
-        }}>
-          <div style={{ color: COLORS.gold, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            {perDay.toLocaleString()} / day
+        <div className="norp-press-backlog__stats">
+          <div className="norp-press-backlog__block">
+            <div className="norp-press-backlog__label" style={{ color: COLORS.muted, fontSize: compact ? '10px' : '11px', fontWeight: 900 }}>
+              Still to press
+            </div>
+            <div className="norp-press-backlog__value" style={{
+              color: COLORS.green,
+              fontSize: compact ? 'clamp(16px, 2.4vw, 20px)' : 'clamp(18px, 1.6vw, 22px)',
+              fontWeight: 900,
+            }}>
+              {remainingLabel}
+              <span style={{ color: COLORS.faint, fontSize: '12px', fontWeight: 700, letterSpacing: 0, marginLeft: '6px' }}>
+                records
+              </span>
+            </div>
           </div>
-          <div style={{
-            color: COLORS.text,
-            fontSize: isMobile ? '16px' : '18px',
-            fontWeight: 850,
-            lineHeight: 1.2,
-            whiteSpace: 'nowrap',
-          }}>
-            {loading ? '…' : horizon}
+          <div className="norp-press-backlog__pace">
+            <div className="norp-press-backlog__label" style={{ color: COLORS.gold, fontSize: compact ? '10px' : '11px', fontWeight: 900 }}>
+              {perDay.toLocaleString()} / day
+            </div>
+            <div style={{
+              color: COLORS.text,
+              fontSize: compact ? 'clamp(14px, 2vw, 16px)' : 'clamp(15px, 1.4vw, 18px)',
+              fontWeight: 850,
+              lineHeight: 1.2,
+            }}>
+              {loading ? '…' : horizon}
+            </div>
           </div>
         </div>
       </div>
@@ -3423,6 +3477,8 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [boardReady, setBoardReady] = useState(false);
   const isMobile = useMediaQuery('(max-width: 760px)');
+  const isNarrowHeader = useMediaQuery('(max-width: 1280px)');
+  const stackBacklog = isMobile || isNarrowHeader;
   const syncPausedRef = useRef(false);
   const queuedRefreshRef = useRef(false);
   const inFlightRef = useRef<Promise<void> | null>(null);
@@ -3818,48 +3874,68 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       padding: isMobile ? '12px' : '18px',
     }}>
       <header style={{
-        alignItems: isMobile ? 'stretch' : 'center',
+        alignItems: stackBacklog ? 'stretch' : 'center',
         display: 'flex',
-        flexDirection: isMobile ? 'column' : 'row',
-        gap: isMobile ? '12px' : '18px',
+        flexWrap: 'wrap',
+        gap: isMobile ? '12px' : '14px',
         justifyContent: 'space-between',
         margin: '0 auto 18px',
         maxWidth: '1920px',
       }}>
-        <div style={{ flexShrink: 0 }}>
+        <div style={{
+          flex: stackBacklog ? '1 1 220px' : '0 1 280px',
+          minWidth: 0,
+          order: 1,
+        }}>
           <div style={{ color: COLORS.green, fontSize: '12px', fontWeight: 950, letterSpacing: '0.12em', marginBottom: '7px', textTransform: 'uppercase' }}>
             New Orleans Record Press
           </div>
-          <h1 style={{ color: COLORS.text, fontSize: isMobile ? '27px' : '36px', lineHeight: 1.05, margin: 0 }}>
+          <h1 style={{
+            color: COLORS.text,
+            fontSize: isMobile ? '27px' : isNarrowHeader ? 'clamp(24px, 3vw, 32px)' : '36px',
+            lineHeight: 1.05,
+            margin: 0,
+          }}>
             Press Room Production Pipeline
           </h1>
         </div>
         <div style={{
-          display: 'flex',
-          flex: isMobile ? undefined : 1,
-          justifyContent: isMobile ? 'stretch' : 'center',
+          flex: stackBacklog ? '1 1 100%' : '1 1 280px',
+          maxWidth: stackBacklog ? 'none' : '440px',
           minWidth: 0,
+          order: stackBacklog ? 3 : 2,
+          width: stackBacklog ? '100%' : undefined,
         }}>
           <PressBacklogStat
             remaining={backlog.remaining}
             perDay={backlog.perDay}
             loading={loading}
-            isMobile={isMobile}
+            compact={stackBacklog}
           />
         </div>
         <div style={{
           alignItems: isMobile ? 'flex-start' : 'flex-end',
           display: 'flex',
+          flex: '1 1 auto',
           flexDirection: 'column',
-          flexShrink: 0,
           gap: isMobile ? '0' : '8px',
+          marginLeft: stackBacklog ? 'auto' : undefined,
+          minWidth: 0,
+          order: stackBacklog ? 2 : 3,
         }}>
           <div style={{ color: COLORS.muted, fontSize: '12px', textAlign: isMobile ? 'left' : 'right' }}>
             {loading ? 'Loading Airtable...' : `${activeJobs.length} active jobs`}
             {source && <div style={{ marginTop: '4px' }}>Source: {source === 'airtable' ? 'Airtable' : 'Sheet fallback'}</div>}
           </div>
           {!isMobile && (
-            <div style={{ alignItems: 'center', display: 'flex', gap: '10px' }}>
+            <div style={{
+              alignItems: 'center',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '10px',
+              justifyContent: 'flex-end',
+              minWidth: 0,
+            }}>
               <VendorInvoiceImportControl isMobile={isMobile} onApplied={refreshJobs} />
               <BugReportControl isMobile={isMobile} />
               <a
@@ -3871,11 +3947,11 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
                   border: `1px solid ${COLORS.border}`,
                   borderRadius: '8px',
                   color: COLORS.text,
-                  fontSize: '24px',
+                  fontSize: isNarrowHeader ? '15px' : '24px',
                   fontWeight: 900,
                   lineHeight: 1,
-                  minHeight: '56px',
-                  padding: '0 18px',
+                  minHeight: isNarrowHeader ? '44px' : '56px',
+                  padding: isNarrowHeader ? '0 14px' : '0 18px',
                   display: 'inline-flex',
                   alignItems: 'center',
                   textDecoration: 'none',
