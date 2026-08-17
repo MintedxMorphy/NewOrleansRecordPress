@@ -100,7 +100,7 @@ export async function refreshQBOToken(): Promise<string> {
   return data.access_token!;
 }
 
-async function qboFetch(path: string): Promise<any> {
+async function qboFetch(path: string, options?: { timeoutMs?: number }): Promise<any> {
   const token = await getCachedToken();
   const realmId = QBO_REALM_ID();
   const res = await fetch(`${QBO_BASE}/${realmId}/${path}`, {
@@ -108,7 +108,7 @@ async function qboFetch(path: string): Promise<any> {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json',
     },
-    signal: AbortSignal.timeout(8000), // 8s timeout — fail fast when QBO is broken
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 8000),
   });
   return res.json();
 }
@@ -384,6 +384,16 @@ function mapQboInvoice(inv: Record<string, any>): QboInvoice {
 let invoiceCache: { at: number; invoices: QboInvoice[] } | null = null;
 const INVOICE_CACHE_MS = 5 * 60 * 1000;
 
+async function queryQboInvoices(sql: string): Promise<Record<string, any>[]> {
+  const query = encodeURIComponent(sql);
+  const data = await qboFetch(`query?query=${query}&minorversion=65`, { timeoutMs: 20000 });
+  if (data?.Fault) {
+    const message = data.Fault?.Error?.[0]?.Message || data.Fault?.Error?.[0]?.Detail || 'QuickBooks query failed';
+    throw new Error(message);
+  }
+  return data?.QueryResponse?.Invoice ?? [];
+}
+
 export async function listQboInvoices(options?: { force?: boolean }): Promise<QboInvoice[]> {
   if (!process.env.QBO_CLIENT_ID || !process.env.QBO_REFRESH_TOKEN) return [];
   if (!options?.force && invoiceCache && Date.now() - invoiceCache.at < INVOICE_CACHE_MS) {
@@ -391,11 +401,36 @@ export async function listQboInvoices(options?: { force?: boolean }): Promise<Qb
   }
 
   try {
-    const invoices: QboInvoice[] = [];
-    const query = encodeURIComponent('SELECT * FROM Invoice MAXRESULTS 1000');
-    const data = await qboFetch(`query?query=${query}&minorversion=65`);
-    const batch = data?.QueryResponse?.Invoice ?? [];
-    for (const inv of batch) invoices.push(mapQboInvoice(inv));
+    const byId = new Map<string, QboInvoice>();
+    const add = (rows: Record<string, any>[]) => {
+      for (const inv of rows) {
+        const mapped = mapQboInvoice(inv);
+        if (mapped.id) byId.set(mapped.id, mapped);
+      }
+    };
+
+    try {
+      add(await queryQboInvoices('SELECT * FROM Invoice ORDERBY TxnDate DESC MAXRESULTS 1000'));
+    } catch (error) {
+      console.error('[qbo] ordered invoice list failed, falling back:', error);
+      add(await queryQboInvoices('SELECT * FROM Invoice MAXRESULTS 1000'));
+    }
+
+    try {
+      add(await queryQboInvoices("SELECT * FROM Invoice WHERE Balance > '0' MAXRESULTS 1000"));
+    } catch (error) {
+      console.error('[qbo] open invoice list failed:', error);
+    }
+
+    if (byId.size >= 1000) {
+      try {
+        add(await queryQboInvoices('SELECT * FROM Invoice ORDERBY TxnDate DESC STARTPOSITION 1001 MAXRESULTS 1000'));
+      } catch (error) {
+        console.error('[qbo] invoice page 2 failed:', error);
+      }
+    }
+
+    const invoices = [...byId.values()];
     invoiceCache = { at: Date.now(), invoices };
     return invoices;
   } catch (error) {
