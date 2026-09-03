@@ -3693,6 +3693,9 @@ function PressBacklogStat({
           <div className="norp-press-backlog__pace">
             <div className="norp-press-backlog__label" style={{ color: COLORS.gold, fontSize: compact ? '10px' : '11px', fontWeight: 900 }}>
               {perDay.toLocaleString()} / day
+              <span style={{ color: COLORS.muted, fontWeight: 700, fontStyle: 'italic', marginLeft: '4px' }}>
+                *+15% QC to total*
+              </span>
             </div>
             <div style={{
               color: COLORS.text,
