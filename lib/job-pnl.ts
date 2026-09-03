@@ -198,8 +198,10 @@ export function jobCustomerName(job: JobLike) {
     || job.ARTIST
     || job.Artist
     || job['Customer Name']
+    || job['Job Name']
     || job.Title
-    || job['Project Name'],
+    || job['Project Name']
+    || job['1'],
   );
 }
 

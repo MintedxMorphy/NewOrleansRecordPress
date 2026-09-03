@@ -15,7 +15,7 @@ const STAGE_LABELS: Record<string, string> = {
 
 const FIELD_ALIASES: Record<string, string[]> = {
   job_id: ['Job ID', 'Job Id', 'JobID', 'ID', 'Matrix', 'MATRIX', 'Matrix ID', 'Order Number', 'ORDER NUMBER'],
-  customer: ['Customer', 'Customer Name', 'Client', 'Project', 'Project Name', 'Artist', 'Title', '1', 'Name', 'Silent EM'],
+  customer: ['Job Name', 'Customer', 'Customer Name', 'Client', 'Project', 'Project Name', 'Artist', 'Title', '1', 'Name', 'Silent EM'],
   matrix: ['Matrix', 'MATRIX', 'Matrix ID', 'Catalog Number', 'Catalog #', 'DSK-016'],
   quantity: ['Quantity', 'Qty', 'Units', 'Run Size', '52'],
   records_pressed: ['Records Pressed', 'Dashboard Records Pressed', 'Pressed Count', 'Records Pressed Total'],
