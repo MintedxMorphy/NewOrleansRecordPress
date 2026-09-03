@@ -11,6 +11,7 @@ import {
   formatPvcRate,
   PVC_COST_PER_RECORD,
   PVC_COST_PER_RECORD_CLEAR_SPLATTER,
+  QC_REJECT_RATE,
   RECORDS_PRESSED_PER_DAY,
   type JobPnl,
 } from '@/lib/job-pnl';
@@ -230,26 +231,27 @@ function recordsLeftToPress(job: Job) {
 
 function pressBacklog(jobs: Job[]) {
   const remaining = jobs.reduce((sum, job) => sum + recordsLeftToPress(job), 0);
+  const effectiveRecords = remaining / (1 - QC_REJECT_RATE);
   return {
     remaining,
     perDay: RECORDS_PRESSED_PER_DAY,
-    days: remaining / RECORDS_PRESSED_PER_DAY,
+    days: effectiveRecords / RECORDS_PRESSED_PER_DAY,
   };
 }
 
 function formatPressHorizon(days: number) {
   if (!Number.isFinite(days) || days <= 0) return 'Caught up';
   if (days < 1) return 'Under 1 day';
-  if (days < 14) {
+  if (days < 30) {
     const n = Math.max(1, Math.round(days));
     return `${n} day${n === 1 ? '' : 's'} out`;
   }
-  if (days < 60) {
-    const n = Math.max(1, Math.round(days / 7));
-    return `${n} week${n === 1 ? '' : 's'} out`;
-  }
-  const n = Math.max(1, Math.round(days / 30));
-  return `${n} month${n === 1 ? '' : 's'} out`;
+  const months = Math.floor(days / 30);
+  const remainingDays = Math.round(days % 30);
+  const mPart = `${months} month${months === 1 ? '' : 's'}`;
+  if (remainingDays === 0) return `${mPart} out`;
+  const dPart = `${remainingDays} day${remainingDays === 1 ? '' : 's'}`;
+  return `${mPart}, ${dPart} out`;
 }
 
 function boardSyncSignature(jobs: Job[]) {
