@@ -123,6 +123,7 @@ const COLORS = {
 const AIRTABLE_DATABASE_URL = 'https://airtable.com/appu3BWQLTIxzKF3V/tblmhd7tY2QqTZmnF/viwybIIrPi9Pd9Tyo?blocks=hide';
 const RUSH_MARKER = '[Rush Order]';
 const QUANTITY_KEYS = ['quantity', 'Quantity', 'Qty', 'Run Size'];
+const JOB_TITLE_KEYS = ['customer', 'Job Name', 'Customer', 'Customer Name', 'Artist', 'Title', '1'];
 const STAGE_SPAN_MARKER_RE = /\[Stage\s+Span:\s*([^\]]+)\]/i;
 const STAGE_SPAN_MARKER_GLOBAL_RE = /\[Stage\s+Span:\s*[^\]]+\]/gi;
 const STRETCHED_DROPPABLE_ID = '__stretched_jobs__';
@@ -264,7 +265,7 @@ function boardSyncSignature(jobs: Job[]) {
     job.records_pressed_source || '',
     job.press_log_count || '',
     value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']),
-    value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']),
+    value(job, JOB_TITLE_KEYS),
   ].join('\t')).join('\n');
 }
 
@@ -1256,7 +1257,7 @@ function searchableJobText(job: Job) {
     .join(' ');
 
   return [
-    value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']),
+    value(job, JOB_TITLE_KEYS),
     value(job, ['matrix', 'MATRIX', 'Matrix ID', 'job_id']),
     value(job, ['order_number', 'ORDER NUMBER']),
     value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']),
@@ -1513,7 +1514,7 @@ function JobCard({
   const meta = STATION_META[station];
   const stageSpan = stageSpanForJob(job);
   const stretchLabel = stretch?.label ?? (stageSpan.length > 1 ? stageSpan.map(spanStation => STATION_META[spanStation].shortLabel).join(' -> ') : '');
-  const customer = value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']) || 'Untitled job';
+  const customer = value(job, JOB_TITLE_KEYS) || 'Untitled job';
   const matrix = value(job, ['matrix', 'MATRIX', 'Matrix ID', 'job_id']);
   const quantity = value(job, ['quantity', 'Quantity', 'Qty', 'Run Size']);
   const quantityTotal = numericValue(quantity);
@@ -2435,7 +2436,7 @@ function JobDrawer({
   const details = [
     ['Station', jobStage === 'completed' ? 'Completed' : meta.label],
     ['Run', runLabel],
-    ['Customer', value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title'])],
+    ['Customer', value(job, JOB_TITLE_KEYS)],
     ['Matrix', value(job, ['matrix', 'MATRIX', 'Matrix ID'])],
     ['Quantity', value(job, ['quantity', 'Quantity', 'Qty'])],
     ['Color', value(job, ['colors', 'Colors', 'Color'])],
@@ -2545,7 +2546,7 @@ function JobDrawer({
               </div>
             </div>
             <h2 style={{ color: COLORS.text, fontSize: '23px', lineHeight: 1.18, margin: 0 }}>
-              {value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']) || 'Production Job'}
+              {value(job, JOB_TITLE_KEYS) || 'Production Job'}
             </h2>
           </div>
           <button
