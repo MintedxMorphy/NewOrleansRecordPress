@@ -129,7 +129,7 @@ function jobContext(job: ProductionJob): JobContext {
     record_id: value(job, ['airtable_record_id']),
     job_id: value(job, ['job_id', 'Job ID', 'Matrix']),
     matrix: value(job, ['matrix', 'MATRIX', 'Matrix ID', 'job_id']),
-    customer: value(job, ['customer', 'Customer', 'Customer Name', 'Artist', 'Title']),
+    customer: value(job, ['customer', 'Job Name', 'Customer', 'Customer Name', 'Artist', 'Title', '1']),
     order_number: value(job, ['order_number', 'ORDER NUMBER', 'Order Number']),
   };
 }

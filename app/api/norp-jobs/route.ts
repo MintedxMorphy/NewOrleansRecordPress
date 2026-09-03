@@ -268,7 +268,7 @@ function shipmentMatchesJob(shipment: DashboardShipment, job: any) {
   ].join(' '));
   if (jobMatrixKeys.some(key => key.length >= 4 && shipmentSearchText.includes(key))) return true;
 
-  const jobCustomer = cleanKey(stringValue(job.customer || job.Customer || job['Customer Name'] || job.Artist));
+  const jobCustomer = cleanKey(stringValue(job.customer || job['Job Name'] || job.Customer || job['Customer Name'] || job.Artist || job['1']));
   const shipmentCustomer = cleanKey(shipment.customer);
   if (jobCustomer && shipmentCustomer && jobCustomer === shipmentCustomer) return true;
 
@@ -277,7 +277,7 @@ function shipmentMatchesJob(shipment: DashboardShipment, job: any) {
   const jobContext: JobContext = {
     job_id: stringValue(job.job_id || job['Job ID'] || job.matrix || job.MATRIX),
     matrix: stringValue(job.matrix || job.MATRIX || job.job_id || job['Job ID']),
-    customer: stringValue(job.customer || job.Customer || job.artist || job.ARTIST || job['Customer Name']),
+    customer: stringValue(job.customer || job['Job Name'] || job.Customer || job.artist || job.ARTIST || job['Customer Name'] || job['1']),
     order_number: stringValue(job.order_number || job['Order Number']),
   };
   if (matchJobFromShipmentText(shipmentSearchText, [jobContext])) return true;
@@ -448,7 +448,7 @@ function jobsToLinkContext(jobs: any[]): JobContext[] {
   return jobs.map(job => ({
     job_id: stringValue(job.job_id || job['Job ID'] || job.matrix || job.MATRIX),
     matrix: stringValue(job.matrix || job.MATRIX || job.job_id || job['Job ID']),
-    customer: stringValue(job.customer || job.Customer || job.artist || job.ARTIST || job['Customer Name']),
+    customer: stringValue(job.customer || job['Job Name'] || job.Customer || job.artist || job.ARTIST || job['Customer Name'] || job['1']),
     order_number: stringValue(job.order_number || job['Order Number']),
   })).filter(job => job.job_id || job.matrix || job.customer);
 }
