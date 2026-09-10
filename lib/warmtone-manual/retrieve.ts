@@ -90,12 +90,12 @@ function snippetFor(text: string, tokens: string[], faults: string[]): string {
   const haystack = text.replace(/\s+/g, ' ').trim();
   if (!haystack) return '';
 
-  const needles = [...faults, ...tokens.filter((t) => t.length > 3)];
+  const needles = [...faults, ...tokens.filter((token) => token.length > 3)];
   let bestAt = 0;
   for (const needle of needles) {
-    const at = haystack.toLowerCase().indexOf(needle.toLowerCase());
-    if (at >= 0) {
-      bestAt = Math.max(0, at - 80);
+    const match = haystack.match(new RegExp(`\\b${needle}\\b`, 'i'));
+    if (match?.index != null) {
+      bestAt = Math.max(0, match.index - 80);
       break;
     }
   }
@@ -109,7 +109,7 @@ function scorePage(page: ManualPage, tokens: string[], faults: string[], phrases
 
   let score = 0;
   for (const fault of faults) {
-    if (body.includes(fault)) score += 48;
+    if (new RegExp(`\\b${fault}\\b`).test(body)) score += 48;
   }
   for (const phrase of phrases) {
     if (phrase.length > 5 && body.includes(phrase)) score += 18;
@@ -117,16 +117,10 @@ function scorePage(page: ManualPage, tokens: string[], faults: string[], phrases
 
   const heading = page.heading.toLowerCase();
   for (const token of tokens) {
-    let hits = 0;
-    let from = 0;
-    while (hits < 8) {
-      const at = body.indexOf(token, from);
-      if (at < 0) break;
-      hits += 1;
-      from = at + token.length;
-    }
+    const tokenRe = new RegExp(`\\b${token}\\b`, 'g');
+    const hits = Math.min((body.match(tokenRe) || []).length, 6);
     if (!hits) continue;
-    score += Math.min(hits, 6) * (token.length > 5 ? 2.4 : 1.6);
+    score += hits * (token.length > 5 ? 2.4 : 1.6);
     if (heading.includes(token)) score += 10;
   }
   return score;
