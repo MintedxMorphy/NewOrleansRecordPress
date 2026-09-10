@@ -16,3 +16,6 @@ node_modules
 .DS_Store
 .vercel
 .env.production
+
+# Equipment manuals — keep extracted text in git, not the binary PDF
+*.pdf
