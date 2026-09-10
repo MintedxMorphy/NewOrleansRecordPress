@@ -87,7 +87,10 @@ function faultCodes(value: string): string[] {
 }
 
 function snippetFor(text: string, tokens: string[], faults: string[]): string {
-  const haystack = text.replace(/\s+/g, ' ').trim();
+  const haystack = text
+    .replace(/CONFIDENTIAL\s*&\s*PROPRIETARY/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!haystack) return '';
 
   const needles = [...faults, ...tokens.filter((token) => token.length > 3)];

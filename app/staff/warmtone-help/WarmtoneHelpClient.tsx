@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { FormEvent, PointerEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 type Citation = {
   page: number;
@@ -39,26 +39,19 @@ function formatAnswer(text: string) {
   return withBreaks.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 }
 
-export function WarmtoneHelpClient() {
+export function WarmtoneHelpClient({
+  configured,
+  manualLabel,
+}: {
+  configured: boolean;
+  manualLabel: string;
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [manualLabel, setManualLabel] = useState('MAN-00016 Rev 3.00');
-  const [configured, setConfigured] = useState<boolean | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    fetch('/api/staff/warmtone-help')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.manual?.docId) {
-          setManualLabel(`${data.manual.docId} Rev ${data.manual.revision} · ${data.manual.pageCount} pages`);
-        }
-        if (typeof data?.configured === 'boolean') setConfigured(data.configured);
-      })
-      .catch(() => {});
-  }, []);
+  const askingRef = useRef(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -68,7 +61,8 @@ export function WarmtoneHelpClient() {
 
   async function ask(question: string) {
     const trimmed = question.trim();
-    if (!trimmed || busy) return;
+    if (!trimmed || busy || askingRef.current) return;
+    askingRef.current = true;
 
     const userMessage: ChatMessage = {
       id: `u-${Date.now()}`,
@@ -110,6 +104,7 @@ export function WarmtoneHelpClient() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed');
     } finally {
+      askingRef.current = false;
       setBusy(false);
     }
   }
@@ -117,6 +112,13 @@ export function WarmtoneHelpClient() {
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     void ask(input);
+  }
+
+  function onChipPointerDown(event: PointerEvent<HTMLButtonElement>, suggestion: string) {
+    event.preventDefault();
+    event.stopPropagation();
+    setInput(suggestion);
+    void ask(suggestion);
   }
 
   return (
@@ -132,7 +134,7 @@ export function WarmtoneHelpClient() {
         <div style={S.meta}>{manualLabel}</div>
       </header>
 
-      {configured === false && (
+      {!configured && (
         <div style={S.banner}>
           Claude is not configured in this environment, so answers will show matching manual pages until `ANTHROPIC_API_KEY` is set on Vercel.
         </div>
@@ -143,7 +145,19 @@ export function WarmtoneHelpClient() {
           <p style={S.emptyLead}>Ask about a fault code, HMI screen, stamper change, trimmer, hydraulics, or steam.</p>
           <div style={S.chips}>
             {SUGGESTIONS.map((suggestion) => (
-              <button key={suggestion} type="button" style={S.chip} onClick={() => void ask(suggestion)}>
+              <button
+                key={suggestion}
+                type="button"
+                data-testid={`warmtone-chip-${suggestion.slice(0, 12)}`}
+                style={S.chip}
+                onPointerDown={(event) => onChipPointerDown(event, suggestion)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setInput(suggestion);
+                  void ask(suggestion);
+                }}
+              >
                 {suggestion}
               </button>
             ))}
@@ -285,15 +299,22 @@ const S: Record<string, CSSProperties> = {
   chips: { display: 'flex', flexWrap: 'wrap', gap: 8 },
   chip: {
     appearance: 'none',
+    WebkitAppearance: 'none',
     background: '#0a1a15',
     border: '1px solid #1f7d5b',
     color: '#5DCAA5',
     borderRadius: 999,
-    padding: '8px 12px',
+    padding: '10px 14px',
+    minHeight: 40,
     font: 'inherit',
     fontSize: 13,
     fontWeight: 700,
     cursor: 'pointer',
+    pointerEvents: 'auto',
+    position: 'relative',
+    zIndex: 2,
+    userSelect: 'none',
+    touchAction: 'manipulation',
   },
   thread: { display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 },
   userBubble: {
