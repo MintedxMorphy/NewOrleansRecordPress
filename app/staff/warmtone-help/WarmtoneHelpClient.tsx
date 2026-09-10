@@ -25,8 +25,8 @@ type ChatMessage = {
 const SUGGESTIONS = [
   'Fault 1105 pre-plasticizer 24V missing',
   'How do I change stampers?',
+  'Change 12" moulds to 7" — what settings change?',
   'Edge trimmer is not cycling',
-  'HMI is stuck on the start screen',
   'Platens are not heating / no steam',
 ];
 
@@ -40,10 +40,8 @@ function formatAnswer(text: string) {
 }
 
 export function WarmtoneHelpClient({
-  configured,
   manualLabel,
 }: {
-  configured: boolean;
   manualLabel: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -134,12 +132,6 @@ export function WarmtoneHelpClient({
         <div style={S.meta}>{manualLabel}</div>
       </header>
 
-      {!configured && (
-        <div style={S.banner}>
-          Claude is not configured in this environment, so answers will show matching manual pages until `ANTHROPIC_API_KEY` is set on Vercel.
-        </div>
-      )}
-
       {messages.length === 0 && (
         <div style={S.empty}>
           <p style={S.emptyLead}>Ask about a fault code, HMI screen, stamper change, trimmer, hydraulics, or steam.</p>
@@ -178,7 +170,7 @@ export function WarmtoneHelpClient({
               <div style={S.answer}>{message.content}</div>
             )}
             {message.fallback && (
-              <div style={S.fallbackNote}>Showing manual excerpts because the assistant model was unavailable.</div>
+              <div style={S.fallbackNote}>Writer offline. Use the pages below, or call Viryl 1-844-468-4795.</div>
             )}
             {message.citations && message.citations.length > 0 && (
               <div style={S.citeRow}>
@@ -277,16 +269,6 @@ const S: Record<string, CSSProperties> = {
     color: '#6a6858',
     textAlign: 'right',
     paddingTop: 8,
-  },
-  banner: {
-    background: '#1a1500',
-    border: '1px solid #5a4a00',
-    color: '#f5e6a8',
-    borderRadius: 10,
-    padding: '12px 14px',
-    marginBottom: 16,
-    fontSize: 14,
-    lineHeight: 1.45,
   },
   empty: {
     background: '#14161b',
