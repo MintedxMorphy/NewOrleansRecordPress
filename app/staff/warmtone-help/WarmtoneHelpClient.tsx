@@ -126,7 +126,7 @@ export function WarmtoneHelpClient({
           <div style={S.kicker}>Viryl WarmTone MK1 · PRS00007</div>
           <h1 style={S.title}>WarmTone Help</h1>
           <p style={S.subtitle}>
-            Shop-floor tech support from the owners manual. Web results are only used when the book is thin.
+            Shop-floor tech support from the owners manual. Answers are written from the retrieved pages.
           </p>
         </div>
         <div style={S.meta}>{manualLabel}</div>

@@ -171,8 +171,8 @@ Font: system sans-serif stack. All styling via inline styles (no Tailwind depend
 The dashboard uses `claude-sonnet-4-5` for:
 - **Email classification** (scan-email cron) — classifies inbound emails and extracts structured data
 - **Morning briefing** (morning-briefing cron) — generates a 2-paragraph operations briefing
-- **WarmTone Help** (`/staff/warmtone-help`) — shop-floor answers grounded on the Viryl manual. Same `ANTHROPIC_API_KEY` as the crons. No extra paid service.
+- **WarmTone Help** (`/staff/warmtone-help`) — shop-floor answers grounded on the Viryl manual. Writer is GPT (`OPENAI_API_KEY` / the same shipment-tracking model, default `gpt-5.5`). Claude (`ANTHROPIC_API_KEY`) is an optional backup.
 
-WarmTone Help reads `ANTHROPIC_API_KEY` at request time on the Node runtime (not Edge). Vercel crons only run in Production, so that key is often scoped to Production only. If Preview/branch URLs show the writer-offline fallback, add the same `ANTHROPIC_API_KEY` to Preview — or treat Production as the floor-staff URL. Do not commit the key.
+WarmTone Help is `configured` when either OpenAI or Anthropic is present. It reads keys at request time on the Node runtime (not Edge). Production already has `OPENAI_API_KEY` for shipments — that is the reliable floor-staff path. Do not commit the key.
 
 Monitor usage at [console.anthropic.com](https://console.anthropic.com).
