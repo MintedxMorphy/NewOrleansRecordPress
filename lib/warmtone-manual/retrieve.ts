@@ -1,4 +1,5 @@
 import manual from './pages.json';
+import { isRecordSizeChangeQuery, playbookForQuestion, sizeChangePreferredPages } from './playbooks';
 
 export type ManualPage = {
   page: number;
@@ -30,7 +31,33 @@ const STOP = new Set([
   'be', 'are', 'was', 'were', 'can', 'could', 'should', 'would', 'i', 'we', 'you',
   'my', 'our', 'me', 'not', 'no', 'yes', 'please', 'help', 'about', 'into', 'at',
   'by', 'as', 'so', 'than', 'then', 'too', 'very', 'just', 'get', 'got', 'make',
+  'need', 'needs', 'change', 'changing', 'want', 'have', 'has',
 ]);
+
+const SIZE_CHANGE_PAGES = new Set(sizeChangePreferredPages());
+
+const PAGE_TITLES: Record<number, string> = {
+  28: 'Moulds and Stampers',
+  29: 'Moulds by record size (12-inch / 7-inch)',
+  34: 'Stacking Spindles',
+  61: 'Job Details',
+  62: 'Job Details — compound and record counts',
+  63: 'Load Job / saved process settings',
+  68: 'Process Details',
+  69: 'Heat, dwell, cool, and pressure timings',
+  70: 'Press At Pressure Details',
+  94: 'Loading Labels and Label Cartridges',
+  95: 'Removing label cartridges',
+  99: 'Changing Spindles',
+  100: 'Removing and replacing spindles',
+  101: 'Installing and Removing Stampers',
+  104: 'Before Removing Moulds',
+  105: 'Removing Moulds',
+  106: 'Installing Moulds',
+  107: 'Installing Moulds (top mould / jig)',
+  108: 'Installing Moulds (clamps and hoses)',
+  109: 'Mould install leak check',
+};
 
 export function getManualMeta(): ManualMeta {
   const { pages: _pages, ...meta } = DOC;
@@ -49,11 +76,18 @@ export function getPlantCard() {
   ].join(' ');
 }
 
+export function pageTitle(page: { page: number; heading?: string }): string {
+  if (PAGE_TITLES[page.page]) return PAGE_TITLES[page.page];
+  const heading = (page.heading || '').replace(/\s+/g, ' ').trim();
+  if (!heading) return `Manual page ${page.page}`;
+  return heading.length > 72 ? `${heading.slice(0, 69)}…` : heading;
+}
+
 const SYNONYMS: Record<string, string[]> = {
-  platen: ['mould', 'mold', 'steam', 'heat', 'heating'],
-  platens: ['mould', 'mold', 'steam', 'heat', 'heating'],
-  steam: ['boiler', 'heat', 'heating', 'mould', 'valve'],
-  heating: ['steam', 'mould', 'heat', 'valve'],
+  platen: ['mold', 'steam', 'heat', 'heating'],
+  platens: ['mold', 'steam', 'heat', 'heating'],
+  steam: ['boiler', 'heat', 'heating', 'mold', 'valve'],
+  heating: ['steam', 'mold', 'heat', 'valve'],
   hmi: ['screen', 'display', 'touch'],
   jam: ['fault', 'alarm', 'stuck'],
   jammed: ['fault', 'alarm', 'stuck'],
@@ -61,16 +95,42 @@ const SYNONYMS: Record<string, string[]> = {
   hydraulics: ['hydraulic', 'hpu', 'oil'],
   hydraulic: ['hydraulics', 'hpu', 'oil'],
   trimmer: ['trimming', 'edge'],
-  stamper: ['stampers', 'mould'],
-  stampers: ['stamper', 'mould'],
+  stamper: ['stampers', 'mold'],
+  stampers: ['stamper', 'mold'],
+  mold: ['molds', 'stamper'],
+  molds: ['mold', 'stamper'],
+  spindle: ['spindles', 'stacking'],
+  spindles: ['spindle', 'stacking'],
+  recipe: ['job', 'process'],
+  recipes: ['job', 'process'],
+  dwell: ['heat', 'cool', 'timing'],
+  label: ['labels', 'cartridge'],
+  labels: ['label', 'cartridge'],
 };
 
-function tokenize(value: string): string[] {
-  const base = value
+function normalizeForSearch(value: string): string {
+  return value
     .toLowerCase()
+    .replace(/moulds/g, 'molds')
+    .replace(/mould/g, 'mold')
+    .replace(/12\s*[-]?\s*(?:inch|in\b|["”''])/g, ' 12inch ')
+    .replace(/7\s*[-]?\s*(?:inch|in\b|["”''])/g, ' 7inch ')
+    .replace(/10\s*[-]?\s*(?:inch|in\b|["”''])/g, ' 10inch ')
+    .replace(/\b12\s+molds?\b/g, ' 12inch mold ')
+    .replace(/\b7\s+molds?\b/g, ' 7inch mold ')
+    .replace(/\blps?\b/g, ' lp 12inch ')
+    .replace(/\beps?\b/g, ' ep 7inch ')
+    .replace(/\bjob recipes?\b/g, ' load job process settings ')
+    .replace(/\bload jobs?\b/g, ' load job ')
+    .replace(/\bsize changes?\b/g, ' mold spindle job size ');
+}
+
+function tokenize(value: string): string[] {
+  const normalized = normalizeForSearch(value);
+  const base = normalized
     .replace(/[^a-z0-9]+/g, ' ')
     .split(/\s+/)
-    .filter((token) => token.length > 1 && !STOP.has(token));
+    .filter((token) => token.length > 1 && !STOP.has(token) && !/^\d{1,2}$/.test(token));
   const extra: string[] = [];
   for (const token of base) {
     extra.push(...(SYNONYMS[token] || []));
@@ -106,8 +166,28 @@ function snippetFor(text: string, tokens: string[], faults: string[]): string {
   return (bestAt > 0 ? '…' : '') + slice + (bestAt + 240 < haystack.length ? '…' : '');
 }
 
-function scorePage(page: ManualPage, tokens: string[], faults: string[], phrases: string[]): number {
-  const body = `${page.heading}\n${page.text}`.toLowerCase();
+function sizeChangeBoost(page: ManualPage): number {
+  let boost = 0;
+  if (SIZE_CHANGE_PAGES.has(page.page)) boost += 40;
+  const heading = normalizeForSearch(page.heading);
+  if (/installing molds|removing molds|before removing molds/.test(heading)) boost += 28;
+  if (/changing spindles|removing spindles|replacing spindles/.test(heading)) boost += 26;
+  if (/job details|load job|process details/.test(heading)) boost += 22;
+  if (/molds and stampers|record size/.test(heading)) boost += 12;
+  if (/loading labels/.test(heading)) boost += 10;
+  if (/sequence settings/.test(heading) || page.page === 78) boost -= 36;
+  if (/table of contents|spare parts|fault number/.test(heading) || page.page <= 8) boost -= 24;
+  return boost;
+}
+
+function scorePage(
+  page: ManualPage,
+  tokens: string[],
+  faults: string[],
+  phrases: string[],
+  sizeChange: boolean,
+): number {
+  const body = normalizeForSearch(`${page.heading}\n${page.text}`);
   if (!body.trim()) return 0;
 
   let score = 0;
@@ -118,7 +198,7 @@ function scorePage(page: ManualPage, tokens: string[], faults: string[], phrases
     if (phrase.length > 5 && body.includes(phrase)) score += 18;
   }
 
-  const heading = page.heading.toLowerCase();
+  const heading = normalizeForSearch(page.heading);
   for (const token of tokens) {
     const tokenRe = new RegExp(`\\b${token}\\b`, 'g');
     const hits = Math.min((body.match(tokenRe) || []).length, 6);
@@ -126,16 +206,27 @@ function scorePage(page: ManualPage, tokens: string[], faults: string[], phrases
     score += hits * (token.length > 5 ? 2.4 : 1.6);
     if (heading.includes(token)) score += 10;
   }
+
+  if (sizeChange) score += sizeChangeBoost(page);
   return score;
+}
+
+function bucketFor(page: number): 'mould' | 'spindle' | 'job' | 'label' | 'other' {
+  if ([28, 29, 101, 104, 105, 106, 107, 108, 109].includes(page)) return 'mould';
+  if ([34, 99, 100].includes(page)) return 'spindle';
+  if ([61, 62, 63, 68, 69, 70].includes(page)) return 'job';
+  if ([94, 95, 96, 97, 98].includes(page)) return 'label';
+  return 'other';
 }
 
 export function retrieveManualPages(query: string, limit = 8): RetrievedPage[] {
   const tokens = tokenize(query);
   const faults = faultCodes(query);
-  if (tokens.length === 0 && faults.length === 0) return [];
+  const sizeChange = isRecordSizeChangeQuery(query);
+  const playbook = playbookForQuestion(query);
+  if (tokens.length === 0 && faults.length === 0 && !sizeChange) return [];
 
-  const phrases = query
-    .toLowerCase()
+  const phrases = normalizeForSearch(query)
     .replace(/[^a-z0-9\s]+/g, ' ')
     .split(/\s+/)
     .filter(Boolean)
@@ -144,20 +235,54 @@ export function retrieveManualPages(query: string, limit = 8): RetrievedPage[] {
       return acc;
     }, []);
 
+  if (sizeChange) {
+    phrases.push('record size', 'load job', 'process settings', 'changing spindles', 'installing molds', 'removing molds');
+  }
+
   const ranked = DOC.pages
     .map((page) => ({
       ...page,
-      score: scorePage(page, tokens, faults, phrases),
+      score: scorePage(page, tokens, faults, phrases, sizeChange),
     }))
     .filter((page) => page.score > 0)
     .sort((a, b) => b.score - a.score || a.page - b.page);
 
+  if (playbook) {
+    for (const pageNum of playbook.pages) {
+      const existing = ranked.find((page) => page.page === pageNum);
+      if (existing) {
+        existing.score = Math.max(existing.score, 32);
+        continue;
+      }
+      const page = DOC.pages.find((item) => item.page === pageNum);
+      if (page) ranked.push({ ...page, score: 32 });
+    }
+    ranked.sort((a, b) => b.score - a.score || a.page - b.page);
+  }
+
   const picked = new Map<number, (typeof ranked)[number]>();
+
+  if (sizeChange) {
+    for (const bucket of ['mould', 'spindle', 'job', 'label'] as const) {
+      const hit = ranked.find((page) => bucketFor(page.page) === bucket && !picked.has(page.page));
+      if (hit) {
+        picked.set(hit.page, hit);
+      }
+    }
+  }
+
   for (const page of ranked) {
     if (picked.size >= limit) break;
+    if (picked.has(page.page)) continue;
     picked.set(page.page, page);
     const neighbor = DOC.pages[page.page]; // 0-index: page+1
-    if (neighbor && picked.size < limit && !picked.has(neighbor.page) && page.score >= 12) {
+    const neighborOk =
+      neighbor &&
+      !picked.has(neighbor.page) &&
+      page.score >= 12 &&
+      picked.size < limit &&
+      (!sizeChange || SIZE_CHANGE_PAGES.has(neighbor.page) || bucketFor(neighbor.page) !== 'other');
+    if (neighborOk && neighbor) {
       picked.set(neighbor.page, { ...neighbor, score: page.score * 0.35 });
     }
   }
@@ -167,6 +292,7 @@ export function retrieveManualPages(query: string, limit = 8): RetrievedPage[] {
     .slice(0, limit)
     .map((page) => ({
       ...page,
+      heading: pageTitle(page),
       snippet: snippetFor(page.text, tokens, faults),
     }));
 }
@@ -189,3 +315,5 @@ export function formatManualContext(pages: RetrievedPage[]): string {
     })
     .join('\n\n');
 }
+
+export { isRecordSizeChangeQuery, playbookForQuestion };

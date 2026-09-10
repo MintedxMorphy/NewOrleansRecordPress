@@ -19,7 +19,6 @@ export default function WarmtoneHelpPage() {
       />
       <StaffNav activeHref="/staff/warmtone-help" />
       <WarmtoneHelpClient
-        configured={Boolean(process.env.ANTHROPIC_API_KEY)}
         manualLabel={`${manual.docId} Rev ${manual.revision} · ${manual.pageCount} pages`}
       />
     </div>
