@@ -1,6 +1,6 @@
 /**
- * Short NORP shop-floor playbooks. Checklist spine for Claude — always cite the
- * Viryl manual. Do not invent HMI setpoints; operators load a saved job.
+ * Short NORP shop-floor playbooks. Checklist spine for the writer — always cite
+ * the Viryl manual. Do not invent HMI setpoints; operators load a saved job.
  */
 
 export type Playbook = {
