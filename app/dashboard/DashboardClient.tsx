@@ -1,9 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { DragDropContext, Draggable, Droppable, DraggableProvidedDragHandleProps, DropResult, DragUpdate } from '@hello-pangea/dnd';
 import { packSkyline } from '@/lib/dashboard-pack';
-import { createClient as createBrowserSupabase } from '@/lib/supabase/client';
 import { PRODUCTION_LOG_HEARTBEAT_MS, PRODUCTION_SYNC_POLL_MS, notifyProductionSync, subscribeProductionSync } from '@/lib/production-sync';
 import {
   buildJobPnl,
@@ -33,6 +32,7 @@ interface Job { [key: string]: string | number | boolean | string[] | JobRecord[
 
 interface Props {
   jobs?: Job[];
+  readOnly?: boolean;
 }
 
 const STATIONS = [
@@ -1498,10 +1498,11 @@ function JobCard({
   compact = false,
   queueRank,
   stretch,
+  readOnly = false,
 }: {
   job: Job;
-  onOpen: () => void;
-  onComplete: () => void;
+  onOpen?: () => void;
+  onComplete?: () => void;
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
   compact?: boolean;
   queueRank?: number;
@@ -1510,6 +1511,7 @@ function JobCard({
     label: string;
     offset: number;
   };
+  readOnly?: boolean;
 }) {
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
@@ -1540,7 +1542,7 @@ function JobCard({
   const duplicateCount = variantCount(job);
   const hasVariants = duplicateCount > 1 && Array.isArray(job.variants) && job.variants.length > 1;
   const artReady = job.art_received === true || job.art_received === 'true';
-  const canComplete = station === 'shipping';
+  const canComplete = !readOnly && station === 'shipping' && Boolean(onComplete);
   const completeColor = COLORS.red;
   const isStretched = Boolean(stretch && stretch.columns > 1);
   const shipments = jobShipments(job);
@@ -1550,8 +1552,8 @@ function JobCard({
 
   return (
     <div
-      onClick={onOpen}
-      {...dragHandleProps}
+      onClick={readOnly ? undefined : onOpen}
+      {...(readOnly ? {} : dragHandleProps)}
       style={{
         background: rushed
           ? `linear-gradient(135deg, ${COLORS.red}24 0%, ${COLORS.card} 52%, ${COLORS.red}14 100%)`
@@ -1563,11 +1565,11 @@ function JobCard({
         boxShadow: rushed
           ? `0 0 0 1px ${COLORS.red}33, 0 12px 30px #00000055`
           : isStretched ? `0 0 0 1px ${meta.color}33, 0 12px 30px #00000066` : station === 'now_pressing' ? `0 0 0 1px ${meta.color}44, 0 12px 30px #00000055` : '0 8px 18px #00000035',
-        cursor: 'pointer',
+        cursor: readOnly ? 'default' : 'pointer',
         marginBottom: '8px',
         padding: compact ? '13px' : '10px',
         position: 'relative',
-        userSelect: 'none',
+        userSelect: readOnly ? 'text' : 'none',
         width: '100%',
         zIndex: isStretched ? 8 : 1,
       }}
@@ -1813,6 +1815,7 @@ function Pipeline({
   onError,
   onBusyChange,
   isMobile = false,
+  readOnly = false,
 }: {
   jobs: Job[];
   visibleJobs?: Job[];
@@ -1821,6 +1824,7 @@ function Pipeline({
   onError: (message: string) => void;
   onBusyChange?: (busy: boolean) => void;
   isMobile?: boolean;
+  readOnly?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   const [confirmCompleteJob, setConfirmCompleteJob] = useState<Job | null>(null);
@@ -1876,6 +1880,7 @@ function Pipeline({
   }, [draggingId, overlayTop, rememberCardHeight, visibleJobs]);
 
   const saveMovedJob = async (job: Job, stage: DashboardStage, order: number) => {
+    if (readOnly) return;
     const response = await persistJobPosition(job, stage, order);
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
@@ -1908,6 +1913,7 @@ function Pipeline({
   };
 
   const onDragEnd = async (result: DropResult) => {
+    if (readOnly) return;
     const hoveredStation = dragOverStation;
     const lastStationDrop = lastStationDropRef.current;
     setDraggingId(null);
@@ -2035,6 +2041,7 @@ function Pipeline({
   };
 
   const completeJob = async (job: Job) => {
+    if (readOnly) return;
     const current = stationOf(job);
     if (current !== 'shipping') return;
     const target = 'completed';
@@ -2060,7 +2067,7 @@ function Pipeline({
     }
   };
 
-  if (!mounted) {
+  if (!mounted && !readOnly) {
     return <div style={{ color: COLORS.muted, padding: '24px' }}>Loading board...</div>;
   }
 
@@ -2070,8 +2077,79 @@ function Pipeline({
     ? Math.max(...spanLayout.map(entry => entry.top + entry.height))
     : 0;
 
-  return (
-    <DragDropContext onDragStart={onDragStart} onDragUpdate={onDragUpdate} onDragEnd={onDragEnd}>
+  const renderJobCard = (
+    job: Job,
+    options?: {
+      dragHandleProps?: DraggableProvidedDragHandleProps | null;
+      compact?: boolean;
+      queueRank?: number;
+      stretch?: { columns: number; label: string; offset: number };
+    },
+  ) => (
+    <JobCard
+      job={job}
+      readOnly={readOnly}
+      onOpen={readOnly ? undefined : () => onJobOpen(job)}
+      onComplete={readOnly ? undefined : () => setConfirmCompleteJob(job)}
+      dragHandleProps={readOnly ? undefined : options?.dragHandleProps}
+      compact={options?.compact}
+      queueRank={options?.queueRank}
+      stretch={options?.stretch}
+    />
+  );
+
+  const stretchedCards = spanLayout.map((entry, index) => {
+    const { job, startIndex, endIndex } = entry;
+    const key = jobKey(job);
+    const stretch = stretchForJob(job, isMobile);
+    const card = renderJobCard(job, { stretch });
+    const layoutStyle = {
+      alignSelf: 'start' as const,
+      gridColumn: `${startIndex + 1} / ${endIndex + 2}`,
+      gridRow: '1',
+      marginTop: entry.top,
+      minWidth: 0,
+      pointerEvents: 'auto' as const,
+    };
+    const layoutAttrs = {
+      'data-job-key': key,
+      'data-span-job-key': key,
+      'data-span-stations': stageSpanForJob(job).join(' '),
+      'data-height-key': key,
+    };
+
+    if (readOnly) {
+      return (
+        <div key={`span-${key}`} style={layoutStyle} {...layoutAttrs}>
+          {card}
+        </div>
+      );
+    }
+
+    const isDraggingNormalJob = Boolean(draggingId && !draggingId.startsWith('span-'));
+    const isThisStretchedCard = draggingId === `span-${key}`;
+    return (
+      <Draggable key={`span-${key}`} draggableId={`span-${key}`} index={index}>
+        {(dragProvided, dragSnapshot) => (
+          <div
+            ref={dragProvided.innerRef}
+            {...dragProvided.draggableProps}
+            style={{
+              ...dragProvided.draggableProps.style,
+              ...layoutStyle,
+              opacity: dragSnapshot.isDragging ? 0.88 : 1,
+              pointerEvents: isDraggingNormalJob && !isThisStretchedCard ? 'none' : 'auto',
+            }}
+            {...layoutAttrs}
+          >
+            {renderJobCard(job, { stretch, dragHandleProps: dragProvided.dragHandleProps })}
+          </div>
+        )}
+      </Draggable>
+    );
+  });
+
+  const board = (
       <div
         ref={boardRef}
         style={{
@@ -2099,6 +2177,7 @@ function Pipeline({
               zIndex: 20,
             }}
           >
+            {readOnly ? stretchedCards : (
             <Droppable droppableId={STRETCHED_DROPPABLE_ID} isDropDisabled>
               {provided => (
                 <div
@@ -2106,45 +2185,7 @@ function Pipeline({
                   {...provided.droppableProps}
                   style={{ display: 'contents' }}
                 >
-                  {spanLayout.map((entry, index) => {
-                    const { job, startIndex, endIndex } = entry;
-                    const key = jobKey(job);
-                    const stretch = stretchForJob(job, isMobile);
-                    const isDraggingNormalJob = Boolean(draggingId && !draggingId.startsWith('span-'));
-                    const isThisStretchedCard = draggingId === `span-${key}`;
-                    return (
-                      <Draggable key={`span-${key}`} draggableId={`span-${key}`} index={index}>
-                        {(dragProvided, dragSnapshot) => (
-                          <div
-                            ref={dragProvided.innerRef}
-                            {...dragProvided.draggableProps}
-                            style={{
-                              ...dragProvided.draggableProps.style,
-                              alignSelf: 'start',
-                              gridColumn: `${startIndex + 1} / ${endIndex + 2}`,
-                              gridRow: '1',
-                              marginTop: entry.top,
-                              minWidth: 0,
-                              opacity: dragSnapshot.isDragging ? 0.88 : 1,
-                              pointerEvents: isDraggingNormalJob && !isThisStretchedCard ? 'none' : 'auto',
-                            }}
-                            data-job-key={key}
-                            data-span-job-key={key}
-                            data-span-stations={stageSpanForJob(job).join(' ')}
-                            data-height-key={key}
-                          >
-                            <JobCard
-                              job={job}
-                              onOpen={() => onJobOpen(job)}
-                              onComplete={() => setConfirmCompleteJob(job)}
-                              dragHandleProps={dragProvided.dragHandleProps}
-                              stretch={stretch}
-                            />
-                          </div>
-                        )}
-                      </Draggable>
-                    );
-                  })}
+                  {stretchedCards}
                   <div style={{
                     gridColumn: '1',
                     height: 0,
@@ -2157,6 +2198,7 @@ function Pipeline({
                 </div>
               )}
             </Droppable>
+            )}
           </div>
         )}
         {STATIONS.map(station => {
@@ -2166,30 +2208,8 @@ function Pipeline({
             : columnSlots(boardLayout, station);
           const isNowPressing = station === 'now_pressing';
           const visualQueue = station === 'press_queue' ? stationVisualJobs(visibleJobs, station) : [];
-          let jobDragIndex = 0;
 
-          return (
-            <Droppable droppableId={station} key={station}>
-              {(provided, snapshot) => (
-                <section
-                  id={stationAnchor(station)}
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                  data-station={station}
-                  style={{
-                    background: snapshot.isDraggingOver ? `${meta.color}14` : COLORS.panel,
-                    border: `1px solid ${isNowPressing ? `${meta.color}88` : COLORS.border}`,
-                    borderRadius: '8px',
-                    minHeight: isMobile ? 'auto' : '620px',
-                    minWidth: 0,
-                    overflow: 'visible',
-                    padding: isMobile ? '10px' : '8px',
-                    position: 'relative',
-                    scrollMarginTop: isMobile ? '96px' : '112px',
-                    transition: 'background 0.15s',
-                    zIndex: 1,
-                  }}
-                >
+          const stationHeader = (
                   <div style={{ borderBottom: `1px solid ${COLORS.border}`, marginBottom: '8px', paddingBottom: '9px' }}>
                     <div style={{ alignItems: 'center', display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
                       <div style={{ alignItems: 'center', display: 'flex', gap: '8px', minWidth: 0 }}>
@@ -2227,7 +2247,11 @@ function Pipeline({
                       </div>
                     </div>
                   </div>
+          );
 
+          const stationCards = (placeholder?: ReactNode) => {
+            let jobDragIndex = 0;
+            return (
                   <div
                     data-station-cards="true"
                     style={{
@@ -2250,6 +2274,25 @@ function Pipeline({
                       const index = jobDragIndex;
                       jobDragIndex += 1;
                       const visualIndex = visualQueue.findIndex(candidate => jobKey(candidate) === jobKey(job));
+                      const card = renderJobCard(job, {
+                        compact: isMobile,
+                        queueRank: station === 'press_queue' && visualIndex >= 0 ? visualIndex + 1 : undefined,
+                        stretch: stretchForJob(job, isMobile),
+                      });
+
+                      if (readOnly) {
+                        return (
+                          <div
+                            key={jobKey(job)}
+                            data-job-key={jobKey(job)}
+                            data-column-job-key={jobKey(job)}
+                            data-height-key={jobKey(job)}
+                          >
+                            {card}
+                          </div>
+                        );
+                      }
+
                       return (
                         <Draggable key={jobKey(job)} draggableId={jobKey(job)} index={index}>
                           {(dragProvided, dragSnapshot) => (
@@ -2264,28 +2307,75 @@ function Pipeline({
                               data-column-job-key={jobKey(job)}
                               data-height-key={jobKey(job)}
                             >
-                              <JobCard
-                                job={job}
-                                onOpen={() => onJobOpen(job)}
-                                onComplete={() => setConfirmCompleteJob(job)}
-                                dragHandleProps={dragProvided.dragHandleProps}
-                                compact={isMobile}
-                                queueRank={station === 'press_queue' && visualIndex >= 0 ? visualIndex + 1 : undefined}
-                                stretch={stretchForJob(job, isMobile)}
-                              />
+                              {renderJobCard(job, {
+                                compact: isMobile,
+                                queueRank: station === 'press_queue' && visualIndex >= 0 ? visualIndex + 1 : undefined,
+                                stretch: stretchForJob(job, isMobile),
+                                dragHandleProps: dragProvided.dragHandleProps,
+                              })}
                             </div>
                           )}
                         </Draggable>
                       );
                     })}
-                    {provided.placeholder}
+                    {placeholder}
                   </div>
+            );
+          };
+
+          const sectionStyle = (isDraggingOver = false) => ({
+                    background: isDraggingOver ? `${meta.color}14` : COLORS.panel,
+                    border: `1px solid ${isNowPressing ? `${meta.color}88` : COLORS.border}`,
+                    borderRadius: '8px',
+                    minHeight: isMobile ? 'auto' : '620px',
+                    minWidth: 0,
+                    overflow: 'visible' as const,
+                    padding: isMobile ? '10px' : '8px',
+                    position: 'relative' as const,
+                    scrollMarginTop: isMobile ? '96px' : '112px',
+                    transition: 'background 0.15s',
+                    zIndex: 1,
+          });
+
+          if (readOnly) {
+            return (
+              <section
+                key={station}
+                id={stationAnchor(station)}
+                data-station={station}
+                style={sectionStyle()}
+              >
+                {stationHeader}
+                {stationCards()}
+              </section>
+            );
+          }
+
+          return (
+            <Droppable droppableId={station} key={station}>
+              {(provided, snapshot) => (
+                <section
+                  id={stationAnchor(station)}
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  data-station={station}
+                  style={sectionStyle(snapshot.isDraggingOver)}
+                >
+                  {stationHeader}
+                  {stationCards(provided.placeholder)}
                 </section>
               )}
             </Droppable>
           );
         })}
       </div>
+  );
+
+  if (readOnly) return board;
+
+  return (
+    <DragDropContext onDragStart={onDragStart} onDragUpdate={onDragUpdate} onDragEnd={onDragEnd}>
+      {board}
       {confirmCompleteJob && (
         <>
           <div
@@ -3713,7 +3803,7 @@ function PressBacklogStat({
   );
 }
 
-export default function DashboardClient({ jobs: initialJobs }: Props) {
+export default function DashboardClient({ jobs: initialJobs, readOnly = false }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs ?? []);
   const [loading, setLoading] = useState(true);
   const [financeLoaded, setFinanceLoaded] = useState(false);
@@ -3807,15 +3897,18 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       await run;
     } finally {
       inFlightRef.current = null;
-      if (!silent || !financeLoadedRef.current) {
+      if (!readOnly && (!silent || !financeLoadedRef.current)) {
         void refreshJobDetailsRef.current();
+      } else if (readOnly) {
+        financeLoadedRef.current = true;
+        setFinanceLoaded(true);
       }
-      if (queuedRefreshRef.current && !syncPausedRef.current) {
+      if (!readOnly && queuedRefreshRef.current && !syncPausedRef.current) {
         queuedRefreshRef.current = false;
         void refreshJobsRef.current({ silent: true });
       }
     }
-  }, [applyRemoteJobs]);
+  }, [applyRemoteJobs, readOnly]);
 
   const refreshJobDetails = useCallback(async () => {
     try {
@@ -3874,14 +3967,20 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    const readLogStamp = async () => {
-      const response = await fetch('/api/production-sync', { cache: 'no-store' });
-      const data = await response.json();
-      return `${data.press_log_at || ''}|${data.qc_log_at || ''}`;
-    };
 
     void (async () => {
       try {
+        if (readOnly) {
+          await refreshJobsRef.current({ silent: false });
+          return;
+        }
+
+        const readLogStamp = async () => {
+          const response = await fetch('/api/production-sync', { cache: 'no-store' });
+          const data = await response.json();
+          return `${data.press_log_at || ''}|${data.qc_log_at || ''}`;
+        };
+
         let before = '';
         try {
           before = await readLogStamp();
@@ -3910,10 +4009,10 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => {
-    if (!boardReady) return undefined;
+    if (readOnly || !boardReady) return undefined;
 
     let debounce: number | undefined;
     const pull = () => {
@@ -3956,20 +4055,24 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
     }, PRODUCTION_LOG_HEARTBEAT_MS);
 
     let cleanupRealtime = () => {};
+    let realtimeCancelled = false;
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      try {
-        const supabase = createBrowserSupabase();
-        const channel = supabase
-          .channel('production-log-sync')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'press_log' }, pull)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'qc_log' }, pull)
-          .subscribe();
-        cleanupRealtime = () => {
-          void supabase.removeChannel(channel);
-        };
-      } catch {
-        cleanupRealtime = () => {};
-      }
+      void import('@/lib/supabase/client').then(({ createClient }) => {
+        if (realtimeCancelled) return;
+        try {
+          const supabase = createClient();
+          const channel = supabase
+            .channel('production-log-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'press_log' }, pull)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'qc_log' }, pull)
+            .subscribe();
+          cleanupRealtime = () => {
+            void supabase.removeChannel(channel);
+          };
+        } catch {
+          cleanupRealtime = () => {};
+        }
+      });
     }
 
     return () => {
@@ -3979,9 +4082,10 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       window.clearInterval(timer);
       window.clearInterval(logTimer);
       window.clearTimeout(debounce);
+      realtimeCancelled = true;
       cleanupRealtime();
     };
-  }, [boardReady]);
+  }, [boardReady, readOnly]);
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const visibleJobs = useMemo(() => (
@@ -4003,6 +4107,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   };
 
   const saveDashNotes = async (job: Job, dashNotes: string) => {
+    if (readOnly) return;
     const key = jobKey(job);
     const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/dash-notes`, {
       method: 'PATCH',
@@ -4024,6 +4129,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   };
 
   const toggleRushOrder = async (job: Job, rushed: boolean) => {
+    if (readOnly) return;
     const key = jobKey(job);
     const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
     const nextDashNotes = dashNotesWithDashboardMarkers(rawDashNotes, visibleDashNotes(rawDashNotes), { rushOverride: rushed });
@@ -4047,6 +4153,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   };
 
   const saveStageSpan = async (job: Job, span: Station[]) => {
+    if (readOnly) return;
     const key = jobKey(job);
     const rawDashNotes = value(job, ['dash_notes', 'Dash Notes', 'Dashboard Notes']);
     const nextDashNotes = dashNotesWithDashboardMarkers(rawDashNotes, visibleDashNotes(rawDashNotes), {
@@ -4072,6 +4179,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   };
 
   const splitJob = async (job: Job, payload: { stage: Station; quantity: string }) => {
+    if (readOnly) return;
     const key = jobKey(job);
     const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/split`, {
       method: 'POST',
@@ -4093,6 +4201,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   };
 
   const saveRecordsPressed = async (job: Job, recordsPressed: number | null) => {
+    if (readOnly) return;
     const key = jobKey(job);
     const response = await fetch(`/api/jobs/${encodeURIComponent(key)}/records-pressed`, {
       method: 'PATCH',
@@ -4144,7 +4253,9 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
   };
 
   return (
-    <main style={{
+    <main
+      data-production-board={readOnly ? 'readonly' : 'staff'}
+      style={{
       background:
         'radial-gradient(circle at 18% 0%, rgba(0,232,106,0.12), transparent 28%), radial-gradient(circle at 78% 8%, rgba(77,163,255,0.12), transparent 24%), #090909',
       color: COLORS.text,
@@ -4205,7 +4316,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
             {loading ? 'Loading Airtable...' : `${activeJobs.length} active jobs`}
             {source && <div style={{ marginTop: '4px' }}>Source: {source === 'airtable' ? 'Airtable' : 'Sheet fallback'}</div>}
           </div>
-          {!isMobile && (
+          {!readOnly && !isMobile && (
             <div style={{
               alignItems: 'center',
               display: 'flex',
@@ -4281,7 +4392,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
             }}
           />
         </label>
-        {(normalizedSearch || isMobile) && (
+        {(normalizedSearch || (isMobile && !readOnly)) && (
         <div style={{
           alignItems: 'center',
           display: 'flex',
@@ -4294,7 +4405,7 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
               {visibleActiveJobs.length} shown
             </div>
           )}
-          {isMobile && (
+          {isMobile && !readOnly && (
             <>
               <VendorInvoiceImportControl isMobile={isMobile} onApplied={refreshJobs} />
               <BugReportControl isMobile={isMobile} />
@@ -4340,31 +4451,45 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
       }}>
         {STATIONS.map(station => {
           const meta = STATION_META[station];
+          const tileStyle = {
+              alignItems: 'center' as const,
+              background: station === 'now_pressing' ? `${meta.color}18` : COLORS.panel,
+              border: `1px solid ${station === 'now_pressing' ? meta.color : COLORS.border}`,
+              borderRadius: '8px',
+              cursor: readOnly ? 'default' : 'pointer',
+              display: 'flex' as const,
+              gap: '8px',
+              font: 'inherit',
+              minHeight: '66px',
+              minWidth: 0,
+              padding: isMobile ? '8px' : '9px',
+              textAlign: 'left' as const,
+          };
+          const tileBody = (
+            <>
+              <StationIcon station={station} size={17} />
+              <div>
+                <div style={{ color: meta.color, fontSize: '30px', fontWeight: 950, lineHeight: 1 }}>{counts[station]}</div>
+                <div style={{ color: COLORS.muted, fontSize: '13px', fontWeight: 850, letterSpacing: '0.06em', marginTop: '4px', textTransform: 'uppercase' }}>{meta.shortLabel}</div>
+              </div>
+            </>
+          );
+          if (readOnly) {
+            return (
+              <div key={station} aria-label={meta.label} style={tileStyle}>
+                {tileBody}
+              </div>
+            );
+          }
           return (
             <button
               key={station}
               type="button"
               onClick={() => jumpToStation(station)}
               aria-label={`Jump to ${meta.label}`}
-              style={{
-              alignItems: 'center',
-              background: station === 'now_pressing' ? `${meta.color}18` : COLORS.panel,
-              border: `1px solid ${station === 'now_pressing' ? meta.color : COLORS.border}`,
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              gap: '8px',
-              font: 'inherit',
-              minHeight: '66px',
-              minWidth: 0,
-              padding: isMobile ? '8px' : '9px',
-              textAlign: 'left',
-            }}>
-              <StationIcon station={station} size={17} />
-              <div>
-                <div style={{ color: meta.color, fontSize: '30px', fontWeight: 950, lineHeight: 1 }}>{counts[station]}</div>
-                <div style={{ color: COLORS.muted, fontSize: '13px', fontWeight: 850, letterSpacing: '0.06em', marginTop: '4px', textTransform: 'uppercase' }}>{meta.shortLabel}</div>
-              </div>
+              style={tileStyle}
+            >
+              {tileBody}
             </button>
           );
         })}
@@ -4389,15 +4514,16 @@ export default function DashboardClient({ jobs: initialJobs }: Props) {
         <Pipeline
           jobs={jobs}
           visibleJobs={visibleJobs}
-          onJobsChange={setJobsFromBoard}
-          onJobOpen={setSelectedJob}
+          onJobsChange={readOnly ? () => {} : setJobsFromBoard}
+          onJobOpen={readOnly ? () => {} : setSelectedJob}
           onError={setError}
-          onBusyChange={setSyncBusy}
+          onBusyChange={readOnly ? undefined : setSyncBusy}
           isMobile={isMobile}
+          readOnly={readOnly}
         />
       </div>
 
-      {selectedJob && (
+      {!readOnly && selectedJob && (
         <JobDrawer
           key={jobKey(selectedJob)}
           job={selectedJob}
