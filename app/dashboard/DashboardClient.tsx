@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { DragDropContext, Draggable, Droppable, DraggableProvidedDragHandleProps, DropResult, DragUpdate } from '@hello-pangea/dnd';
 import { packSkyline } from '@/lib/dashboard-pack';
-import { createClient as createBrowserSupabase } from '@/lib/supabase/client';
 import { PRODUCTION_LOG_HEARTBEAT_MS, PRODUCTION_SYNC_POLL_MS, notifyProductionSync, subscribeProductionSync } from '@/lib/production-sync';
 import {
   buildJobPnl,
@@ -4056,20 +4055,24 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
     }, PRODUCTION_LOG_HEARTBEAT_MS);
 
     let cleanupRealtime = () => {};
+    let realtimeCancelled = false;
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      try {
-        const supabase = createBrowserSupabase();
-        const channel = supabase
-          .channel('production-log-sync')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'press_log' }, pull)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'qc_log' }, pull)
-          .subscribe();
-        cleanupRealtime = () => {
-          void supabase.removeChannel(channel);
-        };
-      } catch {
-        cleanupRealtime = () => {};
-      }
+      void import('@/lib/supabase/client').then(({ createClient }) => {
+        if (realtimeCancelled) return;
+        try {
+          const supabase = createClient();
+          const channel = supabase
+            .channel('production-log-sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'press_log' }, pull)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'qc_log' }, pull)
+            .subscribe();
+          cleanupRealtime = () => {
+            void supabase.removeChannel(channel);
+          };
+        } catch {
+          cleanupRealtime = () => {};
+        }
+      });
     }
 
     return () => {
@@ -4079,6 +4082,7 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
       window.clearInterval(timer);
       window.clearInterval(logTimer);
       window.clearTimeout(debounce);
+      realtimeCancelled = true;
       cleanupRealtime();
     };
   }, [boardReady, readOnly]);
@@ -4447,31 +4451,45 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
       }}>
         {STATIONS.map(station => {
           const meta = STATION_META[station];
+          const tileStyle = {
+              alignItems: 'center' as const,
+              background: station === 'now_pressing' ? `${meta.color}18` : COLORS.panel,
+              border: `1px solid ${station === 'now_pressing' ? meta.color : COLORS.border}`,
+              borderRadius: '8px',
+              cursor: readOnly ? 'default' : 'pointer',
+              display: 'flex' as const,
+              gap: '8px',
+              font: 'inherit',
+              minHeight: '66px',
+              minWidth: 0,
+              padding: isMobile ? '8px' : '9px',
+              textAlign: 'left' as const,
+          };
+          const tileBody = (
+            <>
+              <StationIcon station={station} size={17} />
+              <div>
+                <div style={{ color: meta.color, fontSize: '30px', fontWeight: 950, lineHeight: 1 }}>{counts[station]}</div>
+                <div style={{ color: COLORS.muted, fontSize: '13px', fontWeight: 850, letterSpacing: '0.06em', marginTop: '4px', textTransform: 'uppercase' }}>{meta.shortLabel}</div>
+              </div>
+            </>
+          );
+          if (readOnly) {
+            return (
+              <div key={station} aria-label={meta.label} style={tileStyle}>
+                {tileBody}
+              </div>
+            );
+          }
           return (
             <button
               key={station}
               type="button"
               onClick={() => jumpToStation(station)}
               aria-label={`Jump to ${meta.label}`}
-              style={{
-              alignItems: 'center',
-              background: station === 'now_pressing' ? `${meta.color}18` : COLORS.panel,
-              border: `1px solid ${station === 'now_pressing' ? meta.color : COLORS.border}`,
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              gap: '8px',
-              font: 'inherit',
-              minHeight: '66px',
-              minWidth: 0,
-              padding: isMobile ? '8px' : '9px',
-              textAlign: 'left',
-            }}>
-              <StationIcon station={station} size={17} />
-              <div>
-                <div style={{ color: meta.color, fontSize: '30px', fontWeight: 950, lineHeight: 1 }}>{counts[station]}</div>
-                <div style={{ color: COLORS.muted, fontSize: '13px', fontWeight: 850, letterSpacing: '0.06em', marginTop: '4px', textTransform: 'uppercase' }}>{meta.shortLabel}</div>
-              </div>
+              style={tileStyle}
+            >
+              {tileBody}
             </button>
           );
         })}
