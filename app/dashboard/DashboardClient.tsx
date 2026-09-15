@@ -2068,7 +2068,7 @@ function Pipeline({
     }
   };
 
-  if (!mounted) {
+  if (!mounted && !readOnly) {
     return <div style={{ color: COLORS.muted, padding: '24px' }}>Loading board...</div>;
   }
 
