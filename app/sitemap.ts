@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next"
 import { SITE_URL, getBlogPosts, postUrl } from "@/lib/blog"
 
+export const dynamic = "force-dynamic"
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date("2026-09-18")
 

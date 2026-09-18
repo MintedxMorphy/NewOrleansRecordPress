@@ -7,6 +7,8 @@ import { Footer } from "@/components/hoxton/footer"
 import { JsonLd } from "@/components/blog/json-ld"
 import { SITE_URL, absoluteUrl, getBlogPosts, postUrl } from "@/lib/blog"
 
+export const dynamic = "force-dynamic"
+
 const PAGE_URL = `${SITE_URL}/blog`
 const PAGE_TITLE = "Blog | New Orleans Record Press"
 const PAGE_DESCRIPTION =
