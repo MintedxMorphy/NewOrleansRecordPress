@@ -51,8 +51,11 @@ The Airtable token needs these scopes:
 - `data.records:read`
 - `data.records:write`
 - `schema.bases:read`
+- `schema.bases:write` (needed so Mark Complete can add missing Completed columns to match Production)
 
 Grant the token access to the whole workspace if the dashboard should inspect all tables, or to the specific production base if it should be limited.
+
+Mark Complete copies every writable Production field into Completed by exact field name, then deletes the Production row only if that create/update succeeds. It will try to add any missing Completed columns first. There is no 7-field fallback. Board edits (stage, order, dash notes, records pressed) continue to write to Production while the job is open.
 
 The Airtable Jobs table can use friendly field names. The dashboard looks for common names like `Job ID`, `Customer`, `Matrix`, `Quantity`, `Colors`, `Stage`, `Due Date`, and `Notes`. Moving a card on `/dashboard` updates the Airtable `Stage` field.
 
