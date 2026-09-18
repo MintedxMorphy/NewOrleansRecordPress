@@ -98,13 +98,13 @@ export default function BlogIndexPage() {
             {posts.map((post) => (
               <li key={post.slug}>
                 <article className="overflow-hidden rounded-2xl border border-border bg-card">
-                  <Link href={`/blog/${post.slug}`} className="block">
+                  <Link href={`/blog/${post.slug}`} className="block overflow-hidden">
                     <Image
                       src={post.heroImage.src}
                       alt={post.heroImage.alt}
                       width={post.heroImage.width}
                       height={post.heroImage.height}
-                      className="h-auto w-full"
+                      className="aspect-[5/4] h-auto w-full object-cover object-center"
                       priority
                     />
                   </Link>
