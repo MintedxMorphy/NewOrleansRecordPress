@@ -10,7 +10,7 @@ import { SITE_URL, absoluteUrl, getBlogPosts, postUrl } from "@/lib/blog"
 const PAGE_URL = `${SITE_URL}/blog`
 const PAGE_TITLE = "Blog | New Orleans Record Press"
 const PAGE_DESCRIPTION =
-  "Guides from New Orleans Record Press, the independently owned vinyl manufacturing plant in New Orleans — artwork specs, the NORP team, and pressing FAQ."
+  "Notes from New Orleans Record Press, the independently owned vinyl manufacturing plant in New Orleans — Finebilt hand-pressing, artwork specs, the NORP team, and pressing FAQ."
 
 export const metadata: Metadata = {
   title: PAGE_TITLE,

@@ -5,6 +5,7 @@ import { Header } from "@/components/hoxton/header"
 import { Footer } from "@/components/hoxton/footer"
 import { JsonLd } from "@/components/blog/json-ld"
 import { NewOrleansRecordPressArticle } from "@/components/blog/new-orleans-record-press-article"
+import { FinebiltPressArticle } from "@/components/blog/finebilt-press-article"
 import {
   SITE_URL,
   absoluteUrl,
@@ -29,7 +30,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const url = postUrl(post)
   const imageUrl = absoluteUrl(post.heroImage.src)
-  const title = `${post.title} | New Orleans Record Press`
+  const title = `${post.seoTitle ?? post.title} | New Orleans Record Press`
 
   return {
     title,
@@ -120,7 +121,9 @@ export default async function BlogArticlePage({ params }: PageProps) {
       <JsonLd data={articleJsonLd(post)} />
       <Header />
       <main className="bg-white pt-40 pb-24">
-        {slug === "new-orleans-record-press" ? (
+        {slug === "finebilt-press" ? (
+          <FinebiltPressArticle post={post} />
+        ) : slug === "new-orleans-record-press" ? (
           <NewOrleansRecordPressArticle post={post} />
         ) : null}
       </main>

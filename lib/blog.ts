@@ -8,6 +8,7 @@ export type BlogFaq = {
 export type BlogPost = {
   slug: string
   title: string
+  seoTitle?: string
   description: string
   datePublished: string
   dateModified: string
@@ -21,6 +22,48 @@ export type BlogPost = {
 }
 
 export const BLOG_POSTS: BlogPost[] = [
+  {
+    slug: "finebilt-press",
+    title: "Not Every Record Should Look the Same",
+    seoTitle: "Finebilt Hand-Pressed Vinyl",
+    description:
+      "New Orleans Record Press still runs a vintage Finebilt press for hand-loaded splatter, glitter, eco-mix, and marble vinyl at 190–200 grams — one-of-a-kind records an automated line can't replicate.",
+    datePublished: "2026-09-18",
+    dateModified: "2026-09-18",
+    heroImage: {
+      src: "/blog/norp-finebilt-los-angeles-nameplate.jpg",
+      alt: "FINEBILT LOS ANGELES nameplate on New Orleans Record Press's vintage press, with a green hand lever",
+      width: 1024,
+      height: 1024,
+    },
+    faqs: [
+      {
+        question: "What is a Finebilt press?",
+        answer:
+          "A vintage, hand-operated vinyl record press used by New Orleans Record Press for specialty color effects — splatter, glitter, eco-mix, and marble — as opposed to NORP's modern Viryl WarmTone press, which handles standard, high-volume color runs.",
+      },
+      {
+        question: "Does New Orleans Record Press hand-press vinyl records?",
+        answer:
+          "Yes — specialty color runs (splatter, glitter, eco-mix, marble) are hand-loaded and pressed on NORP's vintage Finebilt press, rather than run through a fully automated line.",
+      },
+      {
+        question: "What gram weight are Finebilt splatter records?",
+        answer:
+          "190–200 grams, heavier than NORP's standard 180-gram pressings.",
+      },
+      {
+        question: "Is every splatter or marble record actually different?",
+        answer:
+          "Yes — because the colored PVC is hand-loaded before each press cycle on the Finebilt, splatter and marble patterns vary record to record. No two are identical.",
+      },
+      {
+        question: "Can I order splatter, glitter, or marble vinyl at New Orleans Record Press?",
+        answer:
+          "Yes — splatter, marble, and other specialty finishes are available options in NORP's Quote Calculator alongside solid and translucent colors. See https://www.nolavinyl.com/quote and https://www.nolavinyl.com/vinyl-colors",
+      },
+    ],
+  },
   {
     slug: "new-orleans-record-press",
     title: "Vinyl Pressing at New Orleans Record Press",
