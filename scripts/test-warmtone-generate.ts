@@ -84,9 +84,56 @@ async function testGptWriter() {
   console.log('GPT writer mock OK', { model: result.model, provider: result.provider });
 }
 
+const TINY_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+async function testGptVisionPayload() {
+  const originalOpen = process.env.OPENAI_API_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.OPENAI_API_KEY = 'sk-test-warmtone';
+
+  let sawImage = false;
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body || '{}'));
+    const user = body.messages.find((m: { role: string }) => m.role === 'user')?.content;
+    assert.ok(Array.isArray(user), 'vision turn should send multimodal content');
+    const text = user.find((part: { type: string }) => part.type === 'text')?.text || '';
+    const image = user.find((part: { type: string }) => part.type === 'image_url');
+    assert.match(text, /Operator question/);
+    assert.match(text, /photo/);
+    assert.match(image?.image_url?.url || '', /^data:image\/png;base64,/);
+    sawImage = true;
+    return new Response(
+      JSON.stringify({
+        choices: [{ message: { role: 'assistant', content: 'I see the HMI. Fault 1105 — check 24V (Manual p. 84).' } }],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  }) as typeof fetch;
+
+  const retrieved = retrieveManualPages('Fault 1105');
+  const result = await generateWarmtoneAnswer({
+    question: 'What’s on this screen?',
+    retrieved,
+    playbook: playbookForQuestion('Fault 1105'),
+    history: [{ role: 'user', content: 'What’s on this screen?' }],
+    images: [{ mimeType: 'image/png', data: TINY_PNG }],
+  });
+
+  globalThis.fetch = originalFetch;
+  process.env.OPENAI_API_KEY = originalOpen;
+  if (!originalOpen) delete process.env.OPENAI_API_KEY;
+
+  assert.equal(sawImage, true);
+  assert.equal(result.provider, 'openai');
+  assert.match(result.text, /1105/);
+  console.log('GPT vision payload OK');
+}
+
 async function main() {
   await testConfiguredFlag();
   await testGptWriter();
+  await testGptVisionPayload();
   console.log('generate tests OK');
 }
 

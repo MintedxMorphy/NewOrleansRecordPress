@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateWarmtoneAnswer } from '@/lib/warmtone-manual/generate';
+import { generateWarmtoneAnswer, searchHintFromImages } from '@/lib/warmtone-manual/generate';
+import { parseHelpImages } from '@/lib/warmtone-manual/images';
 import {
   isWarmtoneLlmConfiguredFromEnv,
   preferredWriterFromEnv,
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many questions from this network. Try again in a bit.' }, { status: 429 });
   }
 
-  let body: { messages?: ChatMessage[] } = {};
+  let body: { messages?: ChatMessage[]; images?: unknown } = {};
   try {
     body = await req.json();
   } catch {
@@ -107,23 +108,33 @@ export async function POST(req: NextRequest) {
     .filter((message) => message.content)
     .slice(-MAX_HISTORY);
 
-  const question = [...cleaned].reverse().find((message) => message.role === 'user')?.content || '';
+  const images = parseHelpImages(body.images);
+  const question =
+    [...cleaned].reverse().find((message) => message.role === 'user')?.content ||
+    (images.length ? 'What does this WarmTone photo show, and what should I do?' : '');
   if (!question) {
-    return NextResponse.json({ error: 'Ask a question about the WarmTone.' }, { status: 400 });
+    return NextResponse.json({ error: 'Ask a question or attach a photo of the WarmTone.' }, { status: 400 });
   }
   if (question.length > MAX_QUESTION) {
     return NextResponse.json({ error: 'Keep the question under 2,000 characters.' }, { status: 400 });
   }
 
-  const retrieved = retrieveManualPages(question);
+  let searchText = question;
+  if (images.length > 0) {
+    const hint = await searchHintFromImages(images);
+    if (hint) searchText = `${question} ${hint}`;
+  }
+
+  const retrieved = retrieveManualPages(searchText);
   const citations = citationsFrom(retrieved);
-  const playbook = playbookForQuestion(question);
+  const playbook = playbookForQuestion(searchText);
 
   const generated = await generateWarmtoneAnswer({
     question,
     retrieved,
     playbook,
     history: cleaned,
+    images,
   });
 
   if (generated.text) {
