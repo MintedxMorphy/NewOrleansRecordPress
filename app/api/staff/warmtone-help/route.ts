@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateWarmtoneAnswer, searchHintFromImages } from '@/lib/warmtone-manual/generate';
 import { parseHelpImages } from '@/lib/warmtone-manual/images';
 import { mergeMachineNotes, parseMachineNotes, splitNotesFooter } from '@/lib/warmtone-manual/memory';
+import { appendHelpTurn, persistHelpImages, readHelpMemory } from '@/lib/warmtone-manual/store';
 import {
   isWarmtoneLlmConfiguredFromEnv,
   preferredWriterFromEnv,
@@ -110,7 +111,8 @@ export async function POST(req: NextRequest) {
     .slice(-MAX_HISTORY);
 
   const images = parseHelpImages(body.images);
-  const machineNotes = parseMachineNotes(body.machineNotes);
+  const stored = await readHelpMemory();
+  const machineNotes = mergeMachineNotes(stored.machineNotes, parseMachineNotes(body.machineNotes));
   const question =
     [...cleaned].reverse().find((message) => message.role === 'user')?.content ||
     (images.length ? 'What does this WarmTone photo show, and what should I do?' : '');
@@ -121,8 +123,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Keep the question under 2,000 characters.' }, { status: 400 });
   }
 
+  const storedTurns = stored.messages.map((message) => ({
+    role: message.role,
+    content: message.content,
+  }));
+  const lastStored = storedTurns[storedTurns.length - 1];
+  const history =
+    lastStored?.role === 'user' && lastStored.content === question
+      ? storedTurns.slice(-MAX_HISTORY)
+      : [...storedTurns, { role: 'user' as const, content: question }].slice(-MAX_HISTORY);
+
   let searchText = question;
-  const priorUser = cleaned
+  const priorUser = history
     .filter((message) => message.role === 'user')
     .slice(-3)
     .map((message) => message.content)
@@ -140,13 +152,46 @@ export async function POST(req: NextRequest) {
     question,
     retrieved,
     playbook,
-    history: cleaned,
+    history,
     images,
     machineNotes,
   });
 
+  const userContent =
+    [...cleaned].reverse().find((message) => message.role === 'user')?.content || question;
+  const imageUrls = images.length ? await persistHelpImages(images) : undefined;
+  const userMessage = {
+    id: `u-${Date.now()}`,
+    role: 'user' as const,
+    content: userContent,
+    imageUrls,
+  };
+
   if (generated.text) {
     const split = splitNotesFooter(generated.text);
+    const nextNotes = mergeMachineNotes(machineNotes, split.notes);
+    const assistantMessage = {
+      id: `a-${Date.now()}`,
+      role: 'assistant' as const,
+      content: split.answer,
+      citations,
+      fallback: false,
+    };
+    let memory = stored;
+    try {
+      memory = await appendHelpTurn({
+        user: userMessage,
+        assistant: assistantMessage,
+        machineNotes: nextNotes,
+      });
+    } catch {
+      memory = {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        messages: [...stored.messages, userMessage, assistantMessage],
+        machineNotes: nextNotes,
+      };
+    }
     return NextResponse.json({
       answer: split.answer,
       citations,
@@ -155,13 +200,39 @@ export async function POST(req: NextRequest) {
       model: generated.model,
       provider: generated.provider,
       fallback: false,
-      machineNotes: mergeMachineNotes(machineNotes, split.notes),
+      machineNotes: memory.machineNotes,
+      memory,
+      shared: true,
       manual: getManualMeta(),
     });
   }
 
+  const fallback = fallbackAnswer(retrieved);
+  const assistantMessage = {
+    id: `a-${Date.now()}`,
+    role: 'assistant' as const,
+    content: fallback,
+    citations,
+    fallback: true,
+  };
+  let memory = stored;
+  try {
+    memory = await appendHelpTurn({
+      user: userMessage,
+      assistant: assistantMessage,
+      machineNotes,
+    });
+  } catch {
+    memory = {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      messages: [...stored.messages, userMessage, assistantMessage],
+      machineNotes,
+    };
+  }
+
   return NextResponse.json({
-    answer: fallbackAnswer(retrieved),
+    answer: fallback,
     citations,
     usedWebSearch: false,
     webSources: [],
@@ -169,7 +240,9 @@ export async function POST(req: NextRequest) {
     provider: null,
     fallback: true,
     error: generated.error,
-    machineNotes,
+    machineNotes: memory.machineNotes,
+    memory,
+    shared: true,
     manual: getManualMeta(),
   });
 }

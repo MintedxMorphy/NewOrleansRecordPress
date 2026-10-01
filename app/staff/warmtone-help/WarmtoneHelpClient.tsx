@@ -1,11 +1,7 @@
 'use client';
 
 import { FormEvent, PointerEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import {
-  loadHelpMemory,
-  saveHelpMemory,
-  type StoredHelpMessage,
-} from '@/lib/warmtone-manual/memory';
+import { HELP_STORAGE_KEY, type HelpMemory, type StoredHelpMessage } from '@/lib/warmtone-manual/memory';
 
 type ChatMessage = StoredHelpMessage;
 
@@ -119,21 +115,51 @@ export function WarmtoneHelpClient({
   const pendingImagesRef = useRef<PendingImage[]>([]);
 
   useEffect(() => {
-    const memory = loadHelpMemory();
-    setMessages(memory.messages);
-    setMachineNotes(memory.machineNotes);
-    setHydrated(true);
+    try {
+      window.localStorage.removeItem(HELP_STORAGE_KEY);
+    } catch {
+      // Ignore private-mode failures.
+    }
+
+    let cancelled = false;
+    async function loadShared() {
+      try {
+        const response = await fetch('/api/staff/warmtone-help/thread', { cache: 'no-store' });
+        const data = await response.json();
+        if (cancelled) return;
+        if (data?.memory?.messages) {
+          setMessages(data.memory.messages);
+          setMachineNotes(Array.isArray(data.memory.machineNotes) ? data.memory.machineNotes : []);
+        }
+      } catch {
+        if (!cancelled) setError('Could not load the shop-wide WarmTone thread.');
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
+    }
+    void loadShared();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
-    saveHelpMemory({
-      version: 1,
-      updatedAt: new Date().toISOString(),
-      messages,
-      machineNotes,
-    });
-  }, [hydrated, messages, machineNotes]);
+    const timer = window.setInterval(() => {
+      if (askingRef.current) return;
+      void fetch('/api/staff/warmtone-help/thread', { cache: 'no-store' })
+        .then((response) => response.json())
+        .then((data: { memory?: HelpMemory }) => {
+          if (!data?.memory?.messages || askingRef.current) return;
+          setMessages(data.memory.messages);
+          setMachineNotes(Array.isArray(data.memory.machineNotes) ? data.memory.machineNotes : []);
+        })
+        .catch(() => {
+          // Keep the on-screen thread if a poll fails.
+        });
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -243,20 +269,25 @@ export function WarmtoneHelpClient({
       if (!response.ok && !data?.answer) {
         throw new Error(data?.error || 'Could not reach WarmTone Help');
       }
-      if (Array.isArray(data.machineNotes)) {
-        setMachineNotes(data.machineNotes.filter((note: unknown) => typeof note === 'string'));
+      if (data?.memory?.messages) {
+        setMessages(data.memory.messages);
+        setMachineNotes(Array.isArray(data.memory.machineNotes) ? data.memory.machineNotes : []);
+      } else {
+        if (Array.isArray(data.machineNotes)) {
+          setMachineNotes(data.machineNotes.filter((note: unknown) => typeof note === 'string'));
+        }
+        setMessages((current) => [
+          ...current,
+          {
+            id: `a-${Date.now()}`,
+            role: 'assistant',
+            content: data.answer || data.error || 'No answer returned.',
+            citations: data.citations || [],
+            webSources: data.webSources || [],
+            fallback: Boolean(data.fallback),
+          },
+        ]);
       }
-      setMessages((current) => [
-        ...current,
-        {
-          id: `a-${Date.now()}`,
-          role: 'assistant',
-          content: data.answer || data.error || 'No answer returned.',
-          citations: data.citations || [],
-          webSources: data.webSources || [],
-          fallback: Boolean(data.fallback),
-        },
-      ]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed');
     } finally {
@@ -277,12 +308,28 @@ export function WarmtoneHelpClient({
     void ask(suggestion);
   }
 
-  function startNewChat() {
+  async function startNewChat() {
     if (busy) return;
-    setMessages([]);
-    setError('');
-    setInput('');
-    setShowNotes(false);
+    const confirmed = window.confirm(
+      'Clear the shop-wide WarmTone thread for everyone at NORP? Plant notes about this press will stay.',
+    );
+    if (!confirmed) return;
+    try {
+      const response = await fetch('/api/staff/warmtone-help/thread', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset' }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Could not clear the shop thread');
+      setMessages(data.memory?.messages || []);
+      setMachineNotes(Array.isArray(data.memory?.machineNotes) ? data.memory.machineNotes : machineNotes);
+      setError('');
+      setInput('');
+      setShowNotes(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not clear the shop thread');
+    }
   }
 
   return (
@@ -292,7 +339,7 @@ export function WarmtoneHelpClient({
           <div style={S.kicker}>Viryl WarmTone MK1 · PRS00007</div>
           <h1 style={S.title}>WarmTone Help</h1>
           <p style={S.subtitle}>
-            Shop-floor tech support from the owners manual. Paste a screenshot, drop a photo, or tap Photo — HMI, leak, or part.
+            Shop-floor tech support from the owners manual. Anyone at NORP can continue this same thread on any computer.
           </p>
         </div>
         <div style={S.metaCol}>
@@ -305,8 +352,8 @@ export function WarmtoneHelpClient({
                 </button>
               )}
               {messages.length > 0 && (
-                <button type="button" style={S.metaBtn} onClick={startNewChat} disabled={busy}>
-                  New chat
+                <button type="button" style={S.metaBtn} onClick={() => void startNewChat()} disabled={busy}>
+                  Clear shop thread
                 </button>
               )}
             </div>
@@ -466,8 +513,8 @@ export function WarmtoneHelpClient({
         </div>
       </form>
       <p style={S.hint}>
-        This conversation stays on this computer when you leave the page. Paste a screenshot, drop a photo, or tap Photo.
-        Up to 3 per question. Use New chat to start over — plant notes about PRS00007 are kept.
+        This is the shop-wide WarmTone thread — it follows the press, not one computer. Paste a screenshot, drop a photo, or tap Photo.
+        Up to 3 per question. Clear shop thread wipes the conversation for everyone; plant notes stay.
       </p>
       <p style={S.disclaimer}>
         Internal NORP tool. The paper manual wins on safety. For uncleared faults call Viryl 1-844-468-4795.
