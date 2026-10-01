@@ -1,27 +1,13 @@
 'use client';
 
 import { FormEvent, PointerEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  loadHelpMemory,
+  saveHelpMemory,
+  type StoredHelpMessage,
+} from '@/lib/warmtone-manual/memory';
 
-type Citation = {
-  page: number;
-  heading: string;
-  snippet: string;
-};
-
-type WebSource = {
-  title: string;
-  url: string;
-};
-
-type ChatMessage = {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  imageUrls?: string[];
-  citations?: Citation[];
-  webSources?: WebSource[];
-  fallback?: boolean;
-};
+type ChatMessage = StoredHelpMessage;
 
 type PendingImage = {
   id: string;
@@ -119,6 +105,9 @@ export function WarmtoneHelpClient({
   manualLabel: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [machineNotes, setMachineNotes] = useState<string[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -130,8 +119,26 @@ export function WarmtoneHelpClient({
   const pendingImagesRef = useRef<PendingImage[]>([]);
 
   useEffect(() => {
+    const memory = loadHelpMemory();
+    setMessages(memory.messages);
+    setMachineNotes(memory.machineNotes);
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    saveHelpMemory({
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      messages,
+      machineNotes,
+    });
+  }, [hydrated, messages, machineNotes]);
+
+  useEffect(() => {
+    if (!hydrated) return;
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, busy]);
+  }, [messages, busy, hydrated]);
 
   const canSend = useMemo(
     () => (input.trim().length > 0 || pendingImages.length > 0) && !busy && !addingPhotos,
@@ -202,11 +209,12 @@ export function WarmtoneHelpClient({
     askingRef.current = true;
 
     const displayText = trimmed || 'What’s going on in this photo?';
+    const imageUrls = images.map((image) => `data:${image.mimeType};base64,${image.data}`);
     const userMessage: ChatMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
       content: displayText,
-      imageUrls: images.map((image) => image.previewUrl),
+      imageUrls: imageUrls.length ? imageUrls : undefined,
     };
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
@@ -228,11 +236,15 @@ export function WarmtoneHelpClient({
             mimeType: image.mimeType,
             data: image.data,
           })),
+          machineNotes,
         }),
       });
       const data = await response.json();
       if (!response.ok && !data?.answer) {
         throw new Error(data?.error || 'Could not reach WarmTone Help');
+      }
+      if (Array.isArray(data.machineNotes)) {
+        setMachineNotes(data.machineNotes.filter((note: unknown) => typeof note === 'string'));
       }
       setMessages((current) => [
         ...current,
@@ -265,6 +277,14 @@ export function WarmtoneHelpClient({
     void ask(suggestion);
   }
 
+  function startNewChat() {
+    if (busy) return;
+    setMessages([]);
+    setError('');
+    setInput('');
+    setShowNotes(false);
+  }
+
   return (
     <main style={S.main}>
       <header style={S.header}>
@@ -275,10 +295,37 @@ export function WarmtoneHelpClient({
             Shop-floor tech support from the owners manual. Paste a screenshot, drop a photo, or tap Photo — HMI, leak, or part.
           </p>
         </div>
-        <div style={S.meta}>{manualLabel}</div>
+        <div style={S.metaCol}>
+          <div style={S.meta}>{manualLabel}</div>
+          {hydrated && (messages.length > 0 || machineNotes.length > 0) && (
+            <div style={S.metaActions}>
+              {machineNotes.length > 0 && (
+                <button type="button" style={S.metaBtn} onClick={() => setShowNotes((open) => !open)}>
+                  {showNotes ? 'Hide plant notes' : `${machineNotes.length} plant note${machineNotes.length === 1 ? '' : 's'}`}
+                </button>
+              )}
+              {messages.length > 0 && (
+                <button type="button" style={S.metaBtn} onClick={startNewChat} disabled={busy}>
+                  New chat
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </header>
 
-      {messages.length === 0 && (
+      {showNotes && machineNotes.length > 0 && (
+        <div style={S.notesBox}>
+          <div style={S.notesLabel}>Remembered about this WarmTone</div>
+          <ul style={S.notesList}>
+            {machineNotes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {hydrated && messages.length === 0 && (
         <div style={S.empty}>
           <p style={S.emptyLead}>Ask about a fault code, HMI screen, stamper change, trimmer, hydraulics, or steam — or paste / attach a photo of what you’re looking at.</p>
           <div style={S.chips}>
@@ -418,7 +465,10 @@ export function WarmtoneHelpClient({
           </div>
         </div>
       </form>
-      <p style={S.hint}>Paste a screenshot, drop a photo, or tap Photo. Up to 3. Photos are sent with the next question only.</p>
+      <p style={S.hint}>
+        This conversation stays on this computer when you leave the page. Paste a screenshot, drop a photo, or tap Photo.
+        Up to 3 per question. Use New chat to start over — plant notes about PRS00007 are kept.
+      </p>
       <p style={S.disclaimer}>
         Internal NORP tool. The paper manual wins on safety. For uncleared faults call Viryl 1-844-468-4795.
         This page does nothing until someone asks a question.
@@ -470,6 +520,46 @@ const S: Record<string, CSSProperties> = {
     color: '#6a6858',
     textAlign: 'right',
     paddingTop: 8,
+  },
+  metaCol: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingTop: 8,
+  },
+  metaActions: { display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' },
+  metaBtn: {
+    background: '#1a1d24',
+    color: '#c4c2b8',
+    border: '1px solid #2a2c33',
+    borderRadius: 999,
+    padding: '6px 10px',
+    font: 'inherit',
+    fontSize: 12,
+    cursor: 'pointer',
+  },
+  notesBox: {
+    background: '#14161b',
+    border: '1px solid #2a2c33',
+    borderRadius: 14,
+    padding: '14px 16px',
+    marginBottom: 16,
+  },
+  notesLabel: {
+    fontFamily: 'Space Mono, ui-monospace, monospace',
+    fontSize: 11,
+    color: '#5DCAA5',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    marginBottom: 8,
+  },
+  notesList: {
+    margin: 0,
+    paddingLeft: 18,
+    color: '#c4c2b8',
+    fontSize: 14,
+    lineHeight: 1.5,
   },
   empty: {
     background: '#14161b',

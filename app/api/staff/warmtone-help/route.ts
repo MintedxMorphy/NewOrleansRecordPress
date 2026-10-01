@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateWarmtoneAnswer, searchHintFromImages } from '@/lib/warmtone-manual/generate';
 import { parseHelpImages } from '@/lib/warmtone-manual/images';
+import { mergeMachineNotes, parseMachineNotes, splitNotesFooter } from '@/lib/warmtone-manual/memory';
 import {
   isWarmtoneLlmConfiguredFromEnv,
   preferredWriterFromEnv,
@@ -21,7 +22,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 const MAX_QUESTION = 2000;
-const MAX_HISTORY = 8;
+const MAX_HISTORY = 30;
 const RATE_LIMIT = 40;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 const VIRYL_PHONE = '1-844-468-4795';
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many questions from this network. Try again in a bit.' }, { status: 429 });
   }
 
-  let body: { messages?: ChatMessage[]; images?: unknown } = {};
+  let body: { messages?: ChatMessage[]; images?: unknown; machineNotes?: unknown } = {};
   try {
     body = await req.json();
   } catch {
@@ -109,6 +110,7 @@ export async function POST(req: NextRequest) {
     .slice(-MAX_HISTORY);
 
   const images = parseHelpImages(body.images);
+  const machineNotes = parseMachineNotes(body.machineNotes);
   const question =
     [...cleaned].reverse().find((message) => message.role === 'user')?.content ||
     (images.length ? 'What does this WarmTone photo show, and what should I do?' : '');
@@ -120,14 +122,19 @@ export async function POST(req: NextRequest) {
   }
 
   let searchText = question;
+  const priorUser = cleaned
+    .filter((message) => message.role === 'user')
+    .slice(-3)
+    .map((message) => message.content)
+    .join(' ');
   if (images.length > 0) {
     const hint = await searchHintFromImages(images);
     if (hint) searchText = `${question} ${hint}`;
   }
 
-  const retrieved = retrieveManualPages(searchText);
+  const retrieved = retrieveManualPages(`${priorUser} ${searchText}`.trim());
   const citations = citationsFrom(retrieved);
-  const playbook = playbookForQuestion(searchText);
+  const playbook = playbookForQuestion(`${priorUser} ${searchText}`);
 
   const generated = await generateWarmtoneAnswer({
     question,
@@ -135,17 +142,20 @@ export async function POST(req: NextRequest) {
     playbook,
     history: cleaned,
     images,
+    machineNotes,
   });
 
   if (generated.text) {
+    const split = splitNotesFooter(generated.text);
     return NextResponse.json({
-      answer: generated.text,
+      answer: split.answer,
       citations,
       usedWebSearch: false,
       webSources: [],
       model: generated.model,
       provider: generated.provider,
       fallback: false,
+      machineNotes: mergeMachineNotes(machineNotes, split.notes),
       manual: getManualMeta(),
     });
   }
@@ -159,6 +169,7 @@ export async function POST(req: NextRequest) {
     provider: null,
     fallback: true,
     error: generated.error,
+    machineNotes,
     manual: getManualMeta(),
   });
 }

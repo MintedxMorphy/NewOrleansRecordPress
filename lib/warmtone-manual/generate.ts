@@ -43,11 +43,15 @@ export type GenerateResult = {
   error?: string;
 };
 
-function systemPrompt(playbookText: string | null) {
+function systemPrompt(playbookText: string | null, machineNotes: string[]) {
+  const notesBlock =
+    machineNotes.length > 0
+      ? `\nNORP machine notes for THIS WarmTone (PRS00007) from prior shop-floor conversation. Treat as plant truth unless they contradict a safety rule in the manual:\n${machineNotes.map((note) => `- ${note}`).join('\n')}\n`
+      : '';
   return `You are the in-house WarmTone technician for New Orleans Record Press. Employees ask you about the Viryl WarmTone Record Press on the shop floor.
 
 ${getPlantCard()}
-
+${notesBlock}
 Source of truth: Viryl WarmTone Operation Manual ${getManualMeta().docId} Rev ${getManualMeta().revision} (${getManualMeta().year}). Always prefer the manual over the internet.
 
 Rules:
@@ -60,7 +64,12 @@ Rules:
 - Keep answers tight. No sales talk. No Finebilt advice unless asked.
 - The manual is confidential to Viryl/NORP — do not tell the user to republish it.
 - If a photo is attached, look at it first: read HMI screens, fault numbers, warning lights, leaks, moulds, stampers, hoses, and part labels. Name what you see, then give steps. If a fault code is visible, treat that as the operator's question.
-- Do not browse the web. Answer only from the photo (if any), the manual pages, the NORP plant card, and any attached playbook.
+- Remember this conversation. Follow-up questions refer to the same press and the same problem unless the operator starts a new issue.
+- Do not browse the web. Answer only from the photo (if any), the manual pages, the NORP plant card, machine notes, conversation history, and any attached playbook.
+- If the operator states a durable fact about THIS machine (saved job names, what actually works here, parts swapped, boiler/hydraulic quirks, moulds they run), append this block after the answer, with one dash-bullet per fact. Do not invent notes. If there is nothing new, omit the block.
+<!--norp-notes
+- fact about this press
+-->
 ${playbookText ? `\nA NORP plant playbook is attached for this question. Use it as the checklist spine, still citing the manual pages.\n` : ''}`;
 }
 
@@ -100,7 +109,7 @@ export function buildUserPayload(question: string, retrieved: RetrievedPage[], p
   const playbookBlock = playbook
     ? `\n\nNORP plant playbook (${playbook.title}) — use as the checklist spine; still cite the manual; do not invent setpoints:\n${playbook.text}`
     : '';
-  return `Operator question:\n${question}\n\nRetrieved WarmTone manual pages:\n${formatManualContext(retrieved)}${playbookBlock}\n\nAnswer only from the manual pages, the NORP plant card, and any attached playbook. Write numbered steps the operator can follow.`;
+  return `Operator question:\n${question}\n\nRetrieved WarmTone manual pages:\n${formatManualContext(retrieved)}${playbookBlock}\n\nAnswer from the manual pages, the NORP plant card, machine notes, conversation history, and any attached playbook. Write numbered steps the operator can follow.`;
 }
 
 export function sanitizeHistory(messages: ChatTurn[]): ChatTurn[] {
@@ -217,9 +226,11 @@ export async function generateWarmtoneAnswer(input: {
   playbook: Playbook | null;
   history: ChatTurn[];
   images?: HelpImage[];
+  machineNotes?: string[];
 }): Promise<GenerateResult> {
   const images = input.images || [];
-  const system = systemPrompt(input.playbook?.text || null);
+  const machineNotes = input.machineNotes || [];
+  const system = systemPrompt(input.playbook?.text || null, machineNotes);
   const userPayload =
     buildUserPayload(input.question, input.retrieved, input.playbook) +
     (images.length
