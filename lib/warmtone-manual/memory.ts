@@ -67,12 +67,18 @@ function isDataImage(url: string) {
   return /^data:image\/(jpeg|png|webp|gif);base64,/i.test(url);
 }
 
+function isKeptImage(url: string) {
+  if (typeof url !== 'string' || url.startsWith('blob:')) return false;
+  if (/^https:\/\//i.test(url) && url.length < 2000) return true;
+  return isDataImage(url) && url.length < 900_000;
+}
+
 export function pruneHelpMemory(memory: HelpMemory): HelpMemory {
   const messages = memory.messages.slice(-MAX_STORED_MESSAGES).map((message) => ({
     ...message,
     content: String(message.content || '').slice(0, 4000),
     imageUrls: Array.isArray(message.imageUrls)
-      ? message.imageUrls.filter((url) => typeof url === 'string' && url.length < 900_000 && (isDataImage(url) || url.startsWith('blob:'))).slice(0, 3)
+      ? message.imageUrls.filter(isKeptImage).slice(0, 3)
       : undefined,
   }));
   let imageBudget = MAX_STORED_IMAGE_MESSAGES;
@@ -93,56 +99,33 @@ export function pruneHelpMemory(memory: HelpMemory): HelpMemory {
   };
 }
 
-export function loadHelpMemory(): HelpMemory {
-  if (typeof window === 'undefined') return emptyHelpMemory();
-  try {
-    const raw = window.localStorage.getItem(HELP_STORAGE_KEY);
-    if (!raw) return emptyHelpMemory();
-    const parsed = JSON.parse(raw) as HelpMemory;
-    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.messages)) return emptyHelpMemory();
-    return pruneHelpMemory({
-      version: 1,
-      updatedAt: parsed.updatedAt || new Date().toISOString(),
-      messages: parsed.messages.filter(
-        (message) =>
+export function parseHelpMemory(raw: unknown): HelpMemory {
+  if (!raw || typeof raw !== 'object') return emptyHelpMemory();
+  const parsed = raw as Partial<HelpMemory>;
+  if (!Array.isArray(parsed.messages)) return emptyHelpMemory();
+  return pruneHelpMemory({
+    version: 1,
+    updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
+    messages: parsed.messages.filter(
+      (message): message is StoredHelpMessage =>
+        Boolean(
           message &&
-          (message.role === 'user' || message.role === 'assistant') &&
-          typeof message.content === 'string',
-      ),
-      machineNotes: parseMachineNotes(parsed.machineNotes),
-    });
-  } catch {
-    return emptyHelpMemory();
-  }
+            (message.role === 'user' || message.role === 'assistant') &&
+            typeof message.content === 'string' &&
+            typeof message.id === 'string',
+        ),
+    ),
+    machineNotes: parseMachineNotes(parsed.machineNotes),
+  });
 }
 
-export function saveHelpMemory(memory: HelpMemory) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(
-      HELP_STORAGE_KEY,
-      JSON.stringify(
-        pruneHelpMemory({
-          ...memory,
-          version: 1,
-          updatedAt: new Date().toISOString(),
-        }),
-      ),
-    );
-  } catch {
-    try {
-      window.localStorage.setItem(
-        HELP_STORAGE_KEY,
-        JSON.stringify(
-          pruneHelpMemory({
-            ...memory,
-            messages: memory.messages.map((message) => ({ ...message, imageUrls: undefined })),
-            updatedAt: new Date().toISOString(),
-          }),
-        ),
-      );
-    } catch {
-      // Private mode or quota — keep the in-memory thread only.
-    }
+export function mergeHelpMessages(base: StoredHelpMessage[], extra: StoredHelpMessage[]): StoredHelpMessage[] {
+  const out = [...base];
+  const seen = new Set(base.map((message) => message.id));
+  for (const message of extra) {
+    if (!message?.id || seen.has(message.id)) continue;
+    seen.add(message.id);
+    out.push(message);
   }
+  return out;
 }

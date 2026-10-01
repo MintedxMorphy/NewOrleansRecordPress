@@ -19,3 +19,6 @@ node_modules
 
 # Equipment manuals — keep extracted text in git, not the binary PDF
 *.pdf
+
+# Local fallback for the shop-wide WarmTone Help thread
+.data/

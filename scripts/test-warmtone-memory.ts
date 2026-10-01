@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {
+  mergeHelpMessages,
   mergeMachineNotes,
+  parseHelpMemory,
   parseMachineNotes,
   pruneHelpMemory,
   splitNotesFooter,
@@ -37,5 +39,23 @@ const pruned = pruneHelpMemory({
 });
 assert.equal(pruned.messages.length, 2);
 assert.equal(pruned.machineNotes.length, 1);
+
+const parsed = parseHelpMemory({
+  version: 1,
+  messages: [
+    { id: 'u1', role: 'user', content: 'Edge trimmer' },
+    { role: 'assistant', content: 'missing id' },
+  ],
+  machineNotes: ['Integrated trimmer on PRS00007'],
+});
+assert.equal(parsed.messages.length, 1);
+assert.equal(parsed.messages[0].id, 'u1');
+
+const combined = mergeHelpMessages(parsed.messages, [
+  { id: 'u1', role: 'user', content: 'duplicate' },
+  { id: 'a2', role: 'assistant', content: 'Check the proximity switch.' },
+]);
+assert.equal(combined.length, 2);
+assert.equal(combined[1].id, 'a2');
 
 console.log('memory tests OK');
