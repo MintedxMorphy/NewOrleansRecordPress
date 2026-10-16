@@ -1,4 +1,13 @@
 import type { NORPJob } from './norp-sheet';
+import {
+  completedFieldsFromProductionRecord,
+  fieldCreatePayload,
+  isWritableAirtableField,
+  resolveNamedAirtableTable,
+  writableFieldsMissingOnCompleted,
+  type AirtableCopyField,
+  type AirtableCopyTable,
+} from './airtable-job-copy';
 
 const AIRTABLE_API_URL = 'https://api.airtable.com/v0';
 
@@ -81,17 +90,7 @@ export type AirtableInventoryDashboard = {
   missingTables: string[];
 };
 
-type AirtableFieldMeta = {
-  id: string;
-  name: string;
-  type: string;
-  options?: {
-    choices?: Array<{
-      id?: string;
-      name: string;
-    }>;
-  };
-};
+type AirtableFieldMeta = AirtableCopyField;
 
 type AirtableTableMeta = {
   id: string;
@@ -255,6 +254,12 @@ function baseMetaUrl() {
   return `${AIRTABLE_API_URL}/meta/bases/${encodeURIComponent(baseId)}/tables`;
 }
 
+function tableFieldsUrl(tableId: string) {
+  const baseId = airtableBaseId();
+  if (!baseId) throw new Error('Missing AIRTABLE_BASE_ID');
+  return `${AIRTABLE_API_URL}/meta/bases/${encodeURIComponent(baseId)}/tables/${encodeURIComponent(tableId)}/fields`;
+}
+
 function stringValue(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (Array.isArray(value)) return value.map(stringValue).filter(Boolean).join(', ');
@@ -272,66 +277,6 @@ function parseQuantity(value: unknown) {
 function airtableValueForField(field: AirtableFieldMeta, value: number) {
   if (['number', 'currency', 'percent', 'rating', 'duration'].includes(field.type)) return value;
   return String(value);
-}
-
-function choiceForFieldValue(field: AirtableFieldMeta, value: unknown) {
-  const raw = stringValue(value).trim();
-  if (!raw) return undefined;
-
-  const choices = field.options?.choices || [];
-  if (!choices.length) return raw;
-
-  return choices.find(choice => choiceKey(choice.name) === choiceKey(raw))?.name;
-}
-
-function sanitizedAirtableValueForField(field: AirtableFieldMeta, value: unknown): unknown {
-  if (isEmptyAirtableValue(value)) return undefined;
-
-  if (['number', 'currency', 'percent', 'rating', 'duration'].includes(field.type)) {
-    const parsed = parseQuantity(value);
-    return parsed === undefined ? undefined : parsed;
-  }
-
-  if (['date', 'dateTime'].includes(field.type)) {
-    const raw = stringValue(value).trim();
-    return isDateLike(raw) ? raw : undefined;
-  }
-
-  if (field.type === 'checkbox') {
-    if (typeof value === 'boolean') return value;
-    const normalized = stringValue(value).trim().toLowerCase();
-    if (['yes', 'y', 'true', '1', 'done', 'complete', 'completed', 'approved'].includes(normalized)) return true;
-    if (['no', 'n', 'false', '0'].includes(normalized)) return false;
-    return undefined;
-  }
-
-  if (field.type === 'singleSelect') {
-    return choiceForFieldValue(field, value);
-  }
-
-  if (field.type === 'multipleSelects') {
-    const rawValues = Array.isArray(value)
-      ? value.map(item => stringValue(item))
-      : stringValue(value).split(',');
-    const choices = rawValues
-      .map(item => choiceForFieldValue(field, item))
-      .filter((item): item is string => Boolean(item));
-
-    return choices.length ? Array.from(new Set(choices)) : undefined;
-  }
-
-  if ([
-    'multipleAttachments',
-    'multipleCollaborators',
-    'multipleRecordLinks',
-  ].includes(field.type)) {
-    return undefined;
-  }
-
-  if (Array.isArray(value)) return stringValue(value);
-  if (typeof value === 'object') return stringValue(value);
-
-  return value;
 }
 
 function runMarker(run: number, total: number) {
@@ -487,56 +432,6 @@ function resolveAirtableStageValue(stage: string, tables: AirtableTableMeta[] = 
     keys.has(choiceKey(choice.name)) || normalizeStage(choice.name) === normalizeStage(stage)
   );
   return exactChoice?.name || fallback;
-}
-
-const COMPLETED_COPY_ALIAS_GROUPS = [
-  FIELD_ALIASES.job_id,
-  FIELD_ALIASES.customer,
-  FIELD_ALIASES.matrix,
-  FIELD_ALIASES.quantity,
-  FIELD_ALIASES.colors,
-  FIELD_ALIASES.weight,
-  FIELD_ALIASES.speed,
-  FIELD_ALIASES.ship_date,
-  FIELD_ALIASES.order_number,
-  FIELD_ALIASES.notes,
-  FIELD_ALIASES.dash_notes,
-  FIELD_ALIASES.due_note,
-  FIELD_ALIASES.stage,
-];
-
-function isEmptyAirtableValue(value: unknown) {
-  return value === null || value === undefined || value === '';
-}
-
-function isDateLike(value: unknown) {
-  if (value instanceof Date) return !Number.isNaN(value.getTime());
-  if (typeof value !== 'string') return false;
-  const trimmed = value.trim();
-  return Boolean(trimmed) && !Number.isNaN(Date.parse(trimmed));
-}
-
-function isValueCompatibleWithField(field: AirtableFieldMeta, value: unknown) {
-  return sanitizedAirtableValueForField(field, value) !== undefined;
-}
-
-function matchingSourceFieldForCompletedTarget(
-  targetField: AirtableFieldMeta,
-  production: AirtableTableMeta,
-  record: AirtableRecord
-) {
-  const exact = production.fields.find(field => field.name.toLowerCase() === targetField.name.toLowerCase());
-  if (exact && isValueCompatibleWithField(targetField, record.fields[exact.name])) return exact;
-
-  for (const aliases of COMPLETED_COPY_ALIAS_GROUPS) {
-    const targetIsInAliasGroup = aliases.some(alias => alias.toLowerCase() === targetField.name.toLowerCase());
-    if (!targetIsInAliasGroup) continue;
-
-    const source = resolveAirtableField(production, aliases);
-    if (source && isValueCompatibleWithField(targetField, record.fields[source.name])) return source;
-  }
-
-  return undefined;
 }
 
 async function getAirtableTablesMetaOrEmpty() {
@@ -738,90 +633,97 @@ async function getAirtableTablesMeta() {
 }
 
 function isWritableField(field: AirtableFieldMeta) {
-  return ![
-    'aiText',
-    'autoNumber',
-    'button',
-    'count',
-    'createdBy',
-    'createdTime',
-    'externalSyncSource',
-    'formula',
-    'lastModifiedBy',
-    'lastModifiedTime',
-    'lookup',
-    'multipleLookupValues',
-    'rollup',
-  ].includes(field.type);
+  return isWritableAirtableField(field);
 }
 
 function resolveAirtableTable(tables: AirtableTableMeta[], configuredTable: string) {
-  return tables.find(table => table.id === configuredTable || table.name === configuredTable);
+  return resolveNamedAirtableTable(tables, configuredTable) as AirtableTableMeta | undefined;
 }
 
-function completedFieldsFromRecord(record: AirtableRecord, production: AirtableTableMeta, completed: AirtableTableMeta) {
-  const fields: Record<string, unknown> = {};
+function resolveProductionTable(tables: AirtableTableMeta[]) {
+  return resolveNamedAirtableTable(tables, airtableJobsTable(), ['Production', 'Jobs']) as AirtableTableMeta | undefined;
+}
 
-  for (const targetField of completed.fields) {
-    if (!isWritableField(targetField)) continue;
+function resolveCompletedTable(tables: AirtableTableMeta[]) {
+  return resolveNamedAirtableTable(tables, airtableCompletedTable(), ['Completed']) as AirtableTableMeta | undefined;
+}
 
-    const sourceField = matchingSourceFieldForCompletedTarget(targetField, production, record);
-    const value = sourceField ? record.fields[sourceField.name] : undefined;
+async function ensureCompletedSchemaMatchesProduction(
+  production: AirtableTableMeta,
+  completed: AirtableTableMeta,
+) {
+  const missing = writableFieldsMissingOnCompleted(production, completed);
+  if (!missing.length) return completed;
 
-    const sanitized = sanitizedAirtableValueForField(targetField, value);
-    if (sanitized === undefined) continue;
-    fields[targetField.name] = sanitized;
+  for (const field of missing) {
+    const payload = fieldCreatePayload(field as AirtableCopyField);
+    if (!payload) continue;
+
+    const res = await airtableFetch(tableFieldsUrl(completed.id), {
+      method: 'POST',
+      headers: airtableHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json() as { name?: string; error?: { message?: string } };
+    if (!res.ok) {
+      console.error('[airtable] could not add Completed field to match Production:', field.name, data.error?.message || res.status);
+    }
+  }
+
+  const tables = await getAirtableTablesMeta();
+  return resolveCompletedTable(tables) || completed;
+}
+
+function copiedCompletedFieldsOrThrow(
+  record: AirtableRecord,
+  production: AirtableTableMeta,
+  completed: AirtableTableMeta,
+) {
+  const copied = completedFieldsFromProductionRecord(
+    record,
+    production as AirtableCopyTable,
+    completed as AirtableCopyTable,
+  );
+
+  if (copied.dropped.length) {
+    const details = copied.dropped.map(item => `${item.name} (${item.reason})`).join(', ');
+    throw new Error(`Cannot complete job without copying Production fields: ${details}`);
+  }
+
+  return copied.fields;
+}
+
+function withCompletedStageAndNotes(
+  fields: Record<string, unknown>,
+  completed: AirtableTableMeta,
+  tables: AirtableTableMeta[],
+) {
+  const completedDashNotesField = resolveAirtableField(completed, FIELD_ALIASES.dash_notes);
+  if (completedDashNotesField && fields[completedDashNotesField.name] !== undefined) {
+    fields[completedDashNotesField.name] = stripDashboardMarkers(fields[completedDashNotesField.name]);
+  }
+
+  const stageField = resolveAirtableField(completed, [airtableStageField(), ...FIELD_ALIASES.stage]);
+  if (stageField && isWritableField(stageField)) {
+    fields[stageField.name] = resolveAirtableStageValue('completed', tables, completed);
   }
 
   return fields;
 }
 
-function completedFallbackFields(fields: Record<string, unknown>, completed: AirtableTableMeta) {
-  const fieldNames = new Set<string>();
-  for (const aliases of [
-    FIELD_ALIASES.job_id,
-    FIELD_ALIASES.customer,
-    FIELD_ALIASES.matrix,
-    FIELD_ALIASES.quantity,
-    FIELD_ALIASES.order_number,
-    FIELD_ALIASES.notes,
-    FIELD_ALIASES.dash_notes,
-  ]) {
-    const field = resolveAirtableField(completed, aliases);
-    if (field) fieldNames.add(field.name);
-  }
-
-  return Object.fromEntries(
-    Object.entries(fields).filter(([key]) => fieldNames.has(key))
-  );
-}
-
 async function createCompletedRecord(completed: AirtableTableMeta, fields: Record<string, unknown>) {
-  const create = async (fieldsToCreate: Record<string, unknown>) => {
-    const res = await airtableFetch(tableUrl('', completed.name), {
-      method: 'POST',
-      headers: airtableHeaders(),
-      body: JSON.stringify({ fields: fieldsToCreate, typecast: true }),
-    });
-    const created = await res.json() as { id?: string; error?: { message?: string } };
-    return { res, created };
-  };
+  const res = await airtableFetch(tableUrl('', completed.name), {
+    method: 'POST',
+    headers: airtableHeaders(),
+    body: JSON.stringify({ fields, typecast: true }),
+  });
+  const created = await res.json() as { id?: string; error?: { message?: string } };
 
-  const firstAttempt = await create(fields);
-  if (firstAttempt.res.ok) return firstAttempt.created;
-
-  const fallbackFields = completedFallbackFields(fields, completed);
-  if (Object.keys(fallbackFields).length && Object.keys(fallbackFields).length < Object.keys(fields).length) {
-    const fallbackAttempt = await create(fallbackFields);
-    if (fallbackAttempt.res.ok) return fallbackAttempt.created;
-    throw new Error(
-      fallbackAttempt.created.error?.message ||
-      firstAttempt.created.error?.message ||
-      `Airtable completed record create failed (${fallbackAttempt.res.status})`
-    );
+  if (!res.ok) {
+    throw new Error(created.error?.message || `Airtable completed record create failed (${res.status})`);
   }
 
-  throw new Error(firstAttempt.created.error?.message || `Airtable completed record create failed (${firstAttempt.res.status})`);
+  return created;
 }
 
 function formulaField(fieldName: string) {
@@ -881,11 +783,13 @@ async function completeAirtableRecord(
     existingTables ? Promise.resolve(existingTables) : getAirtableTablesMeta(),
   ]);
 
-  const production = resolveAirtableTable(tables, airtableJobsTable());
-  const completed = resolveAirtableTable(tables, airtableCompletedTable());
+  const production = resolveProductionTable(tables);
+  let completed = resolveCompletedTable(tables);
 
   if (!production) throw new Error(`Airtable table not found: ${airtableJobsTable()}`);
   if (!completed) throw new Error(`Airtable table not found: ${airtableCompletedTable()}`);
+
+  completed = await ensureCompletedSchemaMatchesProduction(production, completed);
 
   const matchingCompleted = await findMatchingCompletedRecord(record, completed);
   if (matchingCompleted) {
@@ -903,13 +807,12 @@ async function completeAirtableRecord(
       completedQuantity >= 0
     ) {
       const mergedQuantity = productionQuantity + completedQuantity;
-      const completedFieldsToUpdate: Record<string, unknown> = {
-        [completedQuantityField.name]: airtableValueForField(completedQuantityField, mergedQuantity),
-      };
-      const completedDashNotesField = resolveAirtableField(completed, FIELD_ALIASES.dash_notes);
-      if (completedDashNotesField && isWritableField(completedDashNotesField)) {
-        completedFieldsToUpdate[completedDashNotesField.name] = stripDashboardMarkers(matchingCompleted.fields[completedDashNotesField.name]);
-      }
+      const completedFieldsToUpdate = withCompletedStageAndNotes(
+        copiedCompletedFieldsOrThrow(record, production, completed),
+        completed,
+        tables,
+      );
+      completedFieldsToUpdate[completedQuantityField.name] = airtableValueForField(completedQuantityField, mergedQuantity);
 
       const updateCompletedRes = await airtableFetch(tableUrl(`/${encodeURIComponent(matchingCompleted.id)}`, completed.name), {
         method: 'PATCH',
@@ -944,11 +847,11 @@ async function completeAirtableRecord(
     }
   }
 
-  const fields = completedFieldsFromRecord(record, production, completed);
-  const completedDashNotesField = resolveAirtableField(completed, FIELD_ALIASES.dash_notes);
-  if (completedDashNotesField && fields[completedDashNotesField.name] !== undefined) {
-    fields[completedDashNotesField.name] = stripDashboardMarkers(fields[completedDashNotesField.name]);
-  }
+  const fields = withCompletedStageAndNotes(
+    copiedCompletedFieldsOrThrow(record, production, completed),
+    completed,
+    tables,
+  );
 
   const created = await createCompletedRecord(completed, fields);
 
@@ -966,11 +869,9 @@ async function completeAirtableRecord(
 }
 
 async function syncCompletedAirtableRecords(records: AirtableRecord[]) {
-  const tables = await getAirtableTablesMeta();
-
   for (const record of records) {
     try {
-      await completeAirtableRecord(record.id, record, tables);
+      await completeAirtableRecord(record.id, record);
     } catch (error) {
       console.error('[airtable] completed production row sync failed:', record.id, error);
     }
@@ -1024,10 +925,11 @@ export async function createAirtableJobSplit(
     getAirtableRecord(recordId),
     getAirtableTablesMeta(),
   ]);
-  const production = resolveAirtableTable(tables, airtableJobsTable());
-  const completed = resolveAirtableTable(tables, airtableCompletedTable());
+  const production = resolveProductionTable(tables);
+  let completed = resolveCompletedTable(tables);
   if (!production) throw new Error(`Airtable table not found: ${airtableJobsTable()}`);
   if (!completed) throw new Error(`Airtable table not found: ${airtableCompletedTable()}`);
+  completed = await ensureCompletedSchemaMatchesProduction(production, completed);
 
   const quantityField = resolveAirtableField(production, FIELD_ALIASES.quantity);
   if (!quantityField) throw new Error('Airtable quantity field not found');
@@ -1040,7 +942,7 @@ export async function createAirtableJobSplit(
   }
   const completedQuantity = totalQuantity - remainingQuantity;
 
-  const completedFields = completedFieldsFromRecord(record, production, completed);
+  const completedFields = copiedCompletedFieldsOrThrow(record, production, completed);
   const completedQuantityField = resolveAirtableField(completed, FIELD_ALIASES.quantity);
   if (completedQuantityField) {
     completedFields[completedQuantityField.name] = airtableValueForField(completedQuantityField, completedQuantity);
@@ -1110,7 +1012,7 @@ export async function updateAirtableJobRecordsPressed(jobId: string, recordsPres
   if (!recordId) throw new Error(`Airtable job not found: ${jobId}`);
 
   const tables = await getAirtableTablesMetaOrEmpty();
-  const production = tables.find(table => table.id === airtableJobsTable() || table.name === airtableJobsTable());
+  const production = resolveProductionTable(tables);
   const recordsPressedField = production
     ? resolveAirtableField(production, [airtableRecordsPressedField(), ...FIELD_ALIASES.records_pressed])
     : undefined;
@@ -1400,8 +1302,8 @@ export async function getAirtableInventoryDashboard(): Promise<AirtableInventory
   const missingTables = selectedSections
     .filter(section => !section.table)
     .map(section => section.title);
-  const productionTable = resolveAirtableTable(tables, airtableJobsTable());
-  const completedTable = resolveAirtableTable(tables, airtableCompletedTable());
+  const productionTable = resolveProductionTable(tables);
+  const completedTable = resolveCompletedTable(tables);
 
   if (!foundSections.length) {
     throw new Error(`No Airtable inventory tables found. Expected: ${configuredSections.map(section => section.tableNames[0]).join(', ')}`);
