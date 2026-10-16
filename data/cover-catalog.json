@@ -1,0 +1,767 @@
+{
+  "generatedAt": "2026-10-16T16:41:43.428Z",
+  "source": "seed-preview",
+  "stats": {
+    "totalJobs": 42,
+    "uniqueReleases": 42,
+    "withArtwork": 26,
+    "artworkPending": 16
+  },
+  "releases": [
+    {
+      "id": "black-flag-jealous-again",
+      "artist": "Black Flag",
+      "title": "Jealous Again",
+      "matrix": "SST-003",
+      "quantity": 1200,
+      "colors": [
+        "black"
+      ],
+      "label": "Black Flag",
+      "year": "1980",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music123/v4/2e/85/cf/2e85cfc7-1860-9711-357b-b6c2262f30ee/669910742556.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/jealous-again-ep/117618263?uo=4",
+      "score": 95,
+      "accent": "#161616",
+      "tile": "hero",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "minute-men-3-way-tie",
+      "artist": "Minute Men",
+      "title": "3-Way Tie",
+      "matrix": "SST-058",
+      "quantity": 1000,
+      "colors": [
+        "green"
+      ],
+      "label": "Minutemen",
+      "year": "1985",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/d3/1d/d2/d31dd229-2c69-ecdb-ddee-1a2131afd586/669910740552.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/3-way-tie-for-last/117013289?uo=4",
+      "score": 91,
+      "accent": "#258064",
+      "tile": "hero",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "husker-du-flip-your-wig",
+      "artist": "Husker Du",
+      "title": "Flip Your Wig",
+      "matrix": "SST-055",
+      "quantity": 800,
+      "colors": [
+        "blue"
+      ],
+      "label": "Hüsker Dü",
+      "year": "1985",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/3d/bd/ad/3dbdad65-456f-2d81-7229-912a4a4dcbe0/dj.suxmhbew.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/flip-your-wig/515394844?uo=4",
+      "score": 90,
+      "accent": "#2779a7",
+      "tile": "hero",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "preservation-hall-jazz-band-so-it-is",
+      "artist": "Preservation Hall Jazz Band",
+      "title": "So It Is",
+      "matrix": "NMR 0501",
+      "quantity": 1500,
+      "colors": [
+        "black"
+      ],
+      "label": "Preservation Hall Jazz Band",
+      "year": "2017",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/7a/f1/0e/7af10ed5-c35b-9eaa-1645-a5c2ba79bdc9/098787126365.png/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/so-it-is/1396162074?uo=4",
+      "score": 88,
+      "accent": "#161616",
+      "tile": "hero",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "low-cut-connie-art-dealers",
+      "artist": "Low Cut Connie",
+      "title": "Art Dealers",
+      "matrix": "LCC-CON-110-1",
+      "quantity": 1000,
+      "colors": [
+        "black"
+      ],
+      "label": "Contender",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 84,
+      "accent": "#161616",
+      "tile": "hero"
+    },
+    {
+      "id": "kamaiyah-tresie",
+      "artist": "Kamaiyah",
+      "title": "Tresie",
+      "matrix": "KEEPITLIT-01",
+      "quantity": 400,
+      "colors": [
+        "black"
+      ],
+      "label": "Keep It Lit",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 80,
+      "accent": "#161616",
+      "tile": "hero"
+    },
+    {
+      "id": "lost-bayou-ramblers-live-at-the-orpheum",
+      "artist": "Lost Bayou Ramblers",
+      "title": "Live at the Orpheum",
+      "matrix": "LBR-001",
+      "quantity": 500,
+      "colors": [
+        "black"
+      ],
+      "label": "Independent",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 79,
+      "accent": "#161616",
+      "tile": "hero"
+    },
+    {
+      "id": "amanda-shaw-not-a-bubble-gum-pop-princess",
+      "artist": "Amanda Shaw",
+      "title": "Not A Bubble Gum Pop Princess",
+      "matrix": "AS-2024",
+      "quantity": 500,
+      "colors": [
+        "pink"
+      ],
+      "label": "Amanda Shaw",
+      "year": "2024",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/2b/7f/03/2b7f031d-669a-8083-82df-185e2cc02263/859791312638_cover.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/im-not-a-bubble-gum-pop-princess-2024-edition-deluxe-ep/1759354198?uo=4",
+      "score": 77,
+      "accent": "#d46794",
+      "tile": "hero",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "anders-osborne-picasso-s-villa",
+      "artist": "Anders Osborne",
+      "title": "Picasso's Villa",
+      "matrix": "AO-001",
+      "quantity": 500,
+      "colors": [
+        "black"
+      ],
+      "label": "Independent",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 76,
+      "accent": "#161616",
+      "tile": "feature"
+    },
+    {
+      "id": "arise-roots-pathways",
+      "artist": "Arise Roots",
+      "title": "Pathways",
+      "matrix": "AR-001",
+      "quantity": 500,
+      "colors": [
+        "green"
+      ],
+      "label": "Arise Roots",
+      "year": "2020",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/4c/9a/bf/4c9abf0d-db50-f3b9-f34c-3a12e544f287/195039405336_cover.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/pathways/1512025692?uo=4",
+      "score": 75,
+      "accent": "#258064",
+      "tile": "feature",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "sir-woman-bitch",
+      "artist": "Sir Woman",
+      "title": "Bitch",
+      "matrix": "NMR 0501",
+      "quantity": 500,
+      "colors": [
+        "gold",
+        "silver",
+        "black"
+      ],
+      "label": "New Modern Records",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 74,
+      "accent": "#161616",
+      "tile": "feature"
+    },
+    {
+      "id": "ike-yard-1982",
+      "artist": "Ike Yard",
+      "title": "1982",
+      "matrix": "DE-295",
+      "quantity": 1000,
+      "colors": [
+        "black"
+      ],
+      "label": "Ike Yard",
+      "year": "2024",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/52/e9/4a/52e94ab1-48e9-7f05-ce67-b11d3d669801/196922841538_Cover.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/1982/1729685124?uo=4",
+      "score": 73,
+      "accent": "#161616",
+      "tile": "feature",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "euroshima-gala",
+      "artist": "Euroshima",
+      "title": "Gala",
+      "matrix": "DE-292",
+      "quantity": 1000,
+      "colors": [
+        "black"
+      ],
+      "label": "Dark Entries",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 72,
+      "accent": "#161616",
+      "tile": "feature"
+    },
+    {
+      "id": "alex-molo-look-at-me",
+      "artist": "Alex Molo",
+      "title": "Look At Me",
+      "matrix": "DE-294",
+      "quantity": 1000,
+      "colors": [
+        "yellow"
+      ],
+      "label": "Dark Entries",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 71,
+      "accent": "#f1c94b",
+      "tile": "feature"
+    },
+    {
+      "id": "maggie-koerner-upstate",
+      "artist": "Maggie Koerner",
+      "title": "Upstate",
+      "matrix": "MK-005",
+      "quantity": 1000,
+      "colors": [
+        "black"
+      ],
+      "label": "Maggie Koerner",
+      "year": "2025",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/88/bd/c6/88bdc685-5c3e-944d-12c6-4866a3b3b2dc/199806008058.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/upstate/1846822599?uo=4",
+      "score": 70,
+      "accent": "#161616",
+      "tile": "feature",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "stooges-brass-band-street-music",
+      "artist": "Stooges Brass Band",
+      "title": "Street Music",
+      "matrix": "SCR-002",
+      "quantity": 500,
+      "colors": [
+        "black"
+      ],
+      "label": "Sinking City Records",
+      "year": "",
+      "coverUrl": "https://i.discogs.com/ndh_BhRTq-Nus5wh2GnTsXWzA40KXStRjLUW5JbDi50/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ3NTE3/MTMtMTM4ODI1NDg3/MS00MDczLmpwZWc.jpeg",
+      "sourceUrl": "",
+      "score": 69,
+      "accent": "#161616",
+      "tile": "feature"
+    },
+    {
+      "id": "seprock-beat-tape-sides-a-and-b",
+      "artist": "Seprock",
+      "title": "Beat Tape Sides A & B",
+      "matrix": "SCR-006",
+      "quantity": 600,
+      "colors": [
+        "black"
+      ],
+      "label": "Sinking City Records",
+      "year": "",
+      "coverUrl": "https://i.discogs.com/MbTcTe_sl8hvP113L7H6NnM_frmbes_u1PoS93yQ7s4/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTExNzIz/NzM1LTE1MjEyOTk0/NzctOTczNS5qcGVn.jpeg",
+      "sourceUrl": "",
+      "score": 68,
+      "accent": "#161616",
+      "tile": "feature"
+    },
+    {
+      "id": "deacon-john-deacon-john-s-jump-blues",
+      "artist": "Deacon John",
+      "title": "Deacon John's Jump Blues",
+      "matrix": "VCC-1005",
+      "quantity": 500,
+      "colors": [
+        "black"
+      ],
+      "label": "Deacon John",
+      "year": "2003",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music/y2004/m03/d19/h03/s05.wtmctzpq.tif/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/deacon-johns-jump-blues-music-from-the-film-cd/5957209?uo=4",
+      "score": 67,
+      "accent": "#161616",
+      "tile": "feature",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "jenny-scheinman-new-release",
+      "artist": "Jenny Scheinman",
+      "title": "New Release",
+      "matrix": "JS-001",
+      "quantity": 500,
+      "colors": [
+        "black"
+      ],
+      "label": "Independent",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 66,
+      "accent": "#161616",
+      "tile": "feature"
+    },
+    {
+      "id": "not-exotic-self-titled-debut",
+      "artist": "Not Exotic",
+      "title": "Self-Titled Debut",
+      "matrix": "NE-001",
+      "quantity": 300,
+      "colors": [
+        "black"
+      ],
+      "label": "Independent",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 65,
+      "accent": "#161616",
+      "tile": "feature"
+    },
+    {
+      "id": "whisper-party-waveland",
+      "artist": "Whisper Party!",
+      "title": "Waveland",
+      "matrix": "WP-001",
+      "quantity": 300,
+      "colors": [
+        "blue"
+      ],
+      "label": "Whisper Party!",
+      "year": "2024",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/0f/46/31/0f4631fe-436d-e117-ef94-e54cd0588729/1762.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/waveland/1773458279?uo=4",
+      "score": 64,
+      "accent": "#2779a7",
+      "tile": "feature",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "troy-sawyer-and-the-elementz-rock-your-soul",
+      "artist": "Troy Sawyer and The Elementz",
+      "title": "Rock Your Soul",
+      "matrix": "TS-001",
+      "quantity": 300,
+      "colors": [
+        "black"
+      ],
+      "label": "Troy Sawyer and the Elementz",
+      "year": "2019",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/17/e6/fd/17e6fda0-0557-1c9e-45bd-b853e9219db6/artwork.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/rock-your-soul-feat-rockin-dopsie-single/1453936164?uo=4",
+      "score": 63,
+      "accent": "#161616",
+      "tile": "feature",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "horseshoes-and-hand-grenades-for-old-time-s-sake",
+      "artist": "Horseshoes & Hand Grenades",
+      "title": "For Old Time's Sake",
+      "matrix": "HHGFOTS420",
+      "quantity": 300,
+      "colors": [
+        "black"
+      ],
+      "label": "Horseshoes & Hand Grenades",
+      "year": "2022",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/09/47/67/094767af-1596-625a-fed5-c54a6420e628/artwork.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/for-old-times-sake/1648406857?uo=4",
+      "score": 62,
+      "accent": "#161616",
+      "tile": "standard",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "da-buze-bruvaz-x-lord-beatjitzu-bolo-yeung-barbarian-bicepz",
+      "artist": "Da Buze Bruvaz x Lord Beatjitzu",
+      "title": "Bolo Yeung Barbarian Bicepz",
+      "matrix": "GP-39",
+      "quantity": 80,
+      "colors": [
+        "yellow",
+        "red"
+      ],
+      "label": "Grilchy Party",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 61,
+      "accent": "#c74242",
+      "tile": "standard"
+    },
+    {
+      "id": "him-lo-x-shar-the-analog-bastard-the-grand-architect",
+      "artist": "HIM LO x Shar the Analog Bastard",
+      "title": "The Grand Architect",
+      "matrix": "GP-53",
+      "quantity": 150,
+      "colors": [
+        "black"
+      ],
+      "label": "Grilchy Party",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 60,
+      "accent": "#161616",
+      "tile": "standard"
+    },
+    {
+      "id": "clever-1-and-giallo-point-gunz-knives-nunchuckz",
+      "artist": "Clever 1 & Giallo Point",
+      "title": "Gunz, Knives + Nunchuckz",
+      "matrix": "GP-45",
+      "quantity": 150,
+      "colors": [
+        "black"
+      ],
+      "label": "Grilchy Party",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 59,
+      "accent": "#161616",
+      "tile": "standard"
+    },
+    {
+      "id": "controller-7-nobody-planning-to-leave-instrumentals",
+      "artist": "Controller 7",
+      "title": "Nobody Planning to Leave Instrumentals",
+      "matrix": "GCR026",
+      "quantity": 250,
+      "colors": [
+        "black"
+      ],
+      "label": "Giallo Point",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 58,
+      "accent": "#161616",
+      "tile": "standard"
+    },
+    {
+      "id": "the-dad-horse-experience-the-dad-horse-experience",
+      "artist": "The Dad Horse Experience",
+      "title": "The Dad Horse Experience",
+      "matrix": "CSR-022",
+      "quantity": 250,
+      "colors": [
+        "orange"
+      ],
+      "label": "The Dad Horse Experience",
+      "year": "2008",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music/7b/4b/24/mzi.ndfvunej.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/too-close-to-heaven/295608492?uo=4",
+      "score": 57,
+      "accent": "#ef9f27",
+      "tile": "standard",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "lowercase-asides-and-besides",
+      "artist": "lowercase",
+      "title": "Asides and Besides",
+      "matrix": "REP-009",
+      "quantity": 350,
+      "colors": [
+        "black"
+      ],
+      "label": "Lowercase",
+      "year": "2020",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/7c/29/08/7c290885-b54d-4b37-7141-a79cea702fb7/195448232226.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/aside-and-besides-a-singles-compilation/1529881661?uo=4",
+      "score": 56,
+      "accent": "#161616",
+      "tile": "standard",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "slowhole-slowhole",
+      "artist": "Slowhole",
+      "title": "Slowhole",
+      "matrix": "ORE014",
+      "quantity": 700,
+      "colors": [
+        "black"
+      ],
+      "label": "Independent",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 55,
+      "accent": "#161616",
+      "tile": "standard"
+    },
+    {
+      "id": "mima-el-pozo",
+      "artist": "MIMA",
+      "title": "El Pozo",
+      "matrix": "DDLP 002",
+      "quantity": 1000,
+      "colors": [
+        "black"
+      ],
+      "label": "MiMa",
+      "year": "2011",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/a4/27/b4/a427b478-b1f1-e5ad-4b8b-8c33258e8e77/859743605283_cover.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/el-pozo/1542166414?uo=4",
+      "score": 54,
+      "accent": "#161616",
+      "tile": "standard",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "dynasty-handbag-the-bored-identity",
+      "artist": "Dynasty Handbag",
+      "title": "The Bored Identity",
+      "matrix": "WW-011",
+      "quantity": 500,
+      "colors": [
+        "pink"
+      ],
+      "label": "Independent",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 53,
+      "accent": "#d46794",
+      "tile": "standard"
+    },
+    {
+      "id": "sunrise-sunset-sunrise-sunset",
+      "artist": "sunrise:sunset",
+      "title": "sunrise:sunset",
+      "matrix": "sunrise001",
+      "quantity": 100,
+      "colors": [
+        "purple",
+        "gold"
+      ],
+      "label": "Juan Pablo Di Pace",
+      "year": "2018",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/f7/46/36/f7463641-5674-6e2c-cc73-8ad7f4fb91d1/10065.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/sunrise-sunset-single/1447687792?uo=4",
+      "score": 52,
+      "accent": "#7350a5",
+      "tile": "standard",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "haves-point",
+      "artist": "haves",
+      "title": "point",
+      "matrix": "pop156",
+      "quantity": 125,
+      "colors": [
+        "black"
+      ],
+      "label": "The Killers",
+      "year": "2013",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/11/64/9c/11649c80-2066-dba8-77a9-df7eecae26c1/17UM1IM06937.rgb.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/direct-hits/1440891166?uo=4",
+      "score": 51,
+      "accent": "#161616",
+      "tile": "standard",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "silent-em-silent-em",
+      "artist": "Silent EM",
+      "title": "Silent EM",
+      "matrix": "DKA0024",
+      "quantity": 50,
+      "colors": [
+        "green",
+        "silver"
+      ],
+      "label": "The Knife",
+      "year": "2006",
+      "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music123/v4/dd/21/98/dd2198d3-7d38-f3ee-4801-efecfd25b024/5060236630209_1.jpg/600x600bb.jpg",
+      "sourceUrl": "https://music.apple.com/us/album/silent-shout/1489763587?uo=4",
+      "score": 50,
+      "accent": "#258064",
+      "tile": "standard",
+      "artworkProvider": "itunes",
+      "artworkConfidence": 8
+    },
+    {
+      "id": "ricky-b-shake-it-fo-ya-hood",
+      "artist": "Ricky B",
+      "title": "Shake It Fo Ya Hood",
+      "matrix": "SCR-013",
+      "quantity": 300,
+      "colors": [
+        "black"
+      ],
+      "label": "Sinking City Records",
+      "year": "",
+      "coverUrl": "https://i.discogs.com/Ykl4-kd89XZqxPJCKQYnFd6xtVbXWy9RLS-i8N142u0/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE1MTI0/MTEwLTE1ODY5ODE3/MzEtNzU5NC5qcGVn.jpeg",
+      "sourceUrl": "",
+      "score": 49,
+      "accent": "#161616",
+      "tile": "standard"
+    },
+    {
+      "id": "blackbird-and-seprock-lifetime-hustler",
+      "artist": "Blackbird & Seprock",
+      "title": "Lifetime / Hustler",
+      "matrix": "SCR-014",
+      "quantity": 300,
+      "colors": [
+        "black"
+      ],
+      "label": "Sinking City Records",
+      "year": "",
+      "coverUrl": "https://i.discogs.com/74luF6WO269SnVopt9dG1OkXDJZ8P1-pLSh4uEzNVdU/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE1MTI0/MTMxLTE1ODY5ODE5/MjItMjk2MC5qcGVn.jpeg",
+      "sourceUrl": "",
+      "score": 48,
+      "accent": "#161616",
+      "tile": "standard"
+    },
+    {
+      "id": "charm-taylor-she-is-the-future",
+      "artist": "Charm Taylor",
+      "title": "She Is The Future",
+      "matrix": "SCR-023",
+      "quantity": 300,
+      "colors": [
+        "black"
+      ],
+      "label": "Sinking City Records",
+      "year": "",
+      "coverUrl": "",
+      "sourceUrl": "",
+      "score": 47,
+      "accent": "#161616",
+      "tile": "standard"
+    },
+    {
+      "id": "the-monocle-kindhumankind",
+      "artist": "The Monocle",
+      "title": "KindHumanKind",
+      "matrix": "SCR-021",
+      "quantity": 300,
+      "colors": [
+        "black"
+      ],
+      "label": "Sinking City Records",
+      "year": "",
+      "coverUrl": "https://i.discogs.com/lWaDJVEaIjQ62oYDpVPWVyUV-UXDdmiqIYrh0O5Mm6o/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMyOTUy/MDA2LTE3Mzc4NDA1/NjEtOTUxNS5qcGVn.jpeg",
+      "sourceUrl": "",
+      "score": 46,
+      "accent": "#161616",
+      "tile": "standard"
+    },
+    {
+      "id": "tasche-de-la-rocha-and-the-psychedelic-roses-self-titled",
+      "artist": "Tasche De La Rocha & The Psychedelic Roses",
+      "title": "Self-Titled",
+      "matrix": "TASCHE-LP",
+      "quantity": 300,
+      "colors": [
+        "red"
+      ],
+      "label": "Independent",
+      "year": "",
+      "coverUrl": "https://i.discogs.com/GkPXjmlnQvJ0BFwEBbztVOjdMGhei7d1qK27zNwNN_o/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI5NzAw/NTM1LTE3MDcwOTk1/ODAtMzYyMS5qcGVn.jpeg",
+      "sourceUrl": "",
+      "score": 45,
+      "accent": "#c74242",
+      "tile": "standard"
+    },
+    {
+      "id": "basher-doubles",
+      "artist": "BASHER",
+      "title": "Doubles",
+      "matrix": "SCR-024",
+      "quantity": 500,
+      "colors": [
+        "black"
+      ],
+      "label": "Sinking City Records",
+      "year": "",
+      "coverUrl": "https://i.discogs.com/nWFGR-FVaIzQ-3FvTapdNeFF-7_9M7sL3SM0ZUdjFpY/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI2MDc4/NDE5LTE2NzYyMTk1/MzUtNjk4MS5qcGVn.jpeg",
+      "sourceUrl": "",
+      "score": 44,
+      "accent": "#161616",
+      "tile": "standard"
+    },
+    {
+      "id": "thesmoothcat-and-wino-willy-ready-set",
+      "artist": "_thesmoothcat & Wino Willy",
+      "title": "Ready, Set",
+      "matrix": "SCR-029",
+      "quantity": 500,
+      "colors": [
+        "black"
+      ],
+      "label": "Sinking City Records",
+      "year": "",
+      "coverUrl": "https://i.discogs.com/MTdI3-Ql4Vq3KVmPYFoBZ_SmSAhESDpYYn0tC9i-lZc/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMwMTgw/OTc0LTE3MzA3MTQ4/ODEtNTcxMi5qcGVn.jpeg",
+      "sourceUrl": "",
+      "score": 43,
+      "accent": "#161616",
+      "tile": "standard"
+    }
+  ]
+}
