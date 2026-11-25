@@ -10,10 +10,13 @@ import {
   formatPvcRate,
   PVC_COST_PER_RECORD,
   PVC_COST_PER_RECORD_CLEAR_SPLATTER,
-  QC_REJECT_RATE,
-  RECORDS_PRESSED_PER_DAY,
   type JobPnl,
 } from '@/lib/job-pnl';
+import {
+  RECORDS_PER_WEEK,
+  calendarDaysForRecords,
+  formatPressHorizon,
+} from '@/lib/press-capacity';
 import {
   BadgeCheck,
   Boxes,
@@ -232,27 +235,11 @@ function recordsLeftToPress(job: Job) {
 
 function pressBacklog(jobs: Job[]) {
   const remaining = jobs.reduce((sum, job) => sum + recordsLeftToPress(job), 0);
-  const effectiveRecords = remaining / (1 - QC_REJECT_RATE);
   return {
     remaining,
-    perDay: RECORDS_PRESSED_PER_DAY,
-    days: effectiveRecords / RECORDS_PRESSED_PER_DAY,
+    perWeek: RECORDS_PER_WEEK,
+    days: calendarDaysForRecords(remaining),
   };
-}
-
-function formatPressHorizon(days: number) {
-  if (!Number.isFinite(days) || days <= 0) return 'Caught up';
-  if (days < 1) return 'Under 1 day';
-  if (days < 30) {
-    const n = Math.max(1, Math.round(days));
-    return `${n} day${n === 1 ? '' : 's'} out`;
-  }
-  const months = Math.floor(days / 30);
-  const remainingDays = Math.round(days % 30);
-  const mPart = `${months} month${months === 1 ? '' : 's'}`;
-  if (remainingDays === 0) return `${mPart} out`;
-  const dPart = `${remainingDays} day${remainingDays === 1 ? '' : 's'}`;
-  return `${mPart}, ${dPart} out`;
 }
 
 function boardSyncSignature(jobs: Job[]) {
@@ -3660,16 +3647,18 @@ function VendorInvoiceImportControl({
 
 function PressBacklogStat({
   remaining,
-  perDay,
+  perWeek,
+  days,
   loading,
   compact = false,
 }: {
   remaining: number;
-  perDay: number;
+  perWeek: number;
+  days: number;
   loading: boolean;
   compact?: boolean;
 }) {
-  const horizon = formatPressHorizon(remaining / perDay);
+  const horizon = formatPressHorizon(days);
   const remainingLabel = loading ? '—' : remaining.toLocaleString();
 
   return (
@@ -3677,7 +3666,7 @@ function PressBacklogStat({
       className="norp-press-backlog"
       aria-label={loading
         ? 'Loading records still to press'
-        : `${remainingLabel} records still to press at ${perDay} a day, ${horizon}`}
+        : `${remainingLabel} records still to press at ${perWeek.toLocaleString()} a week, ${horizon}`}
       style={{
         background: COLORS.panel,
         border: `1px solid ${COLORS.border}`,
@@ -3774,6 +3763,7 @@ function PressBacklogStat({
               color: COLORS.green,
               fontSize: compact ? 'clamp(16px, 2.4vw, 20px)' : 'clamp(18px, 1.6vw, 22px)',
               fontWeight: 900,
+              whiteSpace: 'nowrap',
             }}>
               {remainingLabel}
               <span style={{ color: COLORS.faint, fontSize: '12px', fontWeight: 700, letterSpacing: 0, marginLeft: '6px' }}>
@@ -3783,10 +3773,7 @@ function PressBacklogStat({
           </div>
           <div className="norp-press-backlog__pace">
             <div className="norp-press-backlog__label" style={{ color: COLORS.gold, fontSize: compact ? '10px' : '11px', fontWeight: 900 }}>
-              {perDay.toLocaleString()} / day
-              <span style={{ color: COLORS.muted, fontWeight: 700, fontStyle: 'italic', marginLeft: '4px' }}>
-                *+15% QC to total*
-              </span>
+              {perWeek.toLocaleString()} / week
             </div>
             <div style={{
               color: COLORS.text,
@@ -3795,6 +3782,17 @@ function PressBacklogStat({
               lineHeight: 1.2,
             }}>
               {loading ? '…' : horizon}
+            </div>
+            <div style={{
+              color: COLORS.muted,
+              fontSize: compact ? '10px' : '11px',
+              fontWeight: 700,
+              letterSpacing: 0,
+              lineHeight: 1.3,
+              marginTop: '3px',
+              textTransform: 'none',
+            }}>
+              weekends and 10 holidays off
             </div>
           </div>
         </div>
@@ -4289,15 +4287,16 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
           </h1>
         </div>
         <div style={{
-          flex: stackBacklog ? '1 1 100%' : '1 1 280px',
-          maxWidth: stackBacklog ? 'none' : '440px',
-          minWidth: 0,
+          flex: stackBacklog ? '1 1 100%' : '1 1 420px',
+          maxWidth: stackBacklog ? 'none' : '480px',
+          minWidth: stackBacklog ? 0 : 340,
           order: stackBacklog ? 3 : 2,
           width: stackBacklog ? '100%' : undefined,
         }}>
           <PressBacklogStat
             remaining={backlog.remaining}
-            perDay={backlog.perDay}
+            perWeek={backlog.perWeek}
+            days={backlog.days}
             loading={loading}
             compact={stackBacklog}
           />
