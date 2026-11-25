@@ -9,6 +9,7 @@ import {
   pvcPoundsForRecords,
   pvcRateForColor,
   quickBooksInvoiceUrl,
+  quickBooksInvoicesForJob,
   quickBooksInvoicesFromJob,
   translucentPoundSplit,
   translucentPvcRate,
@@ -226,6 +227,18 @@ const linked = quickBooksInvoicesFromJob({
 });
 assert(linked.length === 1 && linked[0].id === '145' && linked[0].docNumber === '1042', 'only the matched QuickBooks invoice is linked');
 assert(quickBooksInvoicesFromJob({}).length === 0, 'a job with no invoice match has no QuickBooks link');
+
+const dillonInvoices = quickBooksInvoicesForJob({
+  customer: 'Mike Dillon - Mike and Beignet go to the zoo',
+  pnl: {
+    clientInvoices: [
+      { id: '23963', docNumber: '3535', customerName: 'Kevin Calabro', totalAmt: 4827.85, balance: 0, amountPaid: 4827.85, txnDate: '2026-05-29', source: 'quickbooks', matchReason: 'matrix / job ID on invoice · unique customer / artist · album title' },
+      { id: '14922', docNumber: '2579', customerName: 'Mike Dillon', totalAmt: 3537.4, balance: 0, amountPaid: 3537.4, txnDate: '2023-08-30', source: 'quickbooks', matchReason: 'unique customer / artist · album / title words' },
+      { id: '10140', docNumber: '2117', customerName: 'Kevin Calabro', totalAmt: 5579.85, balance: 0, amountPaid: 5579.85, txnDate: '2022-06-08', source: 'quickbooks', matchReason: 'unique customer / artist · album / title words' },
+    ],
+  },
+});
+assert(dillonInvoices.length === 1 && dillonInvoices[0].docNumber === '2579', 'Mike Dillon links to his invoice, not another customer');
 
 if (process.exitCode) {
   console.error('job pnl matching tests failed');

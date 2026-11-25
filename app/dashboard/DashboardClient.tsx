@@ -9,7 +9,7 @@ import {
   formatPvcPounds,
   formatPvcRate,
   quickBooksInvoiceUrl,
-  quickBooksInvoicesFromJob,
+  quickBooksInvoicesForJob,
   translucentPoundSplit,
   PVC_COST_PER_RECORD,
   PVC_COST_PER_RECORD_CLEAR_SPLATTER,
@@ -728,9 +728,8 @@ function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsC
   );
 }
 
-function QuickBooksInvoicePanel({ job }: { job: Job }) {
-  const invoices = quickBooksInvoicesFromJob(job);
-  if (!invoices.length) return null;
+function QuickBooksInvoicePanel({ job, invoicesLoaded }: { job: Job; invoicesLoaded: boolean }) {
+  const invoices = quickBooksInvoicesForJob(job);
 
   return (
     <div style={{
@@ -744,6 +743,11 @@ function QuickBooksInvoicePanel({ job }: { job: Job }) {
         QuickBooks
       </div>
       <div style={{ display: 'grid', gap: '8px' }}>
+        {!invoices.length && (
+          <div style={{ color: COLORS.muted, fontSize: '13px', lineHeight: 1.4 }}>
+            {invoicesLoaded ? 'No QuickBooks invoice matched this job.' : 'Looking up the QuickBooks invoice...'}
+          </div>
+        )}
         {invoices.map(invoice => {
           const href = quickBooksInvoiceUrl(invoice.id);
           const title = invoice.docNumber ? `Invoice ${invoice.docNumber}` : 'Invoice';
@@ -2300,6 +2304,7 @@ function JobDrawer({
   onSplitJob,
   onRecordsPressedSave,
   onShipmentsChanged,
+  invoicesLoaded = false,
 }: {
   job: Job;
   onClose: () => void;
@@ -2309,6 +2314,7 @@ function JobDrawer({
   onSplitJob: (job: Job, payload: { stage: Station; quantity: string }) => Promise<void>;
   onRecordsPressedSave: (job: Job, recordsPressed: number | null) => Promise<void>;
   onShipmentsChanged?: () => Promise<void> | void;
+  invoicesLoaded?: boolean;
 }) {
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
@@ -2509,7 +2515,7 @@ function JobDrawer({
           {savingRush ? 'Saving Rush...' : rushed ? 'Rush Order On' : 'Rush Order'}
         </button>
 
-        <QuickBooksInvoicePanel job={job} />
+        <QuickBooksInvoicePanel job={job} invoicesLoaded={invoicesLoaded} />
         <PvcCompoundPanel job={job} />
 
         {station === 'now_pressing' && quantityTotal > 0 && (
@@ -3669,6 +3675,7 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
   const refreshJobDetailsRef = useRef<() => Promise<void>>(async () => {});
   const logStampRef = useRef('');
   const financeLoadedRef = useRef(false);
+  const [invoicesLoaded, setInvoicesLoaded] = useState(false);
 
   const applyRemoteJobs = useCallback((nextJobs: Job[], startedAt: number) => {
     if (syncPausedRef.current || startedAt < localMutationAtRef.current) {
@@ -3746,6 +3753,7 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
         void refreshJobDetailsRef.current();
       } else if (readOnly) {
         financeLoadedRef.current = true;
+        setInvoicesLoaded(true);
       }
       if (!readOnly && queuedRefreshRef.current && !syncPausedRef.current) {
         queuedRefreshRef.current = false;
@@ -3769,6 +3777,7 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
       // Finance details are optional. The board still shows production flow.
     } finally {
       financeLoadedRef.current = true;
+      setInvoicesLoaded(true);
     }
   }, []);
 
@@ -4371,6 +4380,7 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
         <JobDrawer
           key={jobKey(selectedJob)}
           job={selectedJob}
+          invoicesLoaded={invoicesLoaded}
           onClose={() => setSelectedJob(null)}
           onDashNotesSave={saveDashNotes}
           onRushToggle={toggleRushOrder}
