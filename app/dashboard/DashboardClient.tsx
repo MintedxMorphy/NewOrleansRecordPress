@@ -775,6 +775,9 @@ function QuickBooksInvoicePanel({ job, invoicesLoaded }: { job: Job; invoicesLoa
                 <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
                   {[invoice.customerName, invoice.totalAmt ? formatMoney(invoice.totalAmt) : ''].filter(Boolean).join(' · ') || 'Open in QuickBooks'}
                 </div>
+                {invoice.matchReason ? (
+                  <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>{invoice.matchReason}</div>
+                ) : null}
               </div>
               <div style={{ color: COLORS.blue, fontSize: '12px', fontWeight: 900, whiteSpace: 'nowrap' }}>Open</div>
             </a>
