@@ -8,6 +8,7 @@ import {
   estimatePvcCompound,
   formatPvcPounds,
   formatPvcRate,
+  translucentPoundSplit,
   PVC_COST_PER_RECORD,
   PVC_COST_PER_RECORD_CLEAR_SPLATTER,
 } from '@/lib/job-pnl';
@@ -760,10 +761,15 @@ function PvcCompoundPanel({ job }: { job: Job }) {
       <div style={{ color: COLORS.muted, fontSize: '12px', lineHeight: 1.4, marginBottom: '12px' }}>
         2 records from each pound. 15% of pressed records are rejected, so each color includes the extra compound needed to ship the order.
         Standard vinyl {formatPvcRate(PVC_COST_PER_RECORD)}. Clear and splatter {formatPvcRate(PVC_COST_PER_RECORD_CLEAR_SPLATTER)}.
+        Translucent colors are 20 parts clear compound and 1 part color.
       </div>
 
       <div style={{ display: 'grid', gap: '8px' }}>
-        {estimate.lines.map((line, index) => (
+        {estimate.lines.map((line, index) => {
+          const split = line.clearParts > 0 && line.colorParts > 0
+            ? translucentPoundSplit(line.pounds, line.clearParts, line.colorParts)
+            : null;
+          return (
           <div
             key={`${line.label}-${index}`}
             style={{
@@ -783,8 +789,15 @@ function PvcCompoundPanel({ job }: { job: Job }) {
               </div>
               <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
                 {line.quantity.toLocaleString()} records · {formatPvcRate(line.rate)}
-                {line.premium ? ' · clear/splatter' : ''}
+                {line.clearParts > 0 && line.colorParts > 0
+                  ? ` · ${line.clearParts} parts clear, ${line.colorParts} part ${line.colorant}`
+                  : line.premium ? ' · clear/splatter' : ''}
               </div>
+              {split && (
+                <div style={{ color: COLORS.faint, fontSize: '12px', marginTop: '4px' }}>
+                  {formatPvcPounds(split.clear)} clear · {formatPvcPounds(split.color)} {line.colorant}
+                </div>
+              )}
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ color: COLORS.green, fontSize: '16px', fontWeight: 900, whiteSpace: 'nowrap' }}>
@@ -795,7 +808,8 @@ function PvcCompoundPanel({ job }: { job: Job }) {
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

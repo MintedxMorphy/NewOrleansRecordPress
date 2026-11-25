@@ -2,6 +2,8 @@ export const PVC_COST_PER_RECORD = 0.5;
 export const PVC_COST_PER_RECORD_CLEAR_SPLATTER = 0.75;
 export const RECORDS_PER_POUND = 2;
 export const PVC_REJECTION_RATE = 0.15;
+export const TRANSLUCENT_CLEAR_PARTS = 20;
+export const TRANSLUCENT_COLOR_PARTS = 1;
 export const SHOP_PAYROLL_BIWEEKLY = 11000;
 const RECORDS_PER_WEEK = 4000;
 const PAY_PERIOD_WEEKS = 2;
@@ -15,6 +17,9 @@ export type PvcEstimateLine = {
   cost: number;
   pounds: number;
   premium: boolean;
+  clearParts: number;
+  colorParts: number;
+  colorant: string;
 };
 
 export type PvcEstimate = {
@@ -105,21 +110,69 @@ function jobQuantity(job: JobLike) {
   return 0;
 }
 
-export function isClearOrSplatterColor(color: string) {
-  const text = color.toLowerCase();
+function colorText(color: string) {
+  return color.toLowerCase();
+}
+
+export function isSplatterColor(color: string) {
+  const text = colorText(color);
   return /\bsplatters?\b/.test(text)
     || /\bsplattered\b/.test(text)
-    || /\bsplats?\b/.test(text)
-    || /\bclears?\b/.test(text)
-    || /\btransparent\b/.test(text);
+    || /\bsplats?\b/.test(text);
+}
+
+export function isTranslucentColor(color: string) {
+  const text = colorText(color);
+  return /\btranslucents?\b/.test(text) || /\btrans\b/.test(text);
+}
+
+export function isPureClearColor(color: string) {
+  if (isTranslucentColor(color)) return false;
+  const text = colorText(color);
+  return /\bclears?\b/.test(text) || /\btransparent\b/.test(text);
+}
+
+export function isClearOrSplatterColor(color: string) {
+  return isSplatterColor(color) || isPureClearColor(color);
+}
+
+export function colorantName(color: string) {
+  const name = color
+    .replace(/\btranslucents?\b/ig, '')
+    .replace(/\btrans\b/ig, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,/-]+|[\s,/-]+$/g, '')
+    .trim();
+  return name || 'color';
+}
+
+export function translucentPoundSplit(pounds: number, clearParts = TRANSLUCENT_CLEAR_PARTS, colorParts = TRANSLUCENT_COLOR_PARTS) {
+  const total = Math.max(0, Math.round(pounds));
+  const parts = clearParts + colorParts;
+  if (!Number.isFinite(pounds) || pounds <= 0 || parts <= 0) return { clear: 0, color: 0, total };
+  const clear = Math.min(total, Math.max(0, Math.round(pounds * clearParts / parts)));
+  return { clear, color: total - clear, total };
+}
+
+export function translucentPvcRate() {
+  const parts = TRANSLUCENT_CLEAR_PARTS + TRANSLUCENT_COLOR_PARTS;
+  return (
+    TRANSLUCENT_CLEAR_PARTS * PVC_COST_PER_RECORD_CLEAR_SPLATTER
+    + TRANSLUCENT_COLOR_PARTS * PVC_COST_PER_RECORD
+  ) / parts;
 }
 
 export function pvcRateForColor(color: string) {
-  return isClearOrSplatterColor(color) ? PVC_COST_PER_RECORD_CLEAR_SPLATTER : PVC_COST_PER_RECORD;
+  if (isClearOrSplatterColor(color)) return PVC_COST_PER_RECORD_CLEAR_SPLATTER;
+  if (isTranslucentColor(color)) return translucentPvcRate();
+  return PVC_COST_PER_RECORD;
 }
 
 export function formatPvcRate(rate: number) {
-  return `$${rate.toFixed(2)} / record`;
+  const rounded = Math.round(rate * 1000) / 1000;
+  const cents = Math.round(rounded * 100);
+  const digits = Math.abs(rounded * 100 - cents) < 0.000001 ? 2 : 3;
+  return `$${rounded.toFixed(digits)} / record`;
 }
 
 export function pvcPoundsForRecords(records: number) {
@@ -133,6 +186,7 @@ export function formatPvcPounds(pounds: number) {
 }
 
 function pvcLine(label: string, quantity: number) {
+  const translucent = isTranslucentColor(label) && !isSplatterColor(label);
   const rate = pvcRateForColor(label);
   return {
     label,
@@ -140,7 +194,10 @@ function pvcLine(label: string, quantity: number) {
     rate,
     cost: quantity * rate,
     pounds: pvcPoundsForRecords(quantity),
-    premium: rate === PVC_COST_PER_RECORD_CLEAR_SPLATTER,
+    premium: isClearOrSplatterColor(label),
+    clearParts: translucent ? TRANSLUCENT_CLEAR_PARTS : 0,
+    colorParts: translucent ? TRANSLUCENT_COLOR_PARTS : 0,
+    colorant: translucent ? colorantName(label) : '',
   };
 }
 
