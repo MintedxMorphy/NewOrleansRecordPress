@@ -4,6 +4,8 @@ import {
   assignClientInvoices,
   buildJobPnl,
   clientInvoicesFromQbo,
+  estimatePvcCompound,
+  pvcPoundsForRecords,
   SHOP_PAYROLL_BIWEEKLY,
   SHOP_PAYROLL_PER_RECORD,
   titleCoreFromCustomer,
@@ -171,6 +173,24 @@ assert(payrollLine?.detail.includes('4,000/week') === true, 'payroll detail uses
 assert(payrollJob.costs.every(line => line.key !== 'management' && line.key !== 'freight'), 'management salaries and freight are off the P&L');
 assert(Math.abs(payrollJob.costTotal - (500 + 1375)) < 0.001, 'projected cost is PVC plus shop payroll only');
 assert(payrollJob.grossProfit === 5000 - payrollJob.costTotal, 'gross profit ignores the shipment cost');
+
+const blackPounds = pvcPoundsForRecords(1000);
+assert(Math.abs(blackPounds - (1000 / 0.85 / 2)) < 0.000001, '1,000 records use a half pound each after 15% rejection');
+assert(Math.round(blackPounds) === 588, '1,000 records round to 588 lbs');
+
+const split = estimatePvcCompound({
+  quantity: 1000,
+  colors: 'Black (700) · Clear Splatter (300)',
+  variants: [
+    { colors: 'Black', quantity: '700' },
+    { colors: 'Clear Splatter', quantity: '300' },
+  ],
+});
+assert(split?.lines.length === 2, 'compound use is split by color');
+assert(split?.lines[0].label === 'Black' && Math.round(split.lines[0].pounds) === 412, '700 black records use 412 lbs');
+assert(split?.lines[1].label === 'Clear Splatter' && Math.round(split.lines[1].pounds) === 176, '300 clear splatter records use 176 lbs');
+assert(Math.round(split.lines[0].pounds) + Math.round(split.lines[1].pounds) === 588, 'color pounds add up to the job');
+assert(split.lines[0].cost === 350 && split.lines[1].cost === 225, 'compound cost stays on the ordered record count');
 
 if (process.exitCode) {
   console.error('job pnl matching tests failed');

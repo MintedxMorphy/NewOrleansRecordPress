@@ -1,5 +1,7 @@
 export const PVC_COST_PER_RECORD = 0.5;
 export const PVC_COST_PER_RECORD_CLEAR_SPLATTER = 0.75;
+export const RECORDS_PER_POUND = 2;
+export const PVC_REJECTION_RATE = 0.15;
 export const SHOP_PAYROLL_BIWEEKLY = 11000;
 const RECORDS_PER_WEEK = 4000;
 const PAY_PERIOD_WEEKS = 2;
@@ -11,6 +13,7 @@ export type PvcEstimateLine = {
   quantity: number;
   rate: number;
   cost: number;
+  pounds: number;
   premium: boolean;
 };
 
@@ -18,6 +21,7 @@ export type PvcEstimate = {
   lines: PvcEstimateLine[];
   total: number;
   quantity: number;
+  pounds: number;
 };
 
 export type ClientInvoiceMatch = {
@@ -118,6 +122,28 @@ export function formatPvcRate(rate: number) {
   return `$${rate.toFixed(2)} / record`;
 }
 
+export function pvcPoundsForRecords(records: number) {
+  if (!Number.isFinite(records) || records <= 0) return 0;
+  return records / (1 - PVC_REJECTION_RATE) / RECORDS_PER_POUND;
+}
+
+export function formatPvcPounds(pounds: number) {
+  const rounded = Math.max(0, Math.round(pounds));
+  return `${rounded.toLocaleString('en-US')} lb${rounded === 1 ? '' : 's'}`;
+}
+
+function pvcLine(label: string, quantity: number) {
+  const rate = pvcRateForColor(label);
+  return {
+    label,
+    quantity,
+    rate,
+    cost: quantity * rate,
+    pounds: pvcPoundsForRecords(quantity),
+    premium: rate === PVC_COST_PER_RECORD_CLEAR_SPLATTER,
+  };
+}
+
 export function estimatePvcCompound(job: JobLike): PvcEstimate | null {
   const variants = jobRecords(job.variants);
   const lines: PvcEstimateLine[] = [];
@@ -126,15 +152,7 @@ export function estimatePvcCompound(job: JobLike): PvcEstimate | null {
     for (const variant of variants) {
       const quantity = numericValue(variant.quantity);
       if (quantity <= 0) continue;
-      const label = stringValue(variant.colors || variant.run_label) || 'Variant';
-      const rate = pvcRateForColor(label);
-      lines.push({
-        label,
-        quantity,
-        rate,
-        cost: quantity * rate,
-        premium: rate === PVC_COST_PER_RECORD_CLEAR_SPLATTER,
-      });
+      lines.push(pvcLine(stringValue(variant.colors || variant.run_label) || 'Variant', quantity));
     }
   }
 
@@ -142,20 +160,14 @@ export function estimatePvcCompound(job: JobLike): PvcEstimate | null {
     const quantity = jobQuantity(job);
     if (quantity <= 0) return null;
     const label = stringValue(job.colors || job.Colors || job.color || job.Color || job['Vinyl Color']) || 'Vinyl';
-    const rate = pvcRateForColor(label);
-    lines.push({
-      label,
-      quantity,
-      rate,
-      cost: quantity * rate,
-      premium: rate === PVC_COST_PER_RECORD_CLEAR_SPLATTER,
-    });
+    lines.push(pvcLine(label, quantity));
   }
 
   return {
     lines,
     total: lines.reduce((sum, line) => sum + line.cost, 0),
     quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+    pounds: lines.reduce((sum, line) => sum + line.pounds, 0),
   };
 }
 
@@ -488,7 +500,7 @@ export function buildJobPnl(job: JobLike, invoices: ClientInvoiceMatch[] = []): 
       label: 'PVC compound',
       amount: pvc?.total || 0,
       detail: pvc
-        ? `${pvc.quantity.toLocaleString()} records · ${formatPvcRate(PVC_COST_PER_RECORD)} standard / ${formatPvcRate(PVC_COST_PER_RECORD_CLEAR_SPLATTER)} clear & splatter`
+        ? `${formatPvcPounds(pvc.pounds)} · ${pvc.quantity.toLocaleString()} records · ${formatPvcRate(PVC_COST_PER_RECORD)} standard / ${formatPvcRate(PVC_COST_PER_RECORD_CLEAR_SPLATTER)} clear & splatter`
         : 'Need a quantity to estimate',
       kind: 'cost',
     },
