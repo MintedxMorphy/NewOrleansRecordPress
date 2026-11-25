@@ -6,6 +6,7 @@ import { packSkyline } from '@/lib/dashboard-pack';
 import { PRODUCTION_LOG_HEARTBEAT_MS, PRODUCTION_SYNC_POLL_MS, notifyProductionSync, subscribeProductionSync } from '@/lib/production-sync';
 import {
   estimatePvcCompound,
+  formatPvcPounds,
   formatPvcRate,
   PVC_COST_PER_RECORD,
   PVC_COST_PER_RECORD_CLEAR_SPLATTER,
@@ -727,6 +728,7 @@ function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsC
 function PvcCompoundPanel({ job }: { job: Job }) {
   const estimate = estimatePvcCompound(job);
   if (!estimate) return null;
+  const shownPounds = estimate.lines.reduce((sum, line) => sum + Math.round(line.pounds), 0);
 
   return (
     <div style={{
@@ -750,12 +752,13 @@ function PvcCompoundPanel({ job }: { job: Job }) {
         </div>
         <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
           <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Compound Use</div>
-          <div style={{ color: COLORS.text, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{estimate.quantity.toLocaleString()}</div>
-          <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>records</div>
+          <div style={{ color: COLORS.text, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{formatPvcPounds(shownPounds)}</div>
+          <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>after 15% rejection</div>
         </div>
       </div>
 
       <div style={{ color: COLORS.muted, fontSize: '12px', lineHeight: 1.4, marginBottom: '12px' }}>
+        2 records from each pound. 15% of pressed records are rejected, so each color includes the extra compound needed to ship the order.
         Standard vinyl {formatPvcRate(PVC_COST_PER_RECORD)}. Clear and splatter {formatPvcRate(PVC_COST_PER_RECORD_CLEAR_SPLATTER)}.
       </div>
 
@@ -783,8 +786,13 @@ function PvcCompoundPanel({ job }: { job: Job }) {
                 {line.premium ? ' · clear/splatter' : ''}
               </div>
             </div>
-            <div style={{ color: COLORS.green, fontSize: '14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
-              {formatMoney(line.cost)}
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ color: COLORS.green, fontSize: '16px', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                {formatPvcPounds(line.pounds)}
+              </div>
+              <div style={{ color: COLORS.muted, fontSize: '12px', fontWeight: 800, marginTop: '4px', whiteSpace: 'nowrap' }}>
+                {formatMoney(line.cost)}
+              </div>
             </div>
           </div>
         ))}
