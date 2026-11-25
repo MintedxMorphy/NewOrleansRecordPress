@@ -5,7 +5,11 @@ import {
   buildJobPnl,
   clientInvoicesFromQbo,
   estimatePvcCompound,
+  formatPvcRate,
   pvcPoundsForRecords,
+  pvcRateForColor,
+  translucentPoundSplit,
+  translucentPvcRate,
   SHOP_PAYROLL_BIWEEKLY,
   SHOP_PAYROLL_PER_RECORD,
   titleCoreFromCustomer,
@@ -191,6 +195,22 @@ assert(split?.lines[0].label === 'Black' && Math.round(split.lines[0].pounds) ==
 assert(split?.lines[1].label === 'Clear Splatter' && Math.round(split.lines[1].pounds) === 176, '300 clear splatter records use 176 lbs');
 assert(Math.round(split.lines[0].pounds) + Math.round(split.lines[1].pounds) === 588, 'color pounds add up to the job');
 assert(split.lines[0].cost === 350 && split.lines[1].cost === 225, 'compound cost stays on the ordered record count');
+
+const transRate = translucentPvcRate();
+assert(Math.abs(transRate - ((20 * 0.75 + 0.5) / 21)) < 0.000001, 'translucent compound is 20 parts clear and 1 part color');
+assert(pvcRateForColor('black') === 0.5, 'solid black stays at $0.50');
+assert(pvcRateForColor('Clear') === 0.75, 'clear stays at $0.75');
+assert(pvcRateForColor('translucent red') === transRate, 'translucent red uses the clear-heavy mix');
+assert(pvcRateForColor('Trans Red') === transRate, 'trans red uses the same mix');
+assert(pvcRateForColor('translucent blue') === transRate, 'every translucent color uses the mix');
+assert(formatPvcRate(transRate) === '$0.738 / record', 'the card shows the blended translucent rate');
+
+const dillon = estimatePvcCompound({ quantity: 1000, colors: 'translucent red' });
+const dillonLine = dillon?.lines[0];
+assert(dillonLine?.colorant === 'red' && dillonLine.clearParts === 20 && dillonLine.colorParts === 1, 'translucent red names the color part');
+assert(Math.abs((dillonLine?.cost || 0) - 1000 * transRate) < 0.001, 'translucent red cost follows the mix, not $0.50');
+const dillonSplit = translucentPoundSplit(dillonLine?.pounds || 0);
+assert(dillonSplit.clear === 560 && dillonSplit.color === 28 && dillonSplit.total === 588, '1,000 translucent records split into 560 lbs clear and 28 lbs red');
 
 if (process.exitCode) {
   console.error('job pnl matching tests failed');
