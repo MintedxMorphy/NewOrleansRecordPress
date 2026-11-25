@@ -472,6 +472,27 @@ export function quickBooksInvoicesFromJob(job: { pnl?: unknown }): ClientInvoice
   });
 }
 
+function customerNamedOnJob(customerName: string, jobTitle: string) {
+  const jobWords = new Set(normalizeWords(jobTitle));
+  const customerWords = normalizeWords(customerName).filter(word => word.length >= 4);
+  if (!customerWords.length || !jobWords.size) return false;
+  const hits = customerWords.filter(word => jobWords.has(word));
+  return hits.length >= Math.min(2, customerWords.length);
+}
+
+export function quickBooksInvoicesForJob(job: { pnl?: unknown; customer?: unknown; Customer?: unknown }): ClientInvoiceMatch[] {
+  const invoices = quickBooksInvoicesFromJob(job);
+  if (!invoices.length) return [];
+  const title = stringValue(job.customer || job.Customer || '');
+  const named = invoices.filter(invoice => customerNamedOnJob(invoice.customerName, title));
+  const explicit = invoices.filter(invoice => /order #|matrix \/ job ID/i.test(invoice.matchReason || ''));
+  const pool = named.length ? named : explicit;
+  return pool
+    .slice()
+    .sort((a, b) => String(b.txnDate).localeCompare(String(a.txnDate)))
+    .slice(0, 2);
+}
+
 function toClientInvoice(invoice: QboInvoiceLike, reason: string): ClientInvoiceMatch {
   return {
     id: invoice.id,
