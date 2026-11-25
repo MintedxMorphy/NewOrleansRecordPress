@@ -5,14 +5,6 @@ import { DragDropContext, Draggable, Droppable, DraggableProvidedDragHandleProps
 import { packSkyline } from '@/lib/dashboard-pack';
 import { PRODUCTION_LOG_HEARTBEAT_MS, PRODUCTION_SYNC_POLL_MS, notifyProductionSync, subscribeProductionSync } from '@/lib/production-sync';
 import {
-  buildJobPnl,
-  estimatePvcCompound,
-  formatPvcRate,
-  PVC_COST_PER_RECORD,
-  PVC_COST_PER_RECORD_CLEAR_SPLATTER,
-  type JobPnl,
-} from '@/lib/job-pnl';
-import {
   RECORDS_PER_WEEK,
   calendarDaysForRecords,
   formatPressHorizon,
@@ -292,25 +284,6 @@ type JobLogisticsState = {
   totals: { inbound_cost: number; outbound_cost: number; all_cost: number };
 };
 
-type VendorCostItem = {
-  id: string;
-  invoice_number?: string;
-  vendor?: string;
-  category?: string;
-  matrix?: string;
-  description?: string;
-  amount?: number;
-  invoice_date?: string;
-  source_file?: string;
-};
-
-type VendorCostSummary = {
-  total: number;
-  count: number;
-  categories: Record<string, number>;
-  items: VendorCostItem[];
-};
-
 type VendorInvoiceMatchedJob = {
   record_id?: string;
   job_id?: string;
@@ -347,27 +320,6 @@ type VendorInvoiceParseResult = {
 
 function formatMoney(amount: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
-}
-
-function vendorCostSummary(job: Job): VendorCostSummary | null {
-  const raw = job.vendor_cost_summary;
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-
-  const shaped = raw as Record<string, unknown>;
-  const total = Number(shaped.total || job.vendor_cost_total || 0);
-  const count = Number(shaped.count || job.vendor_cost_count || 0);
-  const rawCategories = shaped.categories && typeof shaped.categories === 'object' && !Array.isArray(shaped.categories)
-    ? shaped.categories as Record<string, unknown>
-    : {};
-  const categories = Object.fromEntries(
-    Object.entries(rawCategories).map(([category, amount]) => [category, Number(amount || 0)]),
-  );
-  const items = Array.isArray(shaped.items)
-    ? shaped.items.map(item => item as VendorCostItem)
-    : [];
-
-  if (!total && !count && !items.length) return null;
-  return { total, count: count || items.length, categories, items };
 }
 
 function trackingLink(carrier: string, trackingNumber: string, trackingUrl = '') {
@@ -762,259 +714,6 @@ function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsC
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function VendorCostsPanel({ job }: { job: Job }) {
-  const summary = vendorCostSummary(job);
-  if (!summary) return null;
-
-  const categories = Object.entries(summary.categories)
-    .filter(([, amount]) => amount)
-    .sort((a, b) => b[1] - a[1]);
-
-  return (
-    <div style={{
-      background: COLORS.card,
-      border: `1px solid ${COLORS.border}`,
-      borderRadius: '8px',
-      marginBottom: '22px',
-      padding: '14px',
-    }}>
-      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', marginBottom: '10px' }}>
-        <Paperclip size={16} color={COLORS.gold} />
-        <div style={{ color: COLORS.gold, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          Vendor Costs
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', marginBottom: '14px' }}>
-        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
-          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Total</div>
-          <div style={{ color: COLORS.gold, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{formatMoney(summary.total)}</div>
-        </div>
-        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
-          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Lines</div>
-          <div style={{ color: COLORS.text, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{summary.count}</div>
-        </div>
-      </div>
-
-      {categories.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
-          {categories.map(([category, amount]) => (
-            <StatusPill key={category} color={COLORS.gold}>{category}: {formatMoney(amount)}</StatusPill>
-          ))}
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gap: '8px' }}>
-        {summary.items.slice(0, 8).map(item => (
-          <div key={item.id} style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px 12px' }}>
-            <div style={{ alignItems: 'start', display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 850 }}>
-                  {item.description || item.category || 'Vendor line'}
-                </div>
-                <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
-                  {[item.vendor, item.invoice_number, item.invoice_date].filter(Boolean).join(' · ') || 'Imported invoice line'}
-                </div>
-              </div>
-              <div style={{ color: COLORS.gold, fontSize: '14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
-                {formatMoney(Number(item.amount || 0))}
-              </div>
-            </div>
-          </div>
-        ))}
-        {summary.items.length > 8 && (
-          <div style={{ color: COLORS.muted, fontSize: '12px' }}>
-            +{summary.items.length - 8} more vendor cost line{summary.items.length - 8 === 1 ? '' : 's'}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PvcCompoundPanel({ job }: { job: Job }) {
-  const estimate = estimatePvcCompound(job);
-  if (!estimate) return null;
-
-  return (
-    <div style={{
-      background: COLORS.card,
-      border: `1px solid ${COLORS.border}`,
-      borderRadius: '8px',
-      marginBottom: '22px',
-      padding: '14px',
-    }}>
-      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', marginBottom: '10px' }}>
-        <Boxes size={16} color={COLORS.green} />
-        <div style={{ color: COLORS.green, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          PVC Compound Estimate
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', marginBottom: '12px' }}>
-        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
-          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Projected PVC</div>
-          <div style={{ color: COLORS.green, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{formatMoney(estimate.total)}</div>
-        </div>
-        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
-          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Records</div>
-          <div style={{ color: COLORS.text, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{estimate.quantity.toLocaleString()}</div>
-        </div>
-      </div>
-
-      <div style={{ color: COLORS.muted, fontSize: '12px', lineHeight: 1.4, marginBottom: '12px' }}>
-        Standard vinyl {formatPvcRate(PVC_COST_PER_RECORD)}. Clear and splatter {formatPvcRate(PVC_COST_PER_RECORD_CLEAR_SPLATTER)}.
-      </div>
-
-      <div style={{ display: 'grid', gap: '8px' }}>
-        {estimate.lines.map((line, index) => (
-          <div
-            key={`${line.label}-${index}`}
-            style={{
-              alignItems: 'start',
-              background: COLORS.panel,
-              border: `1px solid ${COLORS.border}`,
-              borderRadius: '8px',
-              display: 'flex',
-              gap: '10px',
-              justifyContent: 'space-between',
-              padding: '10px 12px',
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 850 }}>
-                {line.label}
-              </div>
-              <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
-                {line.quantity.toLocaleString()} records · {formatPvcRate(line.rate)}
-                {line.premium ? ' · clear/splatter' : ''}
-              </div>
-            </div>
-            <div style={{ color: COLORS.green, fontSize: '14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
-              {formatMoney(line.cost)}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function pnlFromJob(job: Job): JobPnl {
-  const raw = job.pnl;
-  if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'costTotal' in raw) {
-    return raw as JobPnl;
-  }
-  return buildJobPnl(job);
-}
-
-function JobPnlPanel({ job, financeLoaded = false }: { job: Job; financeLoaded?: boolean }) {
-  const pnl = pnlFromJob(job);
-  const profitColor = pnl.grossProfit === null
-    ? COLORS.muted
-    : pnl.grossProfit >= 0 ? COLORS.green : COLORS.red;
-  const invoiceLabel = pnl.clientInvoiceSource === 'quickbooks'
-    ? 'QuickBooks'
-    : pnl.clientInvoiceSource === 'airtable'
-      ? 'Airtable'
-      : financeLoaded ? 'Not found' : 'Looking up QuickBooks...';
-
-  return (
-    <div style={{
-      background: COLORS.card,
-      border: `1px solid ${COLORS.border}`,
-      borderRadius: '8px',
-      marginBottom: '22px',
-      padding: '14px',
-    }}>
-      <div style={{ color: COLORS.gold, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', marginBottom: '10px', textTransform: 'uppercase' }}>
-        Job P&L
-      </div>
-
-      <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', marginBottom: '12px' }}>
-        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
-          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Client Invoice</div>
-          <div style={{ color: COLORS.text, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>
-            {pnl.clientInvoice ? formatMoney(pnl.clientInvoice) : '—'}
-          </div>
-          <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>{invoiceLabel}</div>
-          {pnl.clientInvoiceSource === 'none' && financeLoaded && (
-            <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '6px', lineHeight: 1.4 }}>
-              No QuickBooks match yet. The board uses artist/customer, album title, order #, and matrix ID — a matrix ID is not required.
-            </div>
-          )}
-        </div>
-        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
-          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-            {pnl.grossProfit === null ? 'Need Invoice' : pnl.grossProfit >= 0 ? 'Gross Profit' : 'Gross Loss'}
-          </div>
-          <div style={{ color: profitColor, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>
-            {pnl.grossProfit === null ? '—' : formatMoney(pnl.grossProfit)}
-          </div>
-          <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>
-            {pnl.marginPct === null ? 'Match a client invoice to compare' : `${pnl.marginPct.toFixed(1)}% margin`}
-          </div>
-        </div>
-      </div>
-
-      {pnl.clientInvoices.length > 0 && (
-        <div style={{ display: 'grid', gap: '6px', marginBottom: '12px' }}>
-          {pnl.clientInvoices.map(invoice => (
-            <div key={invoice.id} style={{ color: COLORS.muted, fontSize: '12px', lineHeight: 1.4 }}>
-              {invoice.docNumber ? `INV ${invoice.docNumber}` : 'Invoice'}
-              {invoice.customerName ? ` · ${invoice.customerName}` : ''}
-              {` · ${formatMoney(invoice.totalAmt)}`}
-              {invoice.balance > 0 ? ` · ${formatMoney(invoice.balance)} open` : ' · paid'}
-              {invoice.matchReason ? (
-                <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '2px' }}>{invoice.matchReason}</div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gap: '8px' }}>
-        {pnl.costs.map(line => (
-          <div
-            key={line.key}
-            style={{
-              alignItems: 'start',
-              background: COLORS.panel,
-              border: `1px solid ${COLORS.border}`,
-              borderRadius: '8px',
-              display: 'flex',
-              gap: '10px',
-              justifyContent: 'space-between',
-              padding: '10px 12px',
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 850 }}>{line.label}</div>
-              <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px', lineHeight: 1.4 }}>{line.detail}</div>
-            </div>
-            <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
-              {formatMoney(line.amount)}
-            </div>
-          </div>
-        ))}
-        <div style={{
-          alignItems: 'center',
-          display: 'flex',
-          justifyContent: 'space-between',
-          padding: '4px 4px 0',
-        }}>
-          <div style={{ color: COLORS.muted, fontSize: '12px', fontWeight: 850, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            Projected job cost
-          </div>
-          <div style={{ color: COLORS.gold, fontSize: '16px', fontWeight: 950 }}>
-            {formatMoney(pnl.costTotal)}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -2449,7 +2148,6 @@ function JobDrawer({
   onSplitJob,
   onRecordsPressedSave,
   onShipmentsChanged,
-  financeLoaded = false,
 }: {
   job: Job;
   onClose: () => void;
@@ -2459,7 +2157,6 @@ function JobDrawer({
   onSplitJob: (job: Job, payload: { stage: Station; quantity: string }) => Promise<void>;
   onRecordsPressedSave: (job: Job, recordsPressed: number | null) => Promise<void>;
   onShipmentsChanged?: () => Promise<void> | void;
-  financeLoaded?: boolean;
 }) {
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
@@ -2659,10 +2356,6 @@ function JobDrawer({
         >
           {savingRush ? 'Saving Rush...' : rushed ? 'Rush Order On' : 'Rush Order'}
         </button>
-
-        <JobPnlPanel job={job} financeLoaded={financeLoaded} />
-        <PvcCompoundPanel job={job} />
-        <VendorCostsPanel job={job} />
 
         {station === 'now_pressing' && quantityTotal > 0 && (
           <div style={{
@@ -3804,7 +3497,6 @@ function PressBacklogStat({
 export default function DashboardClient({ jobs: initialJobs, readOnly = false }: Props) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs ?? []);
   const [loading, setLoading] = useState(true);
-  const [financeLoaded, setFinanceLoaded] = useState(false);
   const [source, setSource] = useState('');
   const [error, setError] = useState('');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -3899,7 +3591,6 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
         void refreshJobDetailsRef.current();
       } else if (readOnly) {
         financeLoadedRef.current = true;
-        setFinanceLoaded(true);
       }
       if (!readOnly && queuedRefreshRef.current && !syncPausedRef.current) {
         queuedRefreshRef.current = false;
@@ -3920,10 +3611,9 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
       setJobs(current => current.map(apply));
       setSelectedJob(current => (current ? apply(current) : current));
     } catch {
-      // PVC and payroll still render from the job card while QuickBooks is unavailable.
+      // Finance details are optional. The board still shows production flow.
     } finally {
       financeLoadedRef.current = true;
-      setFinanceLoaded(true);
     }
   }, []);
 
@@ -4526,7 +4216,6 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
         <JobDrawer
           key={jobKey(selectedJob)}
           job={selectedJob}
-          financeLoaded={financeLoaded}
           onClose={() => setSelectedJob(null)}
           onDashNotesSave={saveDashNotes}
           onRushToggle={toggleRushOrder}
