@@ -5,6 +5,12 @@ import { DragDropContext, Draggable, Droppable, DraggableProvidedDragHandleProps
 import { packSkyline } from '@/lib/dashboard-pack';
 import { PRODUCTION_LOG_HEARTBEAT_MS, PRODUCTION_SYNC_POLL_MS, notifyProductionSync, subscribeProductionSync } from '@/lib/production-sync';
 import {
+  estimatePvcCompound,
+  formatPvcRate,
+  PVC_COST_PER_RECORD,
+  PVC_COST_PER_RECORD_CLEAR_SPLATTER,
+} from '@/lib/job-pnl';
+import {
   RECORDS_PER_WEEK,
   calendarDaysForRecords,
   formatPressHorizon,
@@ -714,6 +720,75 @@ function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsC
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function PvcCompoundPanel({ job }: { job: Job }) {
+  const estimate = estimatePvcCompound(job);
+  if (!estimate) return null;
+
+  return (
+    <div style={{
+      background: COLORS.card,
+      border: `1px solid ${COLORS.border}`,
+      borderRadius: '8px',
+      marginBottom: '22px',
+      padding: '14px',
+    }}>
+      <div style={{ alignItems: 'center', display: 'flex', gap: '8px', marginBottom: '10px' }}>
+        <Boxes size={16} color={COLORS.green} />
+        <div style={{ color: COLORS.green, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          PVC Compound
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', marginBottom: '12px' }}>
+        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
+          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Compound Cost</div>
+          <div style={{ color: COLORS.green, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{formatMoney(estimate.total)}</div>
+        </div>
+        <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.border}`, borderRadius: '8px', padding: '10px' }}>
+          <div style={{ color: COLORS.muted, fontSize: '11px', fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Compound Use</div>
+          <div style={{ color: COLORS.text, fontSize: '20px', fontWeight: 900, marginTop: '4px' }}>{estimate.quantity.toLocaleString()}</div>
+          <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>records</div>
+        </div>
+      </div>
+
+      <div style={{ color: COLORS.muted, fontSize: '12px', lineHeight: 1.4, marginBottom: '12px' }}>
+        Standard vinyl {formatPvcRate(PVC_COST_PER_RECORD)}. Clear and splatter {formatPvcRate(PVC_COST_PER_RECORD_CLEAR_SPLATTER)}.
+      </div>
+
+      <div style={{ display: 'grid', gap: '8px' }}>
+        {estimate.lines.map((line, index) => (
+          <div
+            key={`${line.label}-${index}`}
+            style={{
+              alignItems: 'start',
+              background: COLORS.panel,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: '8px',
+              display: 'flex',
+              gap: '10px',
+              justifyContent: 'space-between',
+              padding: '10px 12px',
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: COLORS.text, fontSize: '14px', fontWeight: 850 }}>
+                {line.label}
+              </div>
+              <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
+                {line.quantity.toLocaleString()} records · {formatPvcRate(line.rate)}
+                {line.premium ? ' · clear/splatter' : ''}
+              </div>
+            </div>
+            <div style={{ color: COLORS.green, fontSize: '14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
+              {formatMoney(line.cost)}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -2356,6 +2431,8 @@ function JobDrawer({
         >
           {savingRush ? 'Saving Rush...' : rushed ? 'Rush Order On' : 'Rush Order'}
         </button>
+
+        <PvcCompoundPanel job={job} />
 
         {station === 'now_pressing' && quantityTotal > 0 && (
           <div style={{
