@@ -8,6 +8,8 @@ import {
   formatPvcRate,
   pvcPoundsForRecords,
   pvcRateForColor,
+  quickBooksInvoiceUrl,
+  quickBooksInvoicesFromJob,
   translucentPoundSplit,
   translucentPvcRate,
   SHOP_PAYROLL_BIWEEKLY,
@@ -211,6 +213,19 @@ assert(dillonLine?.colorant === 'red' && dillonLine.clearParts === 20 && dillonL
 assert(Math.abs((dillonLine?.cost || 0) - 1000 * transRate) < 0.001, 'translucent red cost follows the mix, not $0.50');
 const dillonSplit = translucentPoundSplit(dillonLine?.pounds || 0);
 assert(dillonSplit.clear === 560 && dillonSplit.color === 28 && dillonSplit.total === 588, '1,000 translucent records split into 560 lbs clear and 28 lbs red');
+
+assert(quickBooksInvoiceUrl('145') === 'https://app.qbo.intuit.com/app/invoice?txnId=145', 'QuickBooks invoice link uses the invoice id');
+assert(quickBooksInvoiceUrl('  ') === '', 'a blank invoice id does not make a link');
+const linked = quickBooksInvoicesFromJob({
+  pnl: {
+    clientInvoices: [
+      { id: '145', docNumber: '1042', customerName: 'Mike Dillon', totalAmt: 5000, balance: 0, amountPaid: 5000, txnDate: '2026-01-01', source: 'quickbooks' },
+      { id: 'airtable-1', docNumber: '9', customerName: 'Someone', totalAmt: 10, balance: 0, amountPaid: 10, txnDate: '', source: 'airtable' },
+    ],
+  },
+});
+assert(linked.length === 1 && linked[0].id === '145' && linked[0].docNumber === '1042', 'only the matched QuickBooks invoice is linked');
+assert(quickBooksInvoicesFromJob({}).length === 0, 'a job with no invoice match has no QuickBooks link');
 
 if (process.exitCode) {
   console.error('job pnl matching tests failed');
