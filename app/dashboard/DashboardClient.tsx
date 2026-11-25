@@ -8,6 +8,8 @@ import {
   estimatePvcCompound,
   formatPvcPounds,
   formatPvcRate,
+  quickBooksInvoiceUrl,
+  quickBooksInvoicesFromJob,
   translucentPoundSplit,
   PVC_COST_PER_RECORD,
   PVC_COST_PER_RECORD_CLEAR_SPLATTER,
@@ -722,6 +724,59 @@ function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsC
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function QuickBooksInvoicePanel({ job }: { job: Job }) {
+  const invoices = quickBooksInvoicesFromJob(job);
+  if (!invoices.length) return null;
+
+  return (
+    <div style={{
+      background: COLORS.card,
+      border: `1px solid ${COLORS.border}`,
+      borderRadius: '8px',
+      marginBottom: '22px',
+      padding: '14px',
+    }}>
+      <div style={{ color: COLORS.blue, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', marginBottom: '10px', textTransform: 'uppercase' }}>
+        QuickBooks
+      </div>
+      <div style={{ display: 'grid', gap: '8px' }}>
+        {invoices.map(invoice => {
+          const href = quickBooksInvoiceUrl(invoice.id);
+          const title = invoice.docNumber ? `Invoice ${invoice.docNumber}` : 'Invoice';
+          return (
+            <a
+              key={invoice.id}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                alignItems: 'center',
+                background: COLORS.panel,
+                border: `1px solid ${COLORS.blue}55`,
+                borderRadius: '8px',
+                color: COLORS.text,
+                display: 'flex',
+                gap: '10px',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                textDecoration: 'none',
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ color: COLORS.blue, fontSize: '14px', fontWeight: 850 }}>{title}</div>
+                <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
+                  {[invoice.customerName, invoice.totalAmt ? formatMoney(invoice.totalAmt) : ''].filter(Boolean).join(' · ') || 'Open in QuickBooks'}
+                </div>
+              </div>
+              <div style={{ color: COLORS.blue, fontSize: '12px', fontWeight: 900, whiteSpace: 'nowrap' }}>Open</div>
+            </a>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -2454,6 +2509,7 @@ function JobDrawer({
           {savingRush ? 'Saving Rush...' : rushed ? 'Rush Order On' : 'Rush Order'}
         </button>
 
+        <QuickBooksInvoicePanel job={job} />
         <PvcCompoundPanel job={job} />
 
         {station === 'now_pressing' && quantityTotal > 0 && (

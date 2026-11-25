@@ -441,6 +441,37 @@ function scoreInvoiceForJob(profile: JobMatchProfile, invoice: QboInvoiceLike, u
   return { score, reason: reasons.join(' · ') };
 }
 
+export function quickBooksInvoiceUrl(invoiceId: string) {
+  const id = String(invoiceId || '').trim();
+  if (!id) return '';
+  return `https://app.qbo.intuit.com/app/invoice?txnId=${encodeURIComponent(id)}`;
+}
+
+export function quickBooksInvoicesFromJob(job: { pnl?: unknown }): ClientInvoiceMatch[] {
+  const pnl = job.pnl;
+  if (!pnl || typeof pnl !== 'object' || Array.isArray(pnl)) return [];
+  const invoices = (pnl as { clientInvoices?: unknown }).clientInvoices;
+  if (!Array.isArray(invoices)) return [];
+  return invoices.flatMap(invoice => {
+    if (!invoice || typeof invoice !== 'object') return [];
+    const row = invoice as Partial<ClientInvoiceMatch>;
+    if (row.source !== 'quickbooks') return [];
+    const id = String(row.id || '').trim();
+    if (!id) return [];
+    return [{
+      id,
+      docNumber: String(row.docNumber || ''),
+      customerName: String(row.customerName || ''),
+      totalAmt: Number(row.totalAmt || 0),
+      balance: Number(row.balance || 0),
+      amountPaid: Number(row.amountPaid || 0),
+      txnDate: String(row.txnDate || ''),
+      source: 'quickbooks' as const,
+      matchReason: row.matchReason ? String(row.matchReason) : undefined,
+    }];
+  });
+}
+
 function toClientInvoice(invoice: QboInvoiceLike, reason: string): ClientInvoiceMatch {
   return {
     id: invoice.id,
