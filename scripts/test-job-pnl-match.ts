@@ -1,7 +1,11 @@
+import { RECORDS_PER_WEEK } from '../lib/press-capacity.ts';
 import {
   artistCoreFromCustomer,
   assignClientInvoices,
+  buildJobPnl,
   clientInvoicesFromQbo,
+  SHOP_PAYROLL_BIWEEKLY,
+  SHOP_PAYROLL_PER_RECORD,
   titleCoreFromCustomer,
 } from '../lib/job-pnl.ts';
 
@@ -148,6 +152,25 @@ const oneInvoiceTwoJobs = assignClientInvoices(
 );
 const attached = oneInvoiceTwoJobs.flat();
 assert(attached.length === 1 && attached[0].id === 'inv-sam', 'each invoice is assigned to at most one job');
+
+assert(
+  Math.abs(SHOP_PAYROLL_PER_RECORD - (SHOP_PAYROLL_BIWEEKLY / (RECORDS_PER_WEEK * 2))) < 0.000001,
+  'shop payroll uses the board average of 4,000 records a week',
+);
+
+const payrollJob = buildJobPnl({
+  quantity: 1000,
+  colors: 'black',
+  shipments: [{ total_cost: 250 }],
+  invoice_total: 5000,
+});
+const payrollLine = payrollJob.costs.find(line => line.key === 'shop_payroll');
+assert(Boolean(payrollLine), 'shop payroll is on the card');
+assert(Math.abs((payrollLine?.amount || 0) - 1375) < 0.001, '1,000 records of shop payroll is $1,375');
+assert(payrollLine?.detail.includes('4,000/week') === true, 'payroll detail uses 4,000 records a week');
+assert(payrollJob.costs.every(line => line.key !== 'management' && line.key !== 'freight'), 'management salaries and freight are off the P&L');
+assert(Math.abs(payrollJob.costTotal - (500 + 1375)) < 0.001, 'projected cost is PVC plus shop payroll only');
+assert(payrollJob.grossProfit === 5000 - payrollJob.costTotal, 'gross profit ignores the shipment cost');
 
 if (process.exitCode) {
   console.error('job pnl matching tests failed');

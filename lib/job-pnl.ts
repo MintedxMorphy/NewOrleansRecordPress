@@ -1,14 +1,10 @@
 export const PVC_COST_PER_RECORD = 0.5;
 export const PVC_COST_PER_RECORD_CLEAR_SPLATTER = 0.75;
 export const SHOP_PAYROLL_BIWEEKLY = 11000;
-export const MANAGEMENT_SALARY_BIWEEKLY = 8300;
-export const WORKING_DAYS_PER_PAY_PERIOD = 10;
-export const RECORDS_PRESSED_PER_DAY = 350;
-export const QC_REJECT_RATE = 0.15;
-
-const BIWEEKLY_OUTPUT_RECORDS = RECORDS_PRESSED_PER_DAY * WORKING_DAYS_PER_PAY_PERIOD;
+const RECORDS_PER_WEEK = 4000;
+const PAY_PERIOD_WEEKS = 2;
+const BIWEEKLY_OUTPUT_RECORDS = RECORDS_PER_WEEK * PAY_PERIOD_WEEKS;
 export const SHOP_PAYROLL_PER_RECORD = SHOP_PAYROLL_BIWEEKLY / BIWEEKLY_OUTPUT_RECORDS;
-export const MANAGEMENT_SALARY_PER_RECORD = MANAGEMENT_SALARY_BIWEEKLY / BIWEEKLY_OUTPUT_RECORDS;
 
 export type PvcEstimateLine = {
   label: string;
@@ -49,8 +45,6 @@ export type JobPnl = {
   pvc: PvcEstimate | null;
   vendorCosts: number;
   shopPayroll: number;
-  managementSalaries: number;
-  freight: number;
   costs: JobPnlLine[];
   costTotal: number;
   clientInvoice: number;
@@ -469,15 +463,6 @@ function vendorCostTotal(job: JobLike) {
   return numericValue(job.vendor_cost_total);
 }
 
-function freightTotal(job: JobLike) {
-  const shipments = job.shipments;
-  if (!Array.isArray(shipments)) return 0;
-  return shipments.reduce((sum, item) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) return sum;
-    return sum + numericValue((item as { total_cost?: unknown }).total_cost);
-  }, 0);
-}
-
 function airtableInvoiceTotal(job: JobLike) {
   return numericValue(
     job.invoice_total
@@ -496,8 +481,6 @@ export function buildJobPnl(job: JobLike, invoices: ClientInvoiceMatch[] = []): 
   const quantity = pvc?.quantity || jobQuantity(job);
   const vendorCosts = vendorCostTotal(job);
   const shopPayroll = quantity * SHOP_PAYROLL_PER_RECORD;
-  const managementSalaries = quantity * MANAGEMENT_SALARY_PER_RECORD;
-  const freight = freightTotal(job);
 
   const costs: JobPnlLine[] = [
     {
@@ -520,21 +503,7 @@ export function buildJobPnl(job: JobLike, invoices: ClientInvoiceMatch[] = []): 
       key: 'shop_payroll',
       label: 'Shop payroll',
       amount: shopPayroll,
-      detail: `$${SHOP_PAYROLL_BIWEEKLY.toLocaleString()} every 2 weeks ÷ ${BIWEEKLY_OUTPUT_RECORDS.toLocaleString()} records (${RECORDS_PRESSED_PER_DAY}/day × ${WORKING_DAYS_PER_PAY_PERIOD} workdays) = ${formatPvcRate(SHOP_PAYROLL_PER_RECORD)}`,
-      kind: 'cost',
-    },
-    {
-      key: 'management',
-      label: 'Management salaries',
-      amount: managementSalaries,
-      detail: `$${MANAGEMENT_SALARY_BIWEEKLY.toLocaleString()} every 2 weeks ÷ ${BIWEEKLY_OUTPUT_RECORDS.toLocaleString()} records = ${formatPvcRate(MANAGEMENT_SALARY_PER_RECORD)}`,
-      kind: 'cost',
-    },
-    {
-      key: 'freight',
-      label: 'Freight / tracking',
-      amount: freight,
-      detail: freight ? 'Known shipment costs on this job' : 'No shipment costs on the board yet',
+      detail: `$${SHOP_PAYROLL_BIWEEKLY.toLocaleString()} every 2 weeks ÷ ${BIWEEKLY_OUTPUT_RECORDS.toLocaleString()} records (${RECORDS_PER_WEEK.toLocaleString()}/week × ${PAY_PERIOD_WEEKS} weeks) = ${formatPvcRate(SHOP_PAYROLL_PER_RECORD)}`,
       kind: 'cost',
     },
   ];
@@ -552,8 +521,6 @@ export function buildJobPnl(job: JobLike, invoices: ClientInvoiceMatch[] = []): 
     pvc,
     vendorCosts,
     shopPayroll,
-    managementSalaries,
-    freight,
     costs,
     costTotal,
     clientInvoice,
