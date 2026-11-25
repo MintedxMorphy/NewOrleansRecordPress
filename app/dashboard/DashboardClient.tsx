@@ -159,18 +159,22 @@ function preservedFinance(job: Job) {
     vendor_cost_total: job.vendor_cost_total,
     vendor_cost_count: job.vendor_cost_count,
     vendor_cost_categories: job.vendor_cost_categories,
+    invoice_match_status: job.invoice_match_status,
+    invoice_match_model: job.invoice_match_model,
   };
 }
 
-function withFinanceDetails(job: Job, extra?: Record<string, unknown> | null) {
+function withFinanceDetails(job: Job, extra?: Record<string, unknown> | null): Job {
   if (!extra) return job;
   return {
     ...job,
-    pnl: extra.pnl,
-    vendor_cost_summary: extra.vendor_cost_summary,
-    vendor_cost_total: extra.vendor_cost_total,
-    vendor_cost_count: extra.vendor_cost_count,
-    vendor_cost_categories: extra.vendor_cost_categories,
+    pnl: extra.pnl as Job['pnl'],
+    vendor_cost_summary: extra.vendor_cost_summary as Job['vendor_cost_summary'],
+    vendor_cost_total: extra.vendor_cost_total as Job['vendor_cost_total'],
+    vendor_cost_count: extra.vendor_cost_count as Job['vendor_cost_count'],
+    vendor_cost_categories: extra.vendor_cost_categories as Job['vendor_cost_categories'],
+    invoice_match_status: typeof extra.invoice_match_status === 'string' ? extra.invoice_match_status : '',
+    invoice_match_model: typeof extra.invoice_match_model === 'string' ? extra.invoice_match_model : '',
   };
 }
 
@@ -730,6 +734,8 @@ function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsC
 
 function QuickBooksInvoicePanel({ job, invoicesLoaded }: { job: Job; invoicesLoaded: boolean }) {
   const invoices = quickBooksInvoicesForJob(job);
+  const matchStatus = String(job.invoice_match_status || '');
+  const matchModel = String(job.invoice_match_model || '');
 
   return (
     <div style={{
@@ -745,7 +751,11 @@ function QuickBooksInvoicePanel({ job, invoicesLoaded }: { job: Job; invoicesLoa
       <div style={{ display: 'grid', gap: '8px' }}>
         {!invoices.length && (
           <div style={{ color: COLORS.muted, fontSize: '13px', lineHeight: 1.4 }}>
-            {invoicesLoaded ? 'No QuickBooks invoice matched this job.' : 'Looking up the QuickBooks invoice...'}
+            {invoicesLoaded
+              ? (matchStatus === 'unavailable'
+                ? 'The invoice model could not run, so no invoice was linked.'
+                : `No QuickBooks invoice matched this job${matchModel ? ` (${matchModel})` : ''}.`)
+              : 'Looking up the QuickBooks invoice...'}
           </div>
         )}
         {invoices.map(invoice => {

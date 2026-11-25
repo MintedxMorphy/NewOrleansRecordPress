@@ -9,9 +9,11 @@ import { ensureCanonicalHeaders, getSheet } from '@/lib/sheets';
 import { matchJobFromShipmentText } from '@/lib/shipment-job-link';
 import { loadProductionJobsForVendorInvoices, type JobContext } from '@/lib/vendor-invoice-import';
 import { listQboInvoices } from '@/lib/qbo';
-import { assignClientInvoices, buildJobPnl } from '@/lib/job-pnl';
+import { buildJobPnl } from '@/lib/job-pnl';
+import { assignClientInvoicesWithAi } from '@/lib/qbo-invoice-ai';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const STAGE_RANK: Record<string, number> = {
   pre_production: 1,
@@ -491,7 +493,7 @@ function withBoardExtras(jobs: any[], artIndex: Awaited<ReturnType<typeof getNOR
   });
 }
 
-function financePayload(
+async function financePayload(
   jobs: any[],
   vendorCostSummaries: Map<string, VendorCostSummary>,
   qboInvoices: Awaited<ReturnType<typeof listQboInvoices>>,
@@ -507,10 +509,12 @@ function financePayload(
       vendor_cost_categories: vendorCostSummary.categories,
     };
   });
-  const assignedInvoices = assignClientInvoices(withVendor, qboInvoices);
+  const matched = await assignClientInvoicesWithAi(withVendor, qboInvoices);
   return withVendor.map((job, index) => ({
     detail_key: jobDetailKey(job),
-    pnl: buildJobPnl(job, assignedInvoices[index] || []),
+    pnl: buildJobPnl(job, matched.assigned[index] || []),
+    invoice_match_status: matched.status,
+    invoice_match_model: matched.model,
     vendor_cost_summary: job.vendor_cost_summary || null,
     vendor_cost_total: job.vendor_cost_total || 0,
     vendor_cost_count: job.vendor_cost_count || 0,
@@ -543,7 +547,7 @@ export async function GET(request: NextRequest) {
         }),
       ]);
 
-      const details = financePayload(jobs, vendorCostSummaries, qboInvoices);
+      const details = await financePayload(jobs, vendorCostSummaries, qboInvoices);
       return NextResponse.json({
         count: details.length,
         jobs: details,
