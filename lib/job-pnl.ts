@@ -82,8 +82,9 @@ const STOPWORDS = new Set([
   'record', 'records', 'vinyl', 'press', 'pressing', 'job', 'invoice', 'norp',
 ]);
 
-const MIN_ASSIGN_SCORE = 28;
+const MIN_ASSIGN_SCORE = 40;
 const AMBIGUOUS_GAP = 8;
+export const INVOICE_LOOKBACK_MONTHS = 6;
 
 function stringValue(value: unknown) {
   if (value === null || value === undefined || value === false) return '';
@@ -249,10 +250,6 @@ function wordCore(value: string) {
   return normalizeWords(value).join(' ');
 }
 
-function compactCore(value: string) {
-  return normalizeWords(value).join('');
-}
-
 export function jobCustomerName(job: JobLike) {
   return stringValue(
     job.customer
@@ -289,71 +286,85 @@ export function titleCoreFromCustomer(customer: string) {
   return '';
 }
 
-function jobIsCompleted(job: JobLike) {
-  return stringValue(job.stage).toLowerCase() === 'completed';
-}
-
 type JobMatchProfile = {
   index: number;
-  completed: boolean;
   artistCore: string;
-  artistCompact: string;
   titleCore: string;
-  titleCompact: string;
-  titleWords: string[];
-  orderCompact: string;
-  matrixTokens: string[];
+  matrixValues: string[];
 };
-
-function uniqueTokens(values: Array<unknown>, minLen = 4) {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const value of values) {
-    const token = compact(stringValue(value));
-    if (token.length < minLen || seen.has(token)) continue;
-    seen.add(token);
-    out.push(token);
-  }
-  return out;
-}
 
 export function jobMatchProfile(job: JobLike, index = 0): JobMatchProfile {
   const customer = jobCustomerName(job);
   const artistCore = artistCoreFromCustomer(customer);
   const titleCore = titleCoreFromCustomer(customer);
-  const artistWords = new Set(artistCore.split(' ').filter(Boolean));
-  const titleWords = Array.from(new Set([
-    ...normalizeWords(titleCore),
-    ...normalizeWords(customer).filter(word => !artistWords.has(word) && word.length >= 4),
-    ...normalizeWords(stringValue(job.notes || job.dash_notes)).filter(word => word.length >= 5),
-  ]));
-
   const variantTokens = jobRecords(job.variants).flatMap(variant => [
     variant.matrix,
     variant.job_id,
     variant.order_number,
   ]);
+  const matrixValues = [
+    job.matrix,
+    job.MATRIX,
+    job.job_id,
+    job['Job ID'],
+    job.order_number,
+    job['Order Number'],
+    job['ORDER NUMBER'],
+    ...variantTokens,
+  ];
 
   return {
     index,
-    completed: jobIsCompleted(job),
     artistCore,
-    artistCompact: compactCore(artistCore || customer),
     titleCore,
-    titleCompact: compactCore(titleCore),
-    titleWords,
-    orderCompact: compact(stringValue(job.order_number || job['Order Number'] || job['ORDER NUMBER'])),
-    matrixTokens: uniqueTokens([
-      job.matrix,
-      job.MATRIX,
-      job.job_id,
-      job['Job ID'],
-      job.order_number,
-      job['Order Number'],
-      job['ORDER NUMBER'],
-      ...variantTokens,
-    ], 4),
+    matrixValues: rawMatrixValues(matrixValues),
   };
+}
+
+function rawMatrixValues(values: unknown[]) {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const text = stringValue(value);
+    const token = compact(text);
+    if (token.length < 5 || seen.has(token)) continue;
+    seen.add(token);
+    out.push(text);
+  }
+  return out;
+}
+
+export function invoiceIsRecent(txnDate: string, now = new Date()) {
+  const raw = String(txnDate || '').trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return false;
+  const [year, month, day] = raw.split('-').map(Number);
+  const txn = Date.UTC(year, month - 1, day);
+  const cutoff = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - INVOICE_LOOKBACK_MONTHS, now.getUTCDate());
+  return txn >= cutoff;
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function clueAppears(haystack: string, phrase: string) {
+  const words = normalizeWords(phrase).filter(word => word.length >= 4);
+  if (!words.length) return false;
+  const hay = haystack.toLowerCase();
+  const present = words.filter(word => new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(word)}(?:[^a-z0-9]|$)`).test(hay));
+  if (words.length === 1) return present.length === 1;
+  const needed = words.length === 2 ? 2 : Math.max(2, Math.ceil(words.length * 0.6));
+  const longest = [...words].sort((a, b) => b.length - a.length)[0];
+  return present.length >= needed && present.includes(longest);
+}
+
+function matrixAppears(haystack: string, rawMatrix: string) {
+  const parts = rawMatrix.toLowerCase().match(/[a-z0-9]+/g) || [];
+  const token = parts.join('');
+  if (token.length < 5) return false;
+  const source = haystack.toLowerCase();
+  const pattern = parts.map(part => escapeRegExp(part)).join('[^a-z0-9]{0,2}');
+  return new RegExp(`(?:^|[^a-z0-9])${pattern}(?:[^a-z0-9]|$)`).test(source);
 }
 
 function invoiceHaystack(invoice: QboInvoiceLike) {
@@ -362,82 +373,30 @@ function invoiceHaystack(invoice: QboInvoiceLike) {
     .join(' ');
 }
 
-function coresMatch(a: string, b: string) {
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const ac = a.replace(/\s+/g, '');
-  const bc = b.replace(/\s+/g, '');
-  if (ac.length >= 8 && bc.length >= 8 && (ac.includes(bc) || bc.includes(ac))) return true;
-  const aw = a.split(' ').filter(Boolean);
-  const bw = b.split(' ').filter(Boolean);
-  if (aw.length < 2 || bw.length < 2) return false;
-  const overlap = aw.filter(word => bw.includes(word) && word.length >= 3);
-  const needed = Math.min(aw.length, bw.length, 3);
-  return overlap.length >= needed && overlap.length / Math.max(aw.length, bw.length) >= 0.6;
-}
-
 type InvoiceScore = { score: number; reason: string };
 
-function scoreInvoiceForJob(profile: JobMatchProfile, invoice: QboInvoiceLike, uniqueArtist: boolean): InvoiceScore {
+function scoreInvoiceForJob(profile: JobMatchProfile, invoice: QboInvoiceLike): InvoiceScore {
   const haystack = invoiceHaystack(invoice);
-  const hayCompact = compact(haystack);
-  const hayCoreCompact = compactCore(haystack);
-  const customerCore = wordCore(invoice.customerName || '');
-  const reasons: string[] = [];
+  const clueText = `${invoice.customerName || ''} ${haystack}`;
+  const matrix = profile.matrixValues.some(value => matrixAppears(clueText, value));
+  const artist = Boolean(profile.artistCore) && clueAppears(clueText, profile.artistCore);
+  const album = Boolean(profile.titleCore) && clueAppears(clueText, profile.titleCore);
+  if (!matrix && !(artist && album)) return { score: 0, reason: '' };
+
   let score = 0;
-
-  const docCompact = compact(invoice.docNumber);
-  if (
-    profile.orderCompact
-    && docCompact
-    && profile.orderCompact.length >= 4
-    && docCompact.length >= 4
-    && (docCompact === profile.orderCompact || docCompact.includes(profile.orderCompact) || profile.orderCompact.includes(docCompact))
-  ) {
-    score += 100;
-    reasons.push(`order #${invoice.docNumber}`);
+  const reasons: string[] = [];
+  if (matrix) {
+    score += 40;
+    reasons.push('matrix ID');
   }
-
-  for (const token of profile.matrixTokens) {
-    if (token === profile.orderCompact) continue;
-    if (hayCompact.includes(token)) {
-      score += 80;
-      reasons.push('matrix / job ID on invoice');
-      break;
-    }
+  if (artist) {
+    score += 30;
+    reasons.push('artist');
   }
-
-  const artistHit = coresMatch(profile.artistCore, customerCore)
-    || coresMatch(profile.artistCore, wordCore(invoice.customerName || ''))
-    || (profile.artistCompact.length >= 8 && (
-      hayCoreCompact.includes(profile.artistCompact)
-      || compactCore(invoice.customerName || '').includes(profile.artistCompact)
-    ));
-  if (artistHit) {
-    score += uniqueArtist ? 42 : 28;
-    reasons.push(uniqueArtist ? 'unique customer / artist' : 'customer / artist');
+  if (album) {
+    score += 30;
+    reasons.push('album');
   }
-
-  if (profile.titleCompact.length >= 8 && (
-    hayCoreCompact.includes(profile.titleCompact)
-    || compactCore(invoice.customerName || '').includes(profile.titleCompact)
-  )) {
-    score += 22;
-    reasons.push('album title');
-  } else {
-    let titleHits = 0;
-    const hayWords = new Set(normalizeWords(haystack));
-    for (const word of profile.titleWords) {
-      if (word.length < 4) continue;
-      if (hayWords.has(word) || hayCompact.includes(word)) titleHits += 1;
-    }
-    if (titleHits > 0) {
-      score += Math.min(24, titleHits * 8);
-      reasons.push('album / title words');
-    }
-  }
-
-  if (score <= 0) return { score: 0, reason: '' };
   return { score, reason: reasons.join(' · ') };
 }
 
@@ -472,23 +431,9 @@ export function quickBooksInvoicesFromJob(job: { pnl?: unknown }): ClientInvoice
   });
 }
 
-function customerNamedOnJob(customerName: string, jobTitle: string) {
-  const jobWords = new Set(normalizeWords(jobTitle));
-  const customerWords = normalizeWords(customerName).filter(word => word.length >= 4);
-  if (!customerWords.length || !jobWords.size) return false;
-  const hits = customerWords.filter(word => jobWords.has(word));
-  return hits.length >= Math.min(2, customerWords.length);
-}
-
-export function quickBooksInvoicesForJob(job: { pnl?: unknown; customer?: unknown; Customer?: unknown }): ClientInvoiceMatch[] {
-  const invoices = quickBooksInvoicesFromJob(job);
-  if (!invoices.length) return [];
-  const title = stringValue(job.customer || job.Customer || '');
-  const named = invoices.filter(invoice => customerNamedOnJob(invoice.customerName, title));
-  const explicit = invoices.filter(invoice => /order #|matrix \/ job ID/i.test(invoice.matchReason || ''));
-  const pool = named.length ? named : explicit;
-  return pool
-    .slice()
+export function quickBooksInvoicesForJob(job: { pnl?: unknown }, now = new Date()): ClientInvoiceMatch[] {
+  return quickBooksInvoicesFromJob(job)
+    .filter(invoice => invoiceIsRecent(invoice.txnDate, now))
     .sort((a, b) => String(b.txnDate).localeCompare(String(a.txnDate)))
     .slice(0, 2);
 }
@@ -509,31 +454,24 @@ function toClientInvoice(invoice: QboInvoiceLike, reason: string): ClientInvoice
 
 /**
  * Assign each QuickBooks invoice to at most one job.
- * Matrix / order # win; otherwise artist + album on the job card are enough
- * when that artist is unique among active jobs.
+ * Production jobs are current, so only invoices from the last 6 months qualify.
+ * A matrix ID can identify the job. Otherwise the artist and album both have to match.
  */
-export function assignClientInvoices(jobs: JobLike[], invoices: QboInvoiceLike[]): ClientInvoiceMatch[][] {
+export function assignClientInvoices(
+  jobs: JobLike[],
+  invoices: QboInvoiceLike[],
+  options: { now?: Date } = {},
+): ClientInvoiceMatch[][] {
+  const now = options.now ?? new Date();
   const profiles = jobs.map((job, index) => jobMatchProfile(job, index));
-  const activeArtistCounts = new Map<string, number>();
-  const allArtistCounts = new Map<string, number>();
-  for (const profile of profiles) {
-    if (!profile.artistCore) continue;
-    allArtistCounts.set(profile.artistCore, (allArtistCounts.get(profile.artistCore) || 0) + 1);
-    if (!profile.completed) {
-      activeArtistCounts.set(profile.artistCore, (activeArtistCounts.get(profile.artistCore) || 0) + 1);
-    }
-  }
 
   const ranked: Array<{ index: number; invoice: QboInvoiceLike; score: number; reason: string }> = [];
   for (const invoice of invoices) {
     if (!invoice.id || !(invoice.totalAmt > 0)) continue;
+    if (!invoiceIsRecent(invoice.txnDate, now)) continue;
     const candidates = profiles
       .map(profile => {
-        const uniqueArtist = profile.completed
-          ? (allArtistCounts.get(profile.artistCore) || 0) === 1
-          : (activeArtistCounts.get(profile.artistCore) || 0) === 1
-            || (allArtistCounts.get(profile.artistCore) || 0) === 1;
-        const { score, reason } = scoreInvoiceForJob(profile, invoice, uniqueArtist);
+        const { score, reason } = scoreInvoiceForJob(profile, invoice);
         return { index: profile.index, score, reason };
       })
       .filter(row => row.score >= MIN_ASSIGN_SCORE)
@@ -565,14 +503,18 @@ export function invoiceMatchesJob(job: JobLike, invoiceText: string, docNumber =
     totalAmt: 1,
     balance: 0,
     amountPaid: 0,
-    txnDate: '',
+    txnDate: new Date().toISOString().slice(0, 10),
     searchText: invoiceText,
   }]);
   return matches[0].length > 0;
 }
 
-export function clientInvoicesFromQbo(job: JobLike, invoices: QboInvoiceLike[]): ClientInvoiceMatch[] {
-  return assignClientInvoices([job], invoices)[0] || [];
+export function clientInvoicesFromQbo(
+  job: JobLike,
+  invoices: QboInvoiceLike[],
+  options: { now?: Date } = {},
+): ClientInvoiceMatch[] {
+  return assignClientInvoices([job], invoices, options)[0] || [];
 }
 
 function vendorCostTotal(job: JobLike) {

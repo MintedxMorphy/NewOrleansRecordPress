@@ -27,6 +27,14 @@ function assert(condition, message) {
   }
 }
 
+const NOW = new Date('2026-11-25T00:00:00Z');
+function assign(jobs, invoices) {
+  return assignClientInvoices(jobs, invoices, { now: NOW });
+}
+function fromQbo(job, invoices) {
+  return clientInvoicesFromQbo(job, invoices, { now: NOW });
+}
+
 assert(artistCoreFromCustomer('Sam and The Soul Machine - Made In Chicago') === 'sam soul machine', 'artist core from Artist - Album');
 assert(titleCoreFromCustomer('Sam and The Soul Machine - Made In Chicago') === 'made chicago', 'title core drops stopwords');
 assert(artistCoreFromCustomer('Sam & The Soul Machine') === 'sam soul machine', '& normalizes to the same artist core');
@@ -56,28 +64,28 @@ const samInvoice = {
   searchText: '1042 Sam & The Soul Machine Made In Chicago vinyl pressing',
 };
 
-const assigned = assignClientInvoices([samJob, otherJob], [samInvoice]);
+const assigned = assign([samJob, otherJob], [samInvoice]);
 assert(assigned[0].length === 1 && assigned[0][0].id === 'inv-sam', 'Sam invoice attaches to Sam job without a matrix ID');
 assert(assigned[1].length === 0, 'Sam invoice does not attach to an unrelated artist');
 assert(Boolean(assigned[0][0].matchReason), 'match includes a reason');
 
-const noMatrix = clientInvoicesFromQbo(
+const noMatrix = fromQbo(
   { customer: 'Sam and The Soul Machine - Made In Chicago', stage: 'now_pressing' },
   [samInvoice],
 );
 assert(noMatrix.length === 1, 'single-job helper matches on artist/album only');
 
-const oldMatcherWouldMiss = clientInvoicesFromQbo(
+const oldMatcherWouldMiss = fromQbo(
   { customer: 'Sam and The Soul Machine - Made In Chicago', matrix: '', job_id: 'x', order_number: '' },
   [{
     ...samInvoice,
     docNumber: 'Q-99',
-    searchText: 'Q-99 Sam & The Soul Machine',
+    searchText: 'Q-99 Sam & The Soul Machine Made In Chicago',
   }],
 );
 assert(oldMatcherWouldMiss.length === 1, '& vs and still matches the QBO customer name');
 
-const twoSamJobs = assignClientInvoices(
+const twoSamJobs = assign(
   [
     { customer: 'Sam and The Soul Machine - Made In Chicago', stage: 'now_pressing' },
     { customer: 'Sam and The Soul Machine - Night Train', stage: 'press_queue' },
@@ -95,7 +103,7 @@ const twoSamJobs = assignClientInvoices(
 );
 assert(twoSamJobs[0].length === 0 && twoSamJobs[1].length === 0, 'same artist + two active albums stays unmatched without a title/matrix');
 
-const titled = assignClientInvoices(
+const titled = assign(
   [
     { customer: 'Sam and The Soul Machine - Made In Chicago', stage: 'now_pressing' },
     { customer: 'Sam and The Soul Machine - Night Train', stage: 'press_queue' },
@@ -113,7 +121,7 @@ const titled = assignClientInvoices(
 );
 assert(titled[0].length === 1 && titled[1].length === 0, 'album title disambiguates two jobs for the same artist');
 
-const activeVsCompleted = assignClientInvoices(
+const activeVsCompleted = assign(
   [
     { customer: 'Sam and The Soul Machine - Made In Chicago', stage: 'now_pressing' },
     { customer: 'Sam and The Soul Machine - Old Record', stage: 'completed' },
@@ -126,12 +134,12 @@ const activeVsCompleted = assignClientInvoices(
     balance: 100,
     amountPaid: 700,
     txnDate: '2026-08-10',
-    searchText: '2003 Sam and The Soul Machine',
+    searchText: '2003 Sam and The Soul Machine Made In Chicago',
   }],
 );
 assert(activeVsCompleted[0].length === 1 && activeVsCompleted[1].length === 0, 'unique active artist wins over completed jobs for the same name');
 
-const matrixWins = assignClientInvoices(
+const matrixWins = assign(
   [
     { customer: 'Random Client', matrix: 'NORP-4411', stage: 'pre_production' },
     { customer: 'Other Client', stage: 'press_queue' },
@@ -149,7 +157,7 @@ const matrixWins = assignClientInvoices(
 );
 assert(matrixWins[0].length === 1, 'matrix ID on the invoice still matches');
 
-const oneInvoiceTwoJobs = assignClientInvoices(
+const oneInvoiceTwoJobs = assign(
   [
     { customer: 'Unrelated Label', matrix: 'SAMSOUL99', stage: 'pre_production' },
     { customer: 'Sam and The Soul Machine - Made In Chicago', stage: 'now_pressing' },
@@ -237,8 +245,61 @@ const dillonInvoices = quickBooksInvoicesForJob({
       { id: '10140', docNumber: '2117', customerName: 'Kevin Calabro', totalAmt: 5579.85, balance: 0, amountPaid: 5579.85, txnDate: '2022-06-08', source: 'quickbooks', matchReason: 'unique customer / artist · album / title words' },
     ],
   },
-});
-assert(dillonInvoices.length === 1 && dillonInvoices[0].docNumber === '2579', 'Mike Dillon links to his invoice, not another customer');
+}, NOW);
+assert(dillonInvoices.length === 1 && dillonInvoices[0].docNumber === '3535', 'invoices older than 6 months drop off the card');
+
+const dillonJob = {
+  customer: 'Mike Dillon - Mike and Beignet go to the zoo',
+  matrix: 'RPF 2616',
+  job_id: 'RPF 2616',
+  stage: 'assembly',
+};
+const dillonSearch = assign([dillonJob], [
+  {
+    id: 'old-mike',
+    docNumber: '2579',
+    customerName: 'Mike Dillon',
+    totalAmt: 3537.4,
+    balance: 0,
+    amountPaid: 3537.4,
+    txnDate: '2023-08-30',
+    searchText: 'Mike Dillon Mike and Beignet go to the zoo RPF 2616',
+  },
+  {
+    id: 'kevin',
+    docNumber: '3535',
+    customerName: 'Kevin Calabro',
+    totalAmt: 4827.85,
+    balance: 0,
+    amountPaid: 4827.85,
+    txnDate: '2026-05-29',
+    searchText: 'Kevin Calabro RPF total 2616 pressing',
+  },
+  {
+    id: 'current-mike',
+    docNumber: '3801',
+    customerName: 'Mike Dillon',
+    totalAmt: 4100,
+    balance: 4100,
+    amountPaid: 0,
+    txnDate: '2026-09-12',
+    searchText: 'Mike Dillon Beignet zoo RPF-2616',
+  },
+]);
+assert(dillonSearch[0].length === 1 && dillonSearch[0][0].docNumber === '3801', 'a new job links to the recent invoice with artist, album, and matrix');
+assert(dillonSearch[0][0].matchReason.includes('matrix ID') && dillonSearch[0][0].matchReason.includes('artist') && dillonSearch[0][0].matchReason.includes('album'), 'the link records all three clues');
+
+const artistOnly = assign([dillonJob], [{
+  id: 'artist-only',
+  docNumber: '3802',
+  customerName: 'Mike Dillon',
+  totalAmt: 100,
+  balance: 0,
+  amountPaid: 100,
+  txnDate: '2026-10-01',
+  searchText: 'Mike Dillon deposit',
+}]);
+assert(artistOnly[0].length === 0, 'artist name alone does not link an invoice');
 
 if (process.exitCode) {
   console.error('job pnl matching tests failed');
