@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getNORPJobs } from '@/lib/norp-sheet';
 import { getNORPArtFiles } from '@/lib/norp-drive';
-import { getAirtableJobs, isAirtableConfigured } from '@/lib/airtable';
+import { getAirtableJobs } from '@/lib/airtable';
 import { listAllShipmentsForSync, trackingUrl, type JobShipment } from '@/lib/airtable-shipments';
-import { applyProductionLogInferences } from '@/lib/production-log-inference';
 import { getVendorCostSummariesByMatrix, type VendorCostSummary } from '@/lib/airtable-vendor-costs';
 import { ensureCanonicalHeaders, getSheet } from '@/lib/sheets';
 import { matchJobFromShipmentText } from '@/lib/shipment-job-link';
 import { loadProductionJobsForVendorInvoices, type JobContext } from '@/lib/vendor-invoice-import';
-import { listQboInvoices } from '@/lib/qbo';
 import { buildJobPnl } from '@/lib/job-pnl';
-import { assignClientInvoicesWithAi } from '@/lib/qbo-invoice-ai';
+import { jobDetailKey, loadCoreBoardJobs } from '@/lib/production-board-jobs';
+import { summarizeCoverage } from '@/lib/qbo-invoice-crawler';
+import {
+  loadInvoiceAgentState,
+  loadPersistedInvoiceLinks,
+  type PersistedJobInvoiceLink,
+} from '@/lib/qbo-invoice-store';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -324,128 +327,6 @@ function vendorCostSummaryForJob(job: any, summaries: Map<string, VendorCostSumm
   return combined;
 }
 
-function isRealMatrix(value = '') {
-  const normalized = matrixKey(value);
-  return normalized.length >= 4 && !['tbc', 'tbd', 'na', 'none', 'unknown'].includes(normalized);
-}
-
-function isSplitBatch(job: any) {
-  return String(job.dash_notes || job['Dash Notes'] || '').toLowerCase().includes('[split batch]');
-}
-
-function parseQuantity(value: unknown) {
-  const parsed = Number(String(value ?? '').replace(/,/g, '').trim());
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function variantSignature(job: any) {
-  return `${cleanKey(job.colors || job.Colors || '')}::${cleanKey(job.quantity || job.Quantity || '')}`;
-}
-
-function runLabelFromNotes(notes: unknown) {
-  const match = String(notes ?? '').match(/\[Run\s+(\d+)\s*\/\s*(\d+)\]/i);
-  return match ? `Run ${match[1]}/${match[2]}` : '';
-}
-
-function formatVariantLabel(colors: string, quantity: string, runLabel = '') {
-  const parts: string[] = [];
-  if (colors) parts.push(colors);
-  if (quantity) parts.push(`(${quantity})`);
-  if (runLabel) parts.push(runLabel);
-  return parts.join(' ').trim();
-}
-
-function mergeVariantGroup<T extends Record<string, any>>(group: T[]) {
-  const winner = group.reduce((best, job) => betterJob(best, job), group[0]);
-  const variants = group.map(job => ({
-    airtable_record_id: job.airtable_record_id || '',
-    colors: String(job.colors || job.Colors || '').trim(),
-    quantity: String(job.quantity || job.Quantity || '').trim(),
-    run_label: runLabelFromNotes(job.dash_notes || job['Dash Notes']),
-  })).filter(variant => variant.colors || variant.quantity);
-
-  const seen = new Set<string>();
-  const uniqueVariants = variants.filter(variant => {
-    const key = `${cleanKey(variant.colors)}::${cleanKey(variant.quantity)}::${cleanKey(variant.run_label)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  const combinedColors = uniqueVariants
-    .map(variant => formatVariantLabel(variant.colors, variant.quantity, variant.run_label))
-    .join(' · ');
-  const totalQuantity = group.reduce((sum, job) => sum + parseQuantity(job.quantity || job.Quantity), 0);
-  const mergedRecordIds = group
-    .map(job => job.airtable_record_id)
-    .filter((id): id is string => Boolean(id));
-
-  return {
-    ...winner,
-    variant_count: group.length,
-    duplicate_count: group.length,
-    merged_record_ids: mergedRecordIds,
-    variants: uniqueVariants,
-    colors: combinedColors || winner.colors,
-    Colors: combinedColors || winner.Colors,
-    quantity: totalQuantity > 0 ? String(totalQuantity) : winner.quantity,
-    Quantity: totalQuantity > 0 ? String(totalQuantity) : winner.Quantity,
-  };
-}
-
-function dedupeKey(job: any) {
-  if (isSplitBatch(job)) {
-    return `split::${job.airtable_record_id || job.job_id || job.matrix}`;
-  }
-
-  const customer = cleanKey(job.customer || '');
-  const rawMatrix = job.matrix || job.job_id || '';
-  const matrix = matrixKey(rawMatrix);
-  const orderNumber = cleanKey(job.order_number || '');
-
-  if (isRealMatrix(rawMatrix)) return `matrix::${matrix}`;
-  if (customer && orderNumber) return `${customer}::${orderNumber}`;
-  if (customer) return `customer::${customer}`;
-  return job.airtable_record_id || job.job_id || matrix;
-}
-
-function betterJob(a: any, b: any) {
-  const sourceDiff = (SOURCE_RANK[b.stage_source] || 0) - (SOURCE_RANK[a.stage_source] || 0);
-  if (sourceDiff > 0) return b;
-  if (sourceDiff < 0) return a;
-
-  const stageDiff = (STAGE_RANK[b.stage] || 0) - (STAGE_RANK[a.stage] || 0);
-  if (stageDiff > 0) return b;
-  if (stageDiff < 0) return a;
-
-  const orderA = Number(a.dashboard_order);
-  const orderB = Number(b.dashboard_order);
-  if (Number.isFinite(orderA) && Number.isFinite(orderB) && orderB < orderA) return b;
-
-  return a;
-}
-
-function dedupeJobs<T extends Record<string, any>>(jobs: T[]) {
-  const groups = new Map<string, T[]>();
-  for (const job of jobs) {
-    const key = dedupeKey(job);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(job);
-  }
-
-  return [...groups.values()].map(group => {
-    if (group.length === 1) return group[0];
-
-    const signatures = new Set(group.map(variantSignature));
-    if (signatures.size === 1) {
-      const winner = group.reduce((best, job) => betterJob(best, job), group[0]);
-      return { ...winner, duplicate_count: group.length };
-    }
-
-    return mergeVariantGroup(group);
-  });
-}
-
 function jobsToLinkContext(jobs: any[]): JobContext[] {
   return jobs.map(job => ({
     job_id: stringValue(job.job_id || job['Job ID'] || job.matrix || job.MATRIX),
@@ -453,22 +334,6 @@ function jobsToLinkContext(jobs: any[]): JobContext[] {
     customer: stringValue(job.customer || job['Job Name'] || job.Customer || job.artist || job.ARTIST || job['Customer Name'] || job['1']),
     order_number: stringValue(job.order_number || job['Order Number']),
   })).filter(job => job.job_id || job.matrix || job.customer);
-}
-
-function jobDetailKey(job: Record<string, any>) {
-  return stringValue(job.airtable_record_id || job.job_id || job.matrix || job.MATRIX);
-}
-
-async function loadCoreJobs() {
-  const source = isAirtableConfigured() ? 'airtable' : 'google_sheet';
-  const baseJobs = source === 'airtable' ? await getAirtableJobs({ syncCompleted: false }) : await getNORPJobs();
-  let jobs = baseJobs;
-  try {
-    jobs = await applyProductionLogInferences(baseJobs);
-  } catch (e) {
-    console.error('[norp-jobs] production log inference failed:', e);
-  }
-  return { source, jobs: dedupeJobs(jobs) };
 }
 
 function withBoardExtras(jobs: any[], artIndex: Awaited<ReturnType<typeof getNORPArtFiles>>, dashboardShipments: DashboardShipment[]) {
@@ -493,10 +358,10 @@ function withBoardExtras(jobs: any[], artIndex: Awaited<ReturnType<typeof getNOR
   });
 }
 
-async function financePayload(
+function financePayload(
   jobs: any[],
   vendorCostSummaries: Map<string, VendorCostSummary>,
-  qboInvoices: Awaited<ReturnType<typeof listQboInvoices>>,
+  persistedLinks: Map<string, PersistedJobInvoiceLink>,
 ) {
   const withVendor = jobs.map(job => {
     const vendorCostSummary = vendorCostSummaryForJob(job, vendorCostSummaries);
@@ -509,23 +374,28 @@ async function financePayload(
       vendor_cost_categories: vendorCostSummary.categories,
     };
   });
-  const matched = await assignClientInvoicesWithAi(withVendor, qboInvoices);
-  return withVendor.map((job, index) => ({
-    detail_key: jobDetailKey(job),
-    pnl: buildJobPnl(job, matched.assigned[index] || []),
-    invoice_match_status: matched.status,
-    invoice_match_model: matched.model,
-    vendor_cost_summary: job.vendor_cost_summary || null,
-    vendor_cost_total: job.vendor_cost_total || 0,
-    vendor_cost_count: job.vendor_cost_count || 0,
-    vendor_cost_categories: job.vendor_cost_categories || {},
-  }));
+  return withVendor.map(job => {
+    const key = jobDetailKey(job);
+    const link = persistedLinks.get(key);
+    return {
+      detail_key: key,
+      pnl: buildJobPnl(job, link?.invoices || []),
+      invoice_match_status: link ? link.status : 'pending',
+      invoice_match_model: link?.model || '',
+      invoice_match_reason: link?.reason || '',
+      invoice_match_checked_at: link?.updatedAt || '',
+      vendor_cost_summary: job.vendor_cost_summary || null,
+      vendor_cost_total: job.vendor_cost_total || 0,
+      vendor_cost_count: job.vendor_cost_count || 0,
+      vendor_cost_categories: job.vendor_cost_categories || {},
+    };
+  });
 }
 
 export async function GET(request: NextRequest) {
   try {
     const detailsOnly = request.nextUrl.searchParams.get('details') === '1';
-    const { source, jobs } = await loadCoreJobs();
+    const { source, jobs } = await loadCoreBoardJobs();
 
     if (detailsOnly) {
       if (source === 'airtable') {
@@ -534,23 +404,30 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      const [vendorCostSummaries, qboInvoices] = await Promise.all([
+      const [vendorCostSummaries, persistedLinks, savedAgentState] = await Promise.all([
         source === 'airtable'
           ? getVendorCostSummariesByMatrix().catch(error => {
               console.error('[norp-jobs] vendor cost summary lookup failed:', error);
               return new Map<string, VendorCostSummary>();
             })
           : Promise.resolve(new Map<string, VendorCostSummary>()),
-        listQboInvoices().catch(error => {
-          console.error('[norp-jobs] QuickBooks invoice lookup failed:', error);
-          return [] as Awaited<ReturnType<typeof listQboInvoices>>;
+        loadPersistedInvoiceLinks().catch(error => {
+          console.error('[norp-jobs] persisted invoice link lookup failed:', error);
+          return new Map<string, PersistedJobInvoiceLink>();
         }),
+        loadInvoiceAgentState().catch(() => null),
       ]);
 
-      const details = await financePayload(jobs, vendorCostSummaries, qboInvoices);
+      const details = financePayload(jobs, vendorCostSummaries, persistedLinks);
+      const invoiceAgent = summarizeCoverage(jobs, persistedLinks, savedAgentState?.qboLatestTxn || '', {
+        lastRunAt: savedAgentState?.lastRunAt || '',
+        model: savedAgentState?.model || '',
+        lastError: savedAgentState?.lastError || '',
+      });
       return NextResponse.json({
         count: details.length,
         jobs: details,
+        invoice_agent: invoiceAgent,
         source,
       });
     }

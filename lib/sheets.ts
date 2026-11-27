@@ -29,6 +29,7 @@ export const TAB_HEADERS: Record<string, string[]> = {
   payroll: ['pay_period_start','pay_period_end','check_date','gross_pay','employer_taxes','employer_benefits','total_employer_cost','employee_count','hours_total','status','notes'],
   employees: ['gusto_employee_id','name','role','employment_type','hourly_rate','annual_salary','start_date','active','notes'],
   qbo_cache: ['key','value','updated_at'],
+  qbo_invoice_links: ['job_key','matrix','customer','stage','status','invoice_ids','invoices_json','confidence','model','reason','evidence','updated_at','qbo_latest_txn','job_signature'],
   ups_tracking_log: ['timestamp','tracking_number','job_id','old_status','new_status','message'],
 };
 
@@ -144,6 +145,61 @@ export async function upsertRow(tabName: string, matchField: string, matchValue:
     await updateRow(tabName, existing.rowIndex, { ...existing.row, ...rowObj });
   } else {
     await appendRow(tabName, rowObj);
+  }
+}
+
+export async function upsertRowsBatch(
+  tabName: keyof typeof TAB_HEADERS,
+  matchField: string,
+  rowObjs: Array<Record<string, string>>,
+): Promise<void> {
+  if (!rowObjs.length) return;
+  await ensureCanonicalHeaders(tabName);
+  const sheets = getSheetsClient();
+  const headers = TAB_HEADERS[tabName];
+  const existingRows = await getSheet(tabName).catch(() => [] as Record<string, string>[]);
+  const indexByKey = new Map<string, { rowIndex: number; row: Record<string, string> }>();
+  existingRows.forEach((row, idx) => {
+    const key = String(row[matchField] || '').trim();
+    if (key) indexByKey.set(key, { rowIndex: idx + 2, row });
+  });
+
+  const updates: Array<{ range: string; values: string[][] }> = [];
+  const appends: string[][] = [];
+
+  for (const rowObj of rowObjs) {
+    const key = String(rowObj[matchField] || '').trim();
+    if (!key) continue;
+    const hit = indexByKey.get(key);
+    if (hit) {
+      const merged = { ...hit.row, ...rowObj };
+      hit.row = merged;
+      updates.push({
+        range: `${tabName}!A${hit.rowIndex}`,
+        values: [headers.map(h => merged[h] ?? '')],
+      });
+    } else {
+      appends.push(headers.map(h => rowObj[h] ?? ''));
+    }
+  }
+
+  if (updates.length) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SHEETS_DB_ID,
+      requestBody: {
+        valueInputOption: 'RAW',
+        data: updates,
+      },
+    });
+  }
+
+  if (appends.length) {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEETS_DB_ID,
+      range: `${tabName}!A1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: appends },
+    });
   }
 }
 
