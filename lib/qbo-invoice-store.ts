@@ -33,8 +33,6 @@ export type InvoiceAgentState = {
 };
 
 const STORE_CACHE_MS = 30 * 1000;
-const UNMATCHED_RECHECK_MS = 2 * 60 * 60 * 1000;
-const MATCHED_RECHECK_MS = 24 * 60 * 60 * 1000;
 const AGENT_STATE_CACHE_KEY = 'qbo_invoice_agent_state';
 
 let memoryLinks: { at: number; map: Map<string, PersistedJobInvoiceLink> } | null = null;
@@ -185,29 +183,16 @@ export function latestQboTxnDate(invoices: QboInvoice[]): string {
 export function jobNeedsCrawl(
   job: JobLike,
   existing: PersistedJobInvoiceLink | undefined,
-  qboLatestTxn: string,
-  now: Date,
+  _qboLatestTxn: string,
+  _now: Date,
 ): { needed: boolean; priority: number } {
+  // Initial run or newly added production board card
   if (!existing) return { needed: true, priority: 1 };
 
+  // Re-run only if the job's title, matrix, or order number changed (e.g., TBC -> real matrix)
   const sig = jobSignature(job);
   if (existing.jobSignature && existing.jobSignature !== sig) {
     return { needed: true, priority: 2 };
-  }
-
-  const updatedMs = Date.parse(existing.updatedAt || '');
-  const ageMs = Number.isFinite(updatedMs) ? now.getTime() - updatedMs : Number.POSITIVE_INFINITY;
-  const qboAdvanced = Boolean(qboLatestTxn && (!existing.qboLatestTxn || qboLatestTxn > existing.qboLatestTxn));
-
-  if (existing.status === 'unmatched') {
-    if (qboAdvanced || ageMs >= UNMATCHED_RECHECK_MS) {
-      return { needed: true, priority: 3 };
-    }
-    return { needed: false, priority: 99 };
-  }
-
-  if (qboAdvanced && ageMs >= MATCHED_RECHECK_MS) {
-    return { needed: true, priority: 4 };
   }
 
   return { needed: false, priority: 99 };
@@ -226,7 +211,7 @@ export function selectJobsForAgentCrawl(
   } = {},
 ): { batch: JobLike[]; totalPending: number } {
   const now = options.now ?? new Date();
-  const limit = Math.min(10, Math.max(1, options.limit ?? 6));
+  const limit = Math.min(300, Math.max(1, options.limit ?? 250));
 
   if (options.jobKey) {
     const target = jobs.find(job => jobKeyOf(job) === options.jobKey);

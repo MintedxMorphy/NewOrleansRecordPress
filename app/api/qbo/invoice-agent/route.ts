@@ -24,14 +24,14 @@ export async function POST(request: NextRequest) {
       forceQboRefresh?: unknown;
     };
 
-    const limit = body.limit !== undefined ? Number(body.limit) : 6;
+    const limit = body.limit !== undefined ? Number(body.limit) : 250;
     const jobKey = typeof body.jobKey === 'string' && body.jobKey.trim() ? body.jobKey.trim() : undefined;
     const force = Boolean(body.force);
     const forceAll = Boolean(body.forceAll);
     const forceQboRefresh = Boolean(body.forceQboRefresh);
 
     const result = await runInvoiceAgentCrawlPass({
-      limit: Number.isFinite(limit) ? limit : 6,
+      limit: Number.isFinite(limit) ? limit : 250,
       jobKey,
       force,
       forceAll,

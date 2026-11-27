@@ -796,10 +796,10 @@ function QuickBooksInvoicePanel({
         {!invoices.length && (
           <div style={{ color: COLORS.muted, fontSize: '13px', lineHeight: 1.4 }}>
             {isPending
-              ? 'AI agent is searching QuickBooks for this job...'
+              ? 'Checking QuickBooks for this job...'
               : (matchStatus === 'unavailable'
-                ? 'QuickBooks invoice agent could not run right now.'
-                : `No recent QuickBooks invoice matched this job${matchModel ? ` (${matchModel})` : ''}.`)}
+                ? 'Could not reach QuickBooks right now.'
+                : 'No recent QuickBooks invoice matched this job.')}
             {!isPending && matchReason && matchStatus === 'unmatched' ? (
               <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>{matchReason}</div>
             ) : null}
@@ -3864,44 +3864,24 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
     if (readOnly || crawlActiveRef.current || unmountedRef.current) return;
     crawlActiveRef.current = true;
     setAgentCrawling(true);
-    let consecutiveErrors = 0;
-    let firstPass = true;
 
     try {
-      for (let pass = 0; pass < 25; pass += 1) {
-        if (unmountedRef.current) break;
-        if (typeof document !== 'undefined' && document.visibilityState !== 'visible' && !firstPass) break;
-
-        const response = await fetch('/api/qbo/invoice-agent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            limit: 6,
-            forceQboRefresh: firstPass && Boolean(options?.forceQboRefresh),
-            forceAll: firstPass && Boolean(options?.forceAll),
-          }),
-        });
-        firstPass = false;
-        const data = await response.json().catch(() => ({}));
-        if (data.state) setAgentState(data.state);
-        if (Array.isArray(data.updatedJobs) && data.updatedJobs.length) {
-          applyJobDetailsPatch(data.updatedJobs);
-        }
-
-        if (!response.ok || !data.ok) {
-          consecutiveErrors += 1;
-          if (consecutiveErrors >= 2) break;
-        } else {
-          consecutiveErrors = 0;
-        }
-
-        const remaining = Number(data.remaining ?? data.state?.pending ?? 0);
-        if (remaining <= 0 || Number(data.processed ?? 0) === 0) break;
-
-        await new Promise(resolve => window.setTimeout(resolve, 600));
+      const response = await fetch('/api/qbo/invoice-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          limit: 250,
+          forceQboRefresh: Boolean(options?.forceQboRefresh),
+          forceAll: Boolean(options?.forceAll),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (data.state) setAgentState(data.state);
+      if (Array.isArray(data.updatedJobs) && data.updatedJobs.length) {
+        applyJobDetailsPatch(data.updatedJobs);
       }
     } catch {
-      // Background crawl retries automatically on the periodic check.
+      // Board stays usable even if QuickBooks lookup fails.
     } finally {
       crawlActiveRef.current = false;
       if (!unmountedRef.current) setAgentCrawling(false);
@@ -3969,16 +3949,6 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
       unmountedRef.current = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (readOnly) return undefined;
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void runBackgroundInvoiceCrawl({ forceQboRefresh: true });
-      }
-    }, 10 * 60 * 1000);
-    return () => window.clearInterval(timer);
-  }, [readOnly, runBackgroundInvoiceCrawl]);
 
   useEffect(() => {
     if (readOnly || !selectedJob || !invoicesLoaded) return;
@@ -4382,7 +4352,7 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
                 <button
                   type="button"
                   disabled={agentCrawling}
-                  onClick={() => void runBackgroundInvoiceCrawl({ forceQboRefresh: true })}
+                  onClick={() => void runBackgroundInvoiceCrawl({ forceQboRefresh: true, forceAll: true })}
                   style={{
                     background: 'transparent',
                     border: 'none',
@@ -4395,8 +4365,8 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
                   }}
                 >
                   {agentCrawling
-                    ? `QBO Agent: crawling${agentState?.pending ? ` (${agentState.pending} left)` : '...'}`
-                    : `QBO Agent: ${agentState?.matched ?? 0}/${agentState?.totalJobs ?? activeJobs.length} linked · Sync`}
+                    ? 'QBO: linking invoices...'
+                    : `QBO: ${agentState?.matched ?? 0}/${agentState?.totalJobs ?? activeJobs.length} linked · Resync`}
                 </button>
               </div>
             )}

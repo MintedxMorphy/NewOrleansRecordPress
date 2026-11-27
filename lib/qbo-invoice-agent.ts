@@ -41,7 +41,7 @@ export type AgentJobVerdict = {
 export type AgentBatchRunResult = {
   ok: boolean;
   model: string;
-  provider: 'anthropic' | 'openai' | 'custom' | null;
+  provider: 'anthropic' | 'openai' | 'local-qbo-graph' | 'custom' | null;
   turns: number;
   toolCalls: number;
   verdicts: AgentJobVerdict[];

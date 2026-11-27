@@ -18,6 +18,7 @@ export type JobDossier = {
   matrixPrefixes: string[];
   orderNumber: string;
   quantity: number;
+  setsCount: number;
   colors: string;
   weight: string;
   stage: string;
@@ -84,13 +85,14 @@ export function jobSignature(job: JobLike): string {
 function extractParentheticalContacts(title: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
-  const matches = title.matchAll(/\(([^()]{2,50})\)|\[([^\[\]]{2,50})\]/g);
+  const matches = title.matchAll(/\(([^()]{2,55})\)|\[([^\[\]]{2,55})\]/g);
   for (const match of matches) {
     const raw = String(match[1] || match[2] || '').trim();
     if (!raw) continue;
-    // Ignore pure format / pressing tags like "(20th Anniversary)", "(500 paper)", "(standard)"
-    if (/^\d+\s*(paper|sets|lp|x|copies|gr|g|oz|anniversary)/i.test(raw)) continue;
-    if (/^(standard|repress|deluxe|special|redux|2lp|12"|7"|tbc|tbd|side [a-d])$/i.test(raw)) continue;
+    // Ignore pure format / pressing tags like "(20th Anniversary)", "(500n paper)", "(45RPM)", "(v2 - teal labels)"
+    if (/^\d+\s*[a-z]?\s*(paper|sets|lp|x|copies|gr|g|oz|rpm|anniversary)/i.test(raw)) continue;
+    if (/^(standard|repress|deluxe|special|redux|2lp|12"|7"|tbc|tbd|side [a-d]|v\d+\b|45\s*rpm|33\s*rpm)/i.test(raw)) continue;
+    if (/\b(packaging|edition|labels?|paper|color|vinyl|sleeve|jacket|anniversary)\b/i.test(raw)) continue;
     const key = raw.toLowerCase();
     if (!seen.has(key)) {
       seen.add(key);
@@ -100,13 +102,78 @@ function extractParentheticalContacts(title: string): string[] {
   return out;
 }
 
+function expandMatrixValues(rawValues: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (candidate: string) => {
+    const cleaned = candidate.trim().replace(/^[(\[]+|[)\]]+$/g, '').trim();
+    const alnum = cleaned.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!alnum || alnum.length < 4) return;
+    if (['tbc', 'tbd', 'none', 'unknown', 'repress', 'vinyl', 'black', 'clear'].includes(alnum)) return;
+    if (seen.has(alnum)) return;
+    seen.add(alnum);
+    out.push(cleaned);
+  };
+
+  for (const raw of rawValues) {
+    if (!raw) continue;
+    // Split dual matrices like "OA-003 (OA135)" or "JDQ1217 / ERZULIE 1577"
+    const parenMatches = [...raw.matchAll(/\(([^()]+)\)/g)].map(m => m[1]);
+    const withoutParens = raw.replace(/\([^()]+\)/g, ' ');
+    const parts = [
+      ...withoutParens.split(/\s*\/\s*|\s*,\s*|\s*;\s*/),
+      ...parenMatches,
+    ];
+    for (const part of parts) {
+      push(part);
+    }
+  }
+  return out;
+}
+
+function splitArtistAlbumSmart(title: string): { artist: string; album: string } {
+  const cleaned = title
+    .replace(/\*{1,3}[^*]*\*{1,3}/g, ' ')
+    .replace(/\([^()]*\)/g, ' ')
+    .replace(/\[[^\[\]]*\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Normalize em-dash / en-dash / tight hyphen before album ("Rhonda Thomas- Little Drummer Girl")
+  const normalized = cleaned
+    .replace(/\s+[—–]\s+/g, ' - ')
+    .replace(/([A-Za-z0-9])-\s+/g, '$1 - ');
+
+  const artist = artistCoreFromCustomer(normalized) || artistCoreFromCustomer(title);
+  let album = titleCoreFromCustomer(normalized) || titleCoreFromCustomer(title);
+
+  // Clean trailing pressing metadata from album
+  album = album
+    .replace(/\b(repress|due\s+[a-z0-9.\s]+|2x?lp|7"|12"|large\s+hole|confirm\s+color|records?\s+only|use\s+v\d+\s+labels?|side\s+[a-d]\s+blank)\b.*$/i, '')
+    .replace(/^["'“”\s-]+|["'“”\s-]+$/g, '')
+    .trim();
+
+  if (/^(tbc|tbd|s\/t|self\s*titled|repress|live|soundtrack)$/i.test(album)) {
+    album = '';
+  }
+
+  return { artist, album };
+}
+
+function extractSetsCount(title: string): number {
+  const match = title.match(/\b(\d{2,5})\s*sets?\b/i);
+  if (!match) return 0;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 function extractMatrixPrefixes(matrixValues: string[]): string[] {
   const prefixes = new Set<string>();
   for (const raw of matrixValues) {
-    const match = raw.match(/^[A-Za-z]{2,6}(?=[\s\-_]?\d)/);
+    const match = raw.match(/^[A-Za-z]{2,8}(?=[\s\-_]?\d)/);
     if (match) {
       const code = match[0].toUpperCase();
-      if (code !== 'NORP' && code !== 'TBC' && code !== 'TBD') {
+      if (!['NORP', 'TBC', 'TBD', 'LP', 'EP'].includes(code)) {
         prefixes.add(code);
       }
     }
@@ -117,6 +184,16 @@ function extractMatrixPrefixes(matrixValues: string[]): string[] {
 export function buildJobDossier(job: JobLike): JobDossier {
   const title = jobCustomerName(job);
   const profile = jobMatchProfile(job);
+  const rawMatrices = [
+    ...profile.matrixValues,
+    str(job.matrix),
+    str(job.MATRIX),
+    str(job.job_id),
+    str(job['Job ID']),
+  ].filter(Boolean);
+  const matrixValues = expandMatrixValues(rawMatrices).slice(0, 8);
+  const { artist, album } = splitArtistAlbumSmart(title);
+
   const variants = Array.isArray(job.variants)
     ? job.variants.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
     : [];
@@ -129,13 +206,14 @@ export function buildJobDossier(job: JobLike): JobDossier {
   return {
     jobKey: jobKeyOf(job),
     title,
-    artist: artistCoreFromCustomer(title),
-    album: titleCoreFromCustomer(title),
+    artist,
+    album,
     contacts: extractParentheticalContacts(title),
-    matrixValues: profile.matrixValues.slice(0, 8),
-    matrixPrefixes: extractMatrixPrefixes(profile.matrixValues),
+    matrixValues,
+    matrixPrefixes: extractMatrixPrefixes(matrixValues),
     orderNumber: str(job.order_number || job['Order Number'] || job['ORDER NUMBER']),
     quantity: num(job.quantity || job.Quantity),
+    setsCount: extractSetsCount(title),
     colors: str(job.colors || job.Color || job.Colors),
     weight: str(job.weight || job.Weight),
     stage: str(job.stage || job.Stage),
@@ -183,7 +261,15 @@ export function invoiceWithinMonths(txnDate: string, months: number, now: Date):
 
 export function boundedMatrixInText(text: string, rawMatrix: string): boolean {
   const parts = rawMatrix.toLowerCase().match(/[a-z0-9]+/g) || [];
-  if (parts.join('').length < 5) return false;
+  const joined = parts.join('');
+  if (joined.length < 4) return false;
+  if (joined.length === 4) {
+    // Allow 4-char matrices like "BD-02", "FM01", "AM-01", "GP-58", "KXS 1" only when clearly alphanumeric code
+    const letters = (joined.match(/[a-z]/g) || []).length;
+    const digits = (joined.match(/\d/g) || []).length;
+    if (letters < 2 || digits < 1) return false;
+    if (/^(180g|140g|200g|45rp|33rp|12in|07in)$/.test(joined)) return false;
+  }
   const pattern = parts.map(part => escapeRegExp(part)).join('[^a-z0-9]{0,2}');
   return new RegExp(`(?:^|[^a-z0-9])${pattern}(?:[^a-z0-9]|$)`, 'i').test(text);
 }
