@@ -334,12 +334,12 @@ function rawMatrixValues(values: unknown[]) {
   return out;
 }
 
-export function invoiceIsRecent(txnDate: string, now = new Date()) {
+export function invoiceIsRecent(txnDate: string, now = new Date(), lookbackMonths = INVOICE_LOOKBACK_MONTHS) {
   const raw = String(txnDate || '').trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return false;
   const [year, month, day] = raw.split('-').map(Number);
   const txn = Date.UTC(year, month - 1, day);
-  const cutoff = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - INVOICE_LOOKBACK_MONTHS, now.getUTCDate());
+  const cutoff = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - lookbackMonths, now.getUTCDate());
   return txn >= cutoff;
 }
 
@@ -443,7 +443,7 @@ export function quickBooksInvoicesFromJob(job: { pnl?: unknown }): ClientInvoice
 
 export function quickBooksInvoicesForJob(job: { pnl?: unknown }, now = new Date()): ClientInvoiceMatch[] {
   return quickBooksInvoicesFromJob(job)
-    .filter(invoice => invoiceIsRecent(invoice.txnDate, now))
+    .filter(invoice => invoiceIsRecent(invoice.txnDate, now, 9))
     .sort((a, b) => String(b.txnDate).localeCompare(String(a.txnDate)))
     .slice(0, 2);
 }

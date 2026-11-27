@@ -161,6 +161,8 @@ function preservedFinance(job: Job) {
     vendor_cost_categories: job.vendor_cost_categories,
     invoice_match_status: job.invoice_match_status,
     invoice_match_model: job.invoice_match_model,
+    invoice_match_reason: job.invoice_match_reason,
+    invoice_match_checked_at: job.invoice_match_checked_at,
   };
 }
 
@@ -168,13 +170,15 @@ function withFinanceDetails(job: Job, extra?: Record<string, unknown> | null): J
   if (!extra) return job;
   return {
     ...job,
-    pnl: extra.pnl as Job['pnl'],
-    vendor_cost_summary: extra.vendor_cost_summary as Job['vendor_cost_summary'],
-    vendor_cost_total: extra.vendor_cost_total as Job['vendor_cost_total'],
-    vendor_cost_count: extra.vendor_cost_count as Job['vendor_cost_count'],
-    vendor_cost_categories: extra.vendor_cost_categories as Job['vendor_cost_categories'],
-    invoice_match_status: typeof extra.invoice_match_status === 'string' ? extra.invoice_match_status : '',
-    invoice_match_model: typeof extra.invoice_match_model === 'string' ? extra.invoice_match_model : '',
+    pnl: (extra.pnl !== undefined ? extra.pnl : job.pnl) as Job['pnl'],
+    vendor_cost_summary: (extra.vendor_cost_summary !== undefined ? extra.vendor_cost_summary : job.vendor_cost_summary) as Job['vendor_cost_summary'],
+    vendor_cost_total: (extra.vendor_cost_total !== undefined ? extra.vendor_cost_total : job.vendor_cost_total) as Job['vendor_cost_total'],
+    vendor_cost_count: (extra.vendor_cost_count !== undefined ? extra.vendor_cost_count : job.vendor_cost_count) as Job['vendor_cost_count'],
+    vendor_cost_categories: (extra.vendor_cost_categories !== undefined ? extra.vendor_cost_categories : job.vendor_cost_categories) as Job['vendor_cost_categories'],
+    invoice_match_status: typeof extra.invoice_match_status === 'string' ? extra.invoice_match_status : job.invoice_match_status,
+    invoice_match_model: typeof extra.invoice_match_model === 'string' ? extra.invoice_match_model : job.invoice_match_model,
+    invoice_match_reason: typeof extra.invoice_match_reason === 'string' ? extra.invoice_match_reason : job.invoice_match_reason,
+    invoice_match_checked_at: typeof extra.invoice_match_checked_at === 'string' ? extra.invoice_match_checked_at : job.invoice_match_checked_at,
   };
 }
 
@@ -732,10 +736,22 @@ function JobLogisticsPanel({ job, onShipmentsChanged }: { job: Job; onShipmentsC
   );
 }
 
-function QuickBooksInvoicePanel({ job, invoicesLoaded }: { job: Job; invoicesLoaded: boolean }) {
+function QuickBooksInvoicePanel({
+  job,
+  invoicesLoaded,
+  searching,
+  onResearch,
+}: {
+  job: Job;
+  invoicesLoaded: boolean;
+  searching: boolean;
+  onResearch?: () => void;
+}) {
   const invoices = quickBooksInvoicesForJob(job);
   const matchStatus = String(job.invoice_match_status || '');
   const matchModel = String(job.invoice_match_model || '');
+  const matchReason = String(job.invoice_match_reason || '');
+  const isPending = !invoicesLoaded || searching || (matchStatus === 'pending' && !invoices.length);
 
   return (
     <div style={{
@@ -745,22 +761,56 @@ function QuickBooksInvoicePanel({ job, invoicesLoaded }: { job: Job; invoicesLoa
       marginBottom: '22px',
       padding: '14px',
     }}>
-      <div style={{ color: COLORS.blue, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', marginBottom: '10px', textTransform: 'uppercase' }}>
-        QuickBooks
+      <div style={{
+        alignItems: 'center',
+        display: 'flex',
+        gap: '8px',
+        justifyContent: 'space-between',
+        marginBottom: '10px',
+      }}>
+        <div style={{ color: COLORS.blue, fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          QuickBooks
+        </div>
+        {onResearch && (
+          <button
+            type="button"
+            disabled={searching}
+            onClick={onResearch}
+            style={{
+              background: COLORS.panel,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: '6px',
+              color: searching ? COLORS.faint : COLORS.muted,
+              cursor: searching ? 'wait' : 'pointer',
+              font: 'inherit',
+              fontSize: '11px',
+              fontWeight: 800,
+              padding: '4px 8px',
+            }}
+          >
+            {searching ? 'Searching...' : 'Re-search QBO'}
+          </button>
+        )}
       </div>
       <div style={{ display: 'grid', gap: '8px' }}>
         {!invoices.length && (
           <div style={{ color: COLORS.muted, fontSize: '13px', lineHeight: 1.4 }}>
-            {invoicesLoaded
-              ? (matchStatus === 'unavailable'
-                ? 'The invoice model could not run, so no invoice was linked.'
-                : `No QuickBooks invoice matched this job${matchModel ? ` (${matchModel})` : ''}.`)
-              : 'Looking up the QuickBooks invoice...'}
+            {isPending
+              ? 'AI agent is searching QuickBooks for this job...'
+              : (matchStatus === 'unavailable'
+                ? 'QuickBooks invoice agent could not run right now.'
+                : `No recent QuickBooks invoice matched this job${matchModel ? ` (${matchModel})` : ''}.`)}
+            {!isPending && matchReason && matchStatus === 'unmatched' ? (
+              <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>{matchReason}</div>
+            ) : null}
           </div>
         )}
         {invoices.map(invoice => {
           const href = quickBooksInvoiceUrl(invoice.id);
           const title = invoice.docNumber ? `Invoice ${invoice.docNumber}` : 'Invoice';
+          const paidLabel = invoice.totalAmt > 0
+            ? (invoice.balance <= 0.01 ? 'Paid' : `${formatMoney(invoice.balance)} due`)
+            : '';
           return (
             <a
               key={invoice.id}
@@ -781,9 +831,11 @@ function QuickBooksInvoicePanel({ job, invoicesLoaded }: { job: Job; invoicesLoa
               }}
             >
               <div style={{ minWidth: 0 }}>
-                <div style={{ color: COLORS.blue, fontSize: '14px', fontWeight: 850 }}>{title}</div>
+                <div style={{ color: COLORS.blue, fontSize: '14px', fontWeight: 850 }}>
+                  {title}{invoice.txnDate ? ` · ${invoice.txnDate}` : ''}
+                </div>
                 <div style={{ color: COLORS.muted, fontSize: '12px', marginTop: '4px' }}>
-                  {[invoice.customerName, invoice.totalAmt ? formatMoney(invoice.totalAmt) : ''].filter(Boolean).join(' · ') || 'Open in QuickBooks'}
+                  {[invoice.customerName, invoice.totalAmt ? formatMoney(invoice.totalAmt) : '', paidLabel].filter(Boolean).join(' · ') || 'Open in QuickBooks'}
                 </div>
                 {invoice.matchReason ? (
                   <div style={{ color: COLORS.faint, fontSize: '11px', marginTop: '4px' }}>{invoice.matchReason}</div>
@@ -2318,6 +2370,8 @@ function JobDrawer({
   onRecordsPressedSave,
   onShipmentsChanged,
   invoicesLoaded = false,
+  invoiceSearching = false,
+  onResearchInvoice,
 }: {
   job: Job;
   onClose: () => void;
@@ -2328,6 +2382,8 @@ function JobDrawer({
   onRecordsPressedSave: (job: Job, recordsPressed: number | null) => Promise<void>;
   onShipmentsChanged?: () => Promise<void> | void;
   invoicesLoaded?: boolean;
+  invoiceSearching?: boolean;
+  onResearchInvoice?: () => void;
 }) {
   const jobStage = stationOf(job);
   const station: Station = jobStage === 'completed' ? 'shipping' : jobStage;
@@ -2528,7 +2584,12 @@ function JobDrawer({
           {savingRush ? 'Saving Rush...' : rushed ? 'Rush Order On' : 'Rush Order'}
         </button>
 
-        <QuickBooksInvoicePanel job={job} invoicesLoaded={invoicesLoaded} />
+        <QuickBooksInvoicePanel
+          job={job}
+          invoicesLoaded={invoicesLoaded}
+          searching={invoiceSearching}
+          onResearch={onResearchInvoice}
+        />
         <PvcCompoundPanel job={job} />
 
         {station === 'now_pressing' && quantityTotal > 0 && (
@@ -3689,6 +3750,30 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
   const logStampRef = useRef('');
   const financeLoadedRef = useRef(false);
   const [invoicesLoaded, setInvoicesLoaded] = useState(false);
+  const [agentState, setAgentState] = useState<{
+    totalJobs: number;
+    matched: number;
+    unmatched: number;
+    pending: number;
+    model: string;
+    lastRunAt: string;
+    lastError: string;
+  } | null>(null);
+  const [agentCrawling, setAgentCrawling] = useState(false);
+  const [searchingJobKey, setSearchingJobKey] = useState('');
+  const crawlActiveRef = useRef(false);
+  const priorityAttemptedRef = useRef(new Set<string>());
+  const unmountedRef = useRef(false);
+
+  const applyJobDetailsPatch = useCallback((rows: Array<Record<string, unknown>>) => {
+    if (!rows.length) return;
+    const byKey = new Map<string, Record<string, unknown>>(
+      rows.map(row => [String(row.detail_key || ''), row]),
+    );
+    const apply = (job: Job) => withFinanceDetails(job, byKey.get(jobKey(job)) || byKey.get(String(job.detail_key || '')));
+    setJobs(current => current.map(apply));
+    setSelectedJob(current => (current ? apply(current) : current));
+  }, []);
 
   const applyRemoteJobs = useCallback((nextJobs: Job[], startedAt: number) => {
     if (syncPausedRef.current || startedAt < localMutationAtRef.current) {
@@ -3775,24 +3860,135 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
     }
   }, [applyRemoteJobs, readOnly]);
 
+  const runBackgroundInvoiceCrawl = useCallback(async (options?: { forceQboRefresh?: boolean; forceAll?: boolean }) => {
+    if (readOnly || crawlActiveRef.current || unmountedRef.current) return;
+    crawlActiveRef.current = true;
+    setAgentCrawling(true);
+    let consecutiveErrors = 0;
+    let firstPass = true;
+
+    try {
+      for (let pass = 0; pass < 25; pass += 1) {
+        if (unmountedRef.current) break;
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible' && !firstPass) break;
+
+        const response = await fetch('/api/qbo/invoice-agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            limit: 6,
+            forceQboRefresh: firstPass && Boolean(options?.forceQboRefresh),
+            forceAll: firstPass && Boolean(options?.forceAll),
+          }),
+        });
+        firstPass = false;
+        const data = await response.json().catch(() => ({}));
+        if (data.state) setAgentState(data.state);
+        if (Array.isArray(data.updatedJobs) && data.updatedJobs.length) {
+          applyJobDetailsPatch(data.updatedJobs);
+        }
+
+        if (!response.ok || !data.ok) {
+          consecutiveErrors += 1;
+          if (consecutiveErrors >= 2) break;
+        } else {
+          consecutiveErrors = 0;
+        }
+
+        const remaining = Number(data.remaining ?? data.state?.pending ?? 0);
+        if (remaining <= 0 || Number(data.processed ?? 0) === 0) break;
+
+        await new Promise(resolve => window.setTimeout(resolve, 600));
+      }
+    } catch {
+      // Background crawl retries automatically on the periodic check.
+    } finally {
+      crawlActiveRef.current = false;
+      if (!unmountedRef.current) setAgentCrawling(false);
+    }
+  }, [applyJobDetailsPatch, readOnly]);
+
+  const researchInvoiceForJob = useCallback(async (job: Job, options?: { force?: boolean }) => {
+    if (readOnly) return;
+    const key = jobKey(job);
+    if (!key) return;
+    setSearchingJobKey(key);
+    try {
+      const response = await fetch('/api/qbo/invoice-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobKey: key,
+          force: Boolean(options?.force),
+          forceQboRefresh: Boolean(options?.force),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (data.state) setAgentState(data.state);
+      if (Array.isArray(data.updatedJobs) && data.updatedJobs.length) {
+        applyJobDetailsPatch(data.updatedJobs);
+      } else if (!response.ok || !data.ok) {
+        applyJobDetailsPatch([{
+          detail_key: key,
+          invoice_match_status: 'unavailable',
+          invoice_match_reason: String(data.error || 'Could not reach QuickBooks invoice agent'),
+        }]);
+      }
+    } catch {
+      // Keep existing state if request fails.
+    } finally {
+      if (!unmountedRef.current) {
+        setSearchingJobKey(current => (current === key ? '' : current));
+      }
+    }
+  }, [applyJobDetailsPatch, readOnly]);
+
   const refreshJobDetails = useCallback(async () => {
     try {
       const response = await fetch('/api/norp-jobs?details=1', { cache: 'no-store' });
       const data = await response.json();
-      if (!Array.isArray(data.jobs)) return;
-      const byKey = new Map(
-        data.jobs.map((row: Record<string, unknown>) => [String(row.detail_key || ''), row]),
-      );
-      const apply = (job: Job) => withFinanceDetails(job, byKey.get(jobKey(job)) || byKey.get(String(job.detail_key || '')));
-      setJobs(current => current.map(apply));
-      setSelectedJob(current => (current ? apply(current) : current));
+      if (data.invoice_agent) setAgentState(data.invoice_agent);
+      if (Array.isArray(data.jobs)) {
+        applyJobDetailsPatch(data.jobs as Array<Record<string, unknown>>);
+      }
+      const pending = Number(data.invoice_agent?.pending ?? 0);
+      if (!readOnly && pending > 0) {
+        void runBackgroundInvoiceCrawl();
+      }
     } catch {
       // Finance details are optional. The board still shows production flow.
     } finally {
       financeLoadedRef.current = true;
       setInvoicesLoaded(true);
     }
+  }, [applyJobDetailsPatch, readOnly, runBackgroundInvoiceCrawl]);
+
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+    };
   }, []);
+
+  useEffect(() => {
+    if (readOnly) return undefined;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void runBackgroundInvoiceCrawl({ forceQboRefresh: true });
+      }
+    }, 10 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [readOnly, runBackgroundInvoiceCrawl]);
+
+  useEffect(() => {
+    if (readOnly || !selectedJob || !invoicesLoaded) return;
+    const key = jobKey(selectedJob);
+    if (!key) return;
+    if (String(selectedJob.invoice_match_status || '') === 'pending' && !priorityAttemptedRef.current.has(key)) {
+      priorityAttemptedRef.current.add(key);
+      void researchInvoiceForJob(selectedJob, { force: false });
+    }
+  }, [invoicesLoaded, readOnly, researchInvoiceForJob, selectedJob]);
 
   refreshJobsRef.current = refreshJobs;
   refreshJobDetailsRef.current = refreshJobDetails;
@@ -4181,6 +4377,29 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
           <div style={{ color: COLORS.muted, fontSize: '12px', textAlign: isMobile ? 'left' : 'right' }}>
             {loading ? 'Loading Airtable...' : `${activeJobs.length} active jobs`}
             {source && <div style={{ marginTop: '4px' }}>Source: {source === 'airtable' ? 'Airtable' : 'Sheet fallback'}</div>}
+            {!readOnly && (agentState || agentCrawling) && (
+              <div style={{ marginTop: '4px' }}>
+                <button
+                  type="button"
+                  disabled={agentCrawling}
+                  onClick={() => void runBackgroundInvoiceCrawl({ forceQboRefresh: true })}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: agentCrawling ? COLORS.blue : COLORS.muted,
+                    cursor: agentCrawling ? 'wait' : 'pointer',
+                    font: 'inherit',
+                    fontSize: '11px',
+                    padding: 0,
+                    textDecoration: agentCrawling ? 'none' : 'underline',
+                  }}
+                >
+                  {agentCrawling
+                    ? `QBO Agent: crawling${agentState?.pending ? ` (${agentState.pending} left)` : '...'}`
+                    : `QBO Agent: ${agentState?.matched ?? 0}/${agentState?.totalJobs ?? activeJobs.length} linked · Sync`}
+                </button>
+              </div>
+            )}
           </div>
           {!readOnly && !isMobile && (
             <div style={{
@@ -4394,6 +4613,8 @@ export default function DashboardClient({ jobs: initialJobs, readOnly = false }:
           key={jobKey(selectedJob)}
           job={selectedJob}
           invoicesLoaded={invoicesLoaded}
+          invoiceSearching={searchingJobKey === jobKey(selectedJob)}
+          onResearchInvoice={() => void researchInvoiceForJob(selectedJob, { force: true })}
           onClose={() => setSelectedJob(null)}
           onDashNotesSave={saveDashNotes}
           onRushToggle={toggleRushOrder}

@@ -334,64 +334,277 @@ export async function createDraftBill(params: CreateBillParams): Promise<CreateB
   }
 }
 
+export type QboInvoiceLine = {
+  description: string;
+  itemName: string;
+  qty: number;
+  unitPrice: number;
+  amount: number;
+};
+
+export type QboCustomField = {
+  name: string;
+  value: string;
+};
+
+export type QboLinkedTxn = {
+  txnId: string;
+  txnType: string;
+};
+
+export type QboCustomer = {
+  id: string;
+  displayName: string;
+  companyName: string;
+  givenName: string;
+  familyName: string;
+  email: string;
+  notes: string;
+  parentId: string;
+};
+
+export type QboEstimate = {
+  id: string;
+  docNumber: string;
+  customerId: string;
+  customerName: string;
+  totalAmt: number;
+  txnDate: string;
+  txnStatus: string;
+  memo: string;
+  lines: QboInvoiceLine[];
+  linkedTxnIds: QboLinkedTxn[];
+  searchText: string;
+};
+
 export type QboInvoice = {
   id: string;
   docNumber: string;
+  customerId: string;
   customerName: string;
+  customerCompany: string;
+  customerEmail: string;
+  customerNotes: string;
   totalAmt: number;
   balance: number;
   amountPaid: number;
   txnDate: string;
   dueDate: string;
   memo: string;
+  privateNote: string;
+  billEmail: string;
+  shipTo: string;
+  customFields: QboCustomField[];
+  lines: QboInvoiceLine[];
+  linkedTxnIds: QboLinkedTxn[];
   searchText: string;
 };
 
-function invoiceSearchText(inv: Record<string, any>) {
-  const customFields = Array.isArray(inv.CustomField)
-    ? inv.CustomField.map((field: any) => `${field?.Name || ''} ${field?.StringValue || ''}`).join(' ')
-    : '';
-  const lines = Array.isArray(inv.Line)
-    ? inv.Line.map((line: any) => `${line?.Description || ''} ${line?.SalesItemLineDetail?.ItemRef?.name || ''}`).join(' ')
-    : '';
+function formatQboAddress(addr: Record<string, any> | undefined): string {
+  if (!addr || typeof addr !== 'object') return '';
+  return [addr.Line1, addr.Line2, addr.Line3, addr.City, addr.CountrySubDivisionCode]
+    .map(part => String(part || '').trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
+function mapQboLines(rawLines: unknown): QboInvoiceLine[] {
+  if (!Array.isArray(rawLines)) return [];
+  const out: QboInvoiceLine[] = [];
+  for (const line of rawLines) {
+    if (!line || typeof line !== 'object') continue;
+    const detail = (line as Record<string, any>).SalesItemLineDetail;
+    const description = String((line as Record<string, any>).Description || '').trim();
+    const itemName = String(detail?.ItemRef?.name || '').trim();
+    const qty = Number(detail?.Qty ?? 0) || 0;
+    const unitPrice = Number(detail?.UnitPrice ?? 0) || 0;
+    const amount = Number((line as Record<string, any>).Amount ?? 0) || 0;
+    if (!description && !itemName && !amount) continue;
+    out.push({ description, itemName, qty, unitPrice, amount });
+  }
+  return out;
+}
+
+function mapQboCustomFields(rawFields: unknown): QboCustomField[] {
+  if (!Array.isArray(rawFields)) return [];
+  return rawFields
+    .map((field: any) => ({
+      name: String(field?.Name || '').trim(),
+      value: String(field?.StringValue || '').trim(),
+    }))
+    .filter(field => field.value);
+}
+
+function mapQboLinkedTxns(rawTxns: unknown): QboLinkedTxn[] {
+  if (!Array.isArray(rawTxns)) return [];
+  return rawTxns
+    .map((txn: any) => ({
+      txnId: String(txn?.TxnId || '').trim(),
+      txnType: String(txn?.TxnType || '').trim(),
+    }))
+    .filter(txn => txn.txnId);
+}
+
+function buildInvoiceSearchText(inv: Omit<QboInvoice, 'searchText'>) {
+  const customFields = inv.customFields.map(field => `${field.name} ${field.value}`).join(' ');
+  const lines = inv.lines
+    .map(line => [line.itemName, line.description, line.qty ? `qty ${line.qty}` : ''].filter(Boolean).join(' '))
+    .join(' ');
   return [
-    inv.DocNumber,
-    inv.CustomerRef?.name,
-    inv.PrivateNote,
-    inv.CustomerMemo?.value,
+    inv.docNumber,
+    inv.customerName,
+    inv.customerCompany,
+    inv.customerEmail,
+    inv.customerNotes,
+    inv.billEmail,
+    inv.shipTo,
+    inv.privateNote,
+    inv.memo,
     customFields,
     lines,
   ].filter(Boolean).join(' ');
 }
 
-function mapQboInvoice(inv: Record<string, any>): QboInvoice {
+function mapQboInvoice(inv: Record<string, any>, customerById?: Map<string, QboCustomer>): QboInvoice {
   const totalAmt = parseFloat(inv.TotalAmt ?? '0') || 0;
   const balance = parseFloat(inv.Balance ?? '0') || 0;
-  return {
+  const customerId = String(inv.CustomerRef?.value || '').trim();
+  const customer = customerId ? customerById?.get(customerId) : undefined;
+  const base: Omit<QboInvoice, 'searchText'> = {
     id: String(inv.Id || ''),
     docNumber: String(inv.DocNumber || ''),
-    customerName: String(inv.CustomerRef?.name || ''),
+    customerId,
+    customerName: String(inv.CustomerRef?.name || customer?.displayName || ''),
+    customerCompany: customer?.companyName || '',
+    customerEmail: customer?.email || '',
+    customerNotes: customer?.notes || '',
     totalAmt,
     balance,
     amountPaid: totalAmt - balance,
     txnDate: String(inv.TxnDate || ''),
     dueDate: String(inv.DueDate || ''),
-    memo: String(inv.PrivateNote || inv.CustomerMemo?.value || ''),
-    searchText: invoiceSearchText(inv),
+    memo: String(inv.CustomerMemo?.value || inv.PrivateNote || ''),
+    privateNote: String(inv.PrivateNote || ''),
+    billEmail: String(inv.BillEmail?.Address || ''),
+    shipTo: formatQboAddress(inv.ShipAddr) || formatQboAddress(inv.BillAddr),
+    customFields: mapQboCustomFields(inv.CustomField),
+    lines: mapQboLines(inv.Line),
+    linkedTxnIds: mapQboLinkedTxns(inv.LinkedTxn),
+  };
+  return {
+    ...base,
+    searchText: buildInvoiceSearchText(base),
+  };
+}
+
+function mapQboCustomer(raw: Record<string, any>): QboCustomer {
+  return {
+    id: String(raw.Id || ''),
+    displayName: String(raw.DisplayName || '').trim(),
+    companyName: String(raw.CompanyName || '').trim(),
+    givenName: String(raw.GivenName || '').trim(),
+    familyName: String(raw.FamilyName || '').trim(),
+    email: String(raw.PrimaryEmailAddr?.Address || '').trim(),
+    notes: String(raw.Notes || '').trim(),
+    parentId: String(raw.ParentRef?.value || '').trim(),
+  };
+}
+
+function mapQboEstimate(raw: Record<string, any>): QboEstimate {
+  const lines = mapQboLines(raw.Line);
+  const memo = String(raw.PrivateNote || raw.CustomerMemo?.value || '').trim();
+  const customerName = String(raw.CustomerRef?.name || '').trim();
+  const docNumber = String(raw.DocNumber || '').trim();
+  const searchText = [
+    docNumber,
+    customerName,
+    memo,
+    ...lines.map(line => `${line.itemName} ${line.description} ${line.qty ? `qty ${line.qty}` : ''}`),
+  ].filter(Boolean).join(' ');
+  return {
+    id: String(raw.Id || ''),
+    docNumber,
+    customerId: String(raw.CustomerRef?.value || '').trim(),
+    customerName,
+    totalAmt: parseFloat(raw.TotalAmt ?? '0') || 0,
+    txnDate: String(raw.TxnDate || ''),
+    txnStatus: String(raw.TxnStatus || ''),
+    memo,
+    lines,
+    linkedTxnIds: mapQboLinkedTxns(raw.LinkedTxn),
+    searchText,
   };
 }
 
 let invoiceCache: { at: number; invoices: QboInvoice[] } | null = null;
+let customerCache: { at: number; customers: QboCustomer[] } | null = null;
+let estimateCache: { at: number; estimates: QboEstimate[] } | null = null;
 const INVOICE_CACHE_MS = 5 * 60 * 1000;
+const CUSTOMER_CACHE_MS = 10 * 60 * 1000;
+const ESTIMATE_CACHE_MS = 10 * 60 * 1000;
 
-async function queryQboInvoices(sql: string): Promise<Record<string, any>[]> {
+async function queryQboEntity(entity: 'Invoice' | 'Customer' | 'Estimate', sql: string): Promise<Record<string, any>[]> {
   const query = encodeURIComponent(sql);
   const data = await qboFetch(`query?query=${query}&minorversion=65`, { timeoutMs: 20000 });
   if (data?.Fault) {
     const message = data.Fault?.Error?.[0]?.Message || data.Fault?.Error?.[0]?.Detail || 'QuickBooks query failed';
     throw new Error(message);
   }
-  return data?.QueryResponse?.Invoice ?? [];
+  return data?.QueryResponse?.[entity] ?? [];
+}
+
+export async function listQboCustomers(options?: { force?: boolean }): Promise<QboCustomer[]> {
+  if (!process.env.QBO_CLIENT_ID || !process.env.QBO_REFRESH_TOKEN) return [];
+  if (!options?.force && customerCache && Date.now() - customerCache.at < CUSTOMER_CACHE_MS) {
+    return customerCache.customers;
+  }
+
+  try {
+    const byId = new Map<string, QboCustomer>();
+    const add = (rows: Record<string, any>[]) => {
+      for (const row of rows) {
+        const mapped = mapQboCustomer(row);
+        if (mapped.id) byId.set(mapped.id, mapped);
+      }
+    };
+    const page1 = await queryQboEntity('Customer', 'SELECT * FROM Customer MAXRESULTS 1000');
+    add(page1);
+    if (page1.length >= 1000) {
+      try {
+        add(await queryQboEntity('Customer', 'SELECT * FROM Customer STARTPOSITION 1001 MAXRESULTS 1000'));
+      } catch (error) {
+        console.error('[qbo] customer page 2 failed:', error);
+      }
+    }
+    const customers = [...byId.values()];
+    customerCache = { at: Date.now(), customers };
+    return customers;
+  } catch (error) {
+    console.error('[qbo] customer list failed:', error);
+    return customerCache?.customers || [];
+  }
+}
+
+export async function listQboEstimates(options?: { force?: boolean }): Promise<QboEstimate[]> {
+  if (!process.env.QBO_CLIENT_ID || !process.env.QBO_REFRESH_TOKEN) return [];
+  if (!options?.force && estimateCache && Date.now() - estimateCache.at < ESTIMATE_CACHE_MS) {
+    return estimateCache.estimates;
+  }
+
+  try {
+    let rows: Record<string, any>[] = [];
+    try {
+      rows = await queryQboEntity('Estimate', 'SELECT * FROM Estimate ORDERBY TxnDate DESC MAXRESULTS 500');
+    } catch {
+      rows = await queryQboEntity('Estimate', 'SELECT * FROM Estimate MAXRESULTS 500');
+    }
+    const estimates = rows.map(mapQboEstimate).filter(estimate => estimate.id);
+    estimateCache = { at: Date.now(), estimates };
+    return estimates;
+  } catch (error) {
+    console.error('[qbo] estimate list failed:', error);
+    return estimateCache?.estimates || [];
+  }
 }
 
 export async function listQboInvoices(options?: { force?: boolean }): Promise<QboInvoice[]> {
@@ -401,30 +614,32 @@ export async function listQboInvoices(options?: { force?: boolean }): Promise<Qb
   }
 
   try {
+    const customers = await listQboCustomers({ force: options?.force }).catch(() => [] as QboCustomer[]);
+    const customerById = new Map(customers.map(customer => [customer.id, customer]));
     const byId = new Map<string, QboInvoice>();
     const add = (rows: Record<string, any>[]) => {
       for (const inv of rows) {
-        const mapped = mapQboInvoice(inv);
+        const mapped = mapQboInvoice(inv, customerById);
         if (mapped.id) byId.set(mapped.id, mapped);
       }
     };
 
     try {
-      add(await queryQboInvoices('SELECT * FROM Invoice ORDERBY TxnDate DESC MAXRESULTS 1000'));
+      add(await queryQboEntity('Invoice', 'SELECT * FROM Invoice ORDERBY TxnDate DESC MAXRESULTS 1000'));
     } catch (error) {
       console.error('[qbo] ordered invoice list failed, falling back:', error);
-      add(await queryQboInvoices('SELECT * FROM Invoice MAXRESULTS 1000'));
+      add(await queryQboEntity('Invoice', 'SELECT * FROM Invoice MAXRESULTS 1000'));
     }
 
     try {
-      add(await queryQboInvoices("SELECT * FROM Invoice WHERE Balance > '0' MAXRESULTS 1000"));
+      add(await queryQboEntity('Invoice', "SELECT * FROM Invoice WHERE Balance > '0' MAXRESULTS 1000"));
     } catch (error) {
       console.error('[qbo] open invoice list failed:', error);
     }
 
     if (byId.size >= 1000) {
       try {
-        add(await queryQboInvoices('SELECT * FROM Invoice ORDERBY TxnDate DESC STARTPOSITION 1001 MAXRESULTS 1000'));
+        add(await queryQboEntity('Invoice', 'SELECT * FROM Invoice ORDERBY TxnDate DESC STARTPOSITION 1001 MAXRESULTS 1000'));
       } catch (error) {
         console.error('[qbo] invoice page 2 failed:', error);
       }
