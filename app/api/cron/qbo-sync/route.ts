@@ -4,7 +4,6 @@ import { runInvoiceAgentCrawlPass } from '@/lib/qbo-invoice-crawler';
 import { findRow, updateRow, appendRow } from '@/lib/sheets';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
 
 async function cacheValue(key: string, value: string) {
   const existing = await findRow('qbo_cache', 'key', key);
@@ -35,7 +34,7 @@ export async function GET(req: NextRequest) {
       cacheValue('mtd_revenue', String(mtd)),
     ]);
 
-    const invoiceCrawl = await runInvoiceAgentCrawlPass({ limit: 8, forceQboRefresh: true })
+    const invoiceCrawl = await runInvoiceAgentCrawlPass({ limit: 4, forceQboRefresh: true })
       .catch(error => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
 
     return NextResponse.json({ ok: true, updated: new Date().toISOString(), invoice_crawl: invoiceCrawl });

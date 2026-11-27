@@ -18,23 +18,6 @@ import {
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const STAGE_RANK: Record<string, number> = {
-  pre_production: 1,
-  press_queue: 2,
-  now_pressing: 3,
-  quality_control: 4,
-  sleeving: 5,
-  assembly: 6,
-  shipping: 7,
-  completed: 8,
-};
-
-const SOURCE_RANK: Record<string, number> = {
-  airtable_dashboard_stage: 4,
-  production_logs: 3,
-  airtable_fields: 2,
-};
-
 type DashboardShipment = {
   id: string;
   tracking_number: string;
