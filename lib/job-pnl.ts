@@ -400,6 +400,16 @@ function scoreInvoiceForJob(profile: JobMatchProfile, invoice: QboInvoiceLike): 
   return { score, reason: reasons.join(' · ') };
 }
 
+/** Clues that actually appear in text. Used to check a model's quoted evidence. */
+export function cluesInText(job: JobLike, text: string) {
+  const profile = jobMatchProfile(job);
+  return {
+    matrix: profile.matrixValues.some(value => matrixAppears(text, value)),
+    artist: Boolean(profile.artistCore) && clueAppears(text, profile.artistCore),
+    album: Boolean(profile.titleCore) && clueAppears(text, profile.titleCore),
+  };
+}
+
 export function quickBooksInvoiceUrl(invoiceId: string) {
   const id = String(invoiceId || '').trim();
   if (!id) return '';
