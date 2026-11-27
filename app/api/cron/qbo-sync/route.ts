@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       cacheValue('mtd_revenue', String(mtd)),
     ]);
 
-    const invoiceCrawl = await runInvoiceAgentCrawlPass({ limit: 4, forceQboRefresh: true })
+    const invoiceCrawl = await runInvoiceAgentCrawlPass({ limit: 250, forceQboRefresh: true })
       .catch(error => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
 
     return NextResponse.json({ ok: true, updated: new Date().toISOString(), invoice_crawl: invoiceCrawl });

@@ -1,4 +1,5 @@
 import { runInvoiceAgentBatch, verifyAgentSubmissions } from '../lib/qbo-invoice-agent';
+import { resolveInvoicesWithQboGraph } from '../lib/qbo-invoice-resolver';
 import {
   buildJobDossier,
   executeQboTool,
@@ -403,22 +404,178 @@ async function main() {
   );
   const persistedMap = new Map<string, PersistedJobInvoiceLink>(persistedList.map(item => [item.jobKey, item]));
 
-  // Nothing new in QBO -> 0 pending!
+  // Nothing new on the board -> 0 pending (even if QBO date moves forward; only new jobs or manual resync run!)
   const steady = selectJobsForAgentCrawl([dillonJob, paradiseJob, scottJob], persistedMap, '2026-11-23', { now: NOW });
-  assert(steady.totalPending === 0, 'already-crawled jobs are skipped when QBO has no newer invoices');
+  assert(steady.totalPending === 0, 'already-crawled jobs are skipped when no new jobs are loaded');
 
-  // New invoice arrives in QBO -> unmatched Scott job automatically queues for re-crawl, matched jobs stay cached!
-  const newInvDay = selectJobsForAgentCrawl([dillonJob, paradiseJob, scottJob], persistedMap, '2026-11-27', { now: NOW });
-  assert(newInvDay.totalPending === 1 && newInvDay.batch[0].detail_key === 'recScott', 'new QBO invoice automatically re-queues unmatched jobs while keeping matched jobs cached');
+  const stillSteady = selectJobsForAgentCrawl([dillonJob, paradiseJob, scottJob], persistedMap, '2026-11-27', { now: NOW });
+  assert(stillSteady.totalPending === 0, 'existing checked jobs stay cached without re-running until manual resync or job change');
 
-  // Brand-new job on the board jumps to priority 1!
+  // Brand-new job loaded into the production board queues immediately!
   const brandNewJob = { detail_key: 'recNew', customer: 'New Band - Debut', matrix: 'NEW-01' };
-  const withNew = selectJobsForAgentCrawl([scottJob, brandNewJob], persistedMap, '2026-11-27', { now: NOW, limit: 1 });
-  assert(withNew.batch[0].detail_key === 'recNew', 'never-crawled new job gets top priority');
+  const withNew = selectJobsForAgentCrawl([scottJob, brandNewJob], persistedMap, '2026-11-27', { now: NOW });
+  assert(withNew.totalPending === 1 && withNew.batch[0].detail_key === 'recNew', 'newly loaded production board job is queued immediately');
+
+  // Card signature update (e.g., matrix TBC -> real matrix) also triggers automatic check
+  const scottUpdated = { ...scottJob, matrix: 'SS-2026' };
+  const withSigChange = selectJobsForAgentCrawl([dillonJob, scottUpdated], persistedMap, '2026-11-27', { now: NOW });
+  assert(withSigChange.totalPending === 1 && withSigChange.batch[0].detail_key === 'recScott', 'job whose matrix changed from TBC to a real code re-queues automatically');
 
   // Force single-job re-search works even on an already-matched job
   const forcedSingle = selectJobsForAgentCrawl([dillonJob, scottJob], persistedMap, '2026-11-23', { now: NOW, jobKey: 'recDillon', force: true });
   assert(forcedSingle.batch.length === 1 && forcedSingle.batch[0].detail_key === 'recDillon', 'forced single-job re-search targets that exact card');
+
+  // 5. Test zero-credit QBO Graph Resolver end-to-end (no LLM API keys or credits required!)
+  const califiaJob = { detail_key: 'recCalifia', customer: 'Califia Farms', matrix: 'TBC', quantity: 500, stage: 'pre_production' };
+  const heatherJob = { detail_key: 'recHeather', customer: 'Heather Littlefield - Wildflowers **2 VARIANTS**', matrix: 'HL-005', quantity: 250, stage: 'pre_production' };
+  const kenny1Job = { detail_key: 'recKenny1', customer: 'Kenny Sasaki & The Tiki Boys — Tiki Moon (Madison Mead)', matrix: 'AWR-019', quantity: 500, stage: 'pre_production' };
+  const kenny2Job = { detail_key: 'recKenny2', customer: 'Kenny Sasaki & The Tiki Boys — Music for Tiki Bars (Madison Mead)', matrix: 'AWR-020', quantity: 500, stage: 'pre_production' };
+  const oxfordJob = { detail_key: 'recOxford', customer: 'Oxford American NO Music', matrix: 'OA-003 (OA135)', quantity: 4000, stage: 'now_pressing' };
+  const boJob = { detail_key: 'recBo', customer: 'Bo Dollis - My Name Is Bo - REPRESS', matrix: 'BD-02', quantity: 500, stage: 'pre_production' };
+
+  const graphCustomers: QboCustomer[] = [
+    ...customers,
+    { id: 'cust-califia', displayName: 'Califia Farms', companyName: 'Califia Farms LLC', givenName: '', familyName: '', email: 'orders@califiafarms.com', notes: '', parentId: '' },
+    { id: 'cust-heather', displayName: 'Heather Littlefield', companyName: '', givenName: 'Heather', familyName: 'Littlefield', email: 'heather@example.com', notes: '', parentId: '' },
+    { id: 'cust-madison', displayName: 'Madison Mead', companyName: 'Aloha Wax Records', givenName: 'Madison', familyName: 'Mead', email: 'madison@alohawax.com', notes: '', parentId: '' },
+  ];
+
+  const graphInvoices: QboInvoice[] = [
+    ...invoices,
+    {
+      id: 'inv-califia',
+      docNumber: '3801',
+      customerId: 'cust-califia',
+      customerName: 'Califia Farms',
+      customerCompany: 'Califia Farms LLC',
+      customerEmail: 'orders@califiafarms.com',
+      customerNotes: '',
+      totalAmt: 4200,
+      balance: 2100,
+      amountPaid: 2100,
+      txnDate: '2026-10-20',
+      dueDate: '2026-11-20',
+      memo: '12" Vinyl Pressing 500 pcs',
+      privateNote: '',
+      billEmail: 'orders@califiafarms.com',
+      shipTo: '',
+      customFields: [],
+      lines: [{ description: '12" Custom Vinyl Pressing', itemName: 'Vinyl Pressing', qty: 500, unitPrice: 8.4, amount: 4200 }],
+      linkedTxnIds: [],
+      searchText: '3801 Califia Farms 12" Custom Vinyl Pressing qty 500',
+    },
+    {
+      id: 'inv-heather',
+      docNumber: '3802',
+      customerId: 'cust-heather',
+      customerName: 'Heather Littlefield',
+      customerCompany: '',
+      customerEmail: 'heather@example.com',
+      customerNotes: '',
+      totalAmt: 2650,
+      balance: 0,
+      amountPaid: 2650,
+      txnDate: '2026-10-12',
+      dueDate: '2026-10-27',
+      memo: '50% pressing deposit',
+      privateNote: '',
+      billEmail: 'heather@example.com',
+      shipTo: '',
+      customFields: [],
+      lines: [{ description: '12" Vinyl Pressing - 2 variants', itemName: 'Vinyl Pressing', qty: 250, unitPrice: 10.6, amount: 2650 }],
+      linkedTxnIds: [],
+      searchText: '3802 Heather Littlefield 12" Vinyl Pressing qty 250',
+    },
+    {
+      id: 'inv-kenny-moon',
+      docNumber: '3803',
+      customerId: 'cust-madison',
+      customerName: 'Madison Mead',
+      customerCompany: 'Aloha Wax Records',
+      customerEmail: 'madison@alohawax.com',
+      customerNotes: '',
+      totalAmt: 3100,
+      balance: 0,
+      amountPaid: 3100,
+      txnDate: '2026-10-01',
+      dueDate: '2026-10-16',
+      memo: 'Tiki Moon pressing',
+      privateNote: '',
+      billEmail: 'madison@alohawax.com',
+      shipTo: '',
+      customFields: [],
+      lines: [{ description: 'Kenny Sasaki Tiki Moon 500 LP', itemName: '12" LP Pressing', qty: 500, unitPrice: 6.2, amount: 3100 }],
+      linkedTxnIds: [],
+      searchText: '3803 Madison Mead Aloha Wax Records Kenny Sasaki Tiki Moon',
+    },
+    {
+      id: 'inv-oxford',
+      docNumber: '3804',
+      customerId: 'cust-oxford',
+      customerName: 'Oxford American',
+      customerCompany: 'Oxford American',
+      customerEmail: '',
+      customerNotes: '',
+      totalAmt: 14000,
+      balance: 7000,
+      amountPaid: 7000,
+      txnDate: '2026-09-18',
+      dueDate: '2026-10-18',
+      memo: 'Issue OA135 pressing',
+      privateNote: '',
+      billEmail: '',
+      shipTo: '',
+      customFields: [],
+      lines: [{ description: 'OA135 Vinyl Pressing', itemName: 'Vinyl Pressing', qty: 4000, unitPrice: 3.5, amount: 14000 }],
+      linkedTxnIds: [],
+      searchText: '3804 Oxford American OA135 Vinyl Pressing',
+    },
+    {
+      id: 'inv-bo',
+      docNumber: '3805',
+      customerId: 'cust-bo',
+      customerName: 'Wild Magnolias Music',
+      customerCompany: '',
+      customerEmail: '',
+      customerNotes: '',
+      totalAmt: 3400,
+      balance: 0,
+      amountPaid: 3400,
+      txnDate: '2026-09-10',
+      dueDate: '2026-09-25',
+      memo: 'Matrix BD-02 repress',
+      privateNote: '',
+      billEmail: '',
+      shipTo: '',
+      customFields: [],
+      lines: [{ description: 'BD-02 12" vinyl repress', itemName: 'Vinyl Pressing', qty: 500, unitPrice: 6.8, amount: 3400 }],
+      linkedTxnIds: [],
+      searchText: '3805 Wild Magnolias Music BD-02 12" vinyl repress',
+    },
+  ];
+
+  const allGraphJobs = [
+    dillonJob, paradiseJob, dawnBlackJob, dawnGoldJob, scottJob,
+    califiaJob, heatherJob, kenny1Job, kenny2Job, oxfordJob, boJob,
+  ];
+  const graphResult = resolveInvoicesWithQboGraph(
+    allGraphJobs,
+    allGraphJobs,
+    { invoices: graphInvoices, customers: graphCustomers, estimates, now: NOW },
+  );
+  assert(graphResult.ok && graphResult.provider === 'local-qbo-graph', 'zero-credit QBO graph resolver runs cleanly with zero API keys');
+  const gByKey = new Map(graphResult.verdicts.map(v => [v.jobKey, v]));
+
+  assert(gByKey.get('recDillon')?.invoices.length === 1 && gByKey.get('recDillon')?.invoices[0].docNumber === '3535', 'graph resolver links Mike Dillon to May 2026 #3535 and skips 2023 #2579');
+  assert(gByKey.get('recParadise')?.invoices[0]?.docNumber === '3705', 'graph resolver links Paradise Radio via Brennan Courtney + Estimate EST-900');
+  assert(gByKey.get('recDawnBlack')?.invoices.length === 2, 'graph resolver links both deposit and balance invoices for Dawn Richard Black Heart');
+  assert(gByKey.get('recDawnGold')?.invoices.length === 1 && gByKey.get('recDawnGold')?.invoices[0].docNumber === '3614', 'graph resolver isolates Dawn Richard Goldenheart invoice');
+  assert(gByKey.get('recScott')?.status === 'unmatched', 'graph resolver rejects $250 misc shipping fee for Scott Satterwhite');
+  assert(gByKey.get('recCalifia')?.invoices[0]?.docNumber === '3801', 'graph resolver links single-entity pressing job Califia Farms');
+  assert(gByKey.get('recHeather')?.invoices[0]?.docNumber === '3802', 'graph resolver links Heather Littlefield via unique artist + pressing qty 250');
+  assert(gByKey.get('recKenny1')?.invoices[0]?.docNumber === '3803' && gByKey.get('recKenny2')?.status === 'unmatched', 'graph resolver assigns Tiki Moon to Kenny1 and does not leak it to Music for Tiki Bars');
+  assert(gByKey.get('recOxford')?.invoices[0]?.docNumber === '3804', 'graph resolver matches parenthetical secondary matrix OA135 from OA-003 (OA135)');
+  assert(gByKey.get('recBo')?.invoices[0]?.docNumber === '3805', 'graph resolver matches 4-character alphanumeric matrix BD-02');
 
   if (process.exitCode) process.exit(process.exitCode);
   console.log('qbo invoice agent tests passed');

@@ -4,15 +4,30 @@ const QBO_BASE = 'https://quickbooks.api.intuit.com/v3/company';
 const QBO_REALM_ID = () => (process.env.QBO_REALM_ID ?? '').trim();
 const TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
 
+let memoryAccessToken: { token: string; expiry: number } | null = null;
+let inFlightTokenPromise: Promise<string> | null = null;
+
 async function getCachedToken(): Promise<string> {
-  const cached = await findRow('qbo_cache', 'key', 'qbo_access_token');
-  if (cached) {
-    const expiry = parseInt(cached.row['updated_at'] ?? '0');
-    if (Date.now() < expiry - 60_000) {
-      return cached.row['value'];
-    }
+  if (memoryAccessToken && Date.now() < memoryAccessToken.expiry - 60_000) {
+    return memoryAccessToken.token;
   }
-  return refreshQBOToken();
+  if (inFlightTokenPromise) return inFlightTokenPromise;
+
+  inFlightTokenPromise = (async () => {
+    const cached = await findRow('qbo_cache', 'key', 'qbo_access_token');
+    if (cached) {
+      const expiry = parseInt(cached.row['updated_at'] ?? '0');
+      if (Date.now() < expiry - 60_000 && cached.row['value']) {
+        memoryAccessToken = { token: cached.row['value'], expiry };
+        return cached.row['value'];
+      }
+    }
+    return refreshQBOToken();
+  })().finally(() => {
+    inFlightTokenPromise = null;
+  });
+
+  return inFlightTokenPromise;
 }
 
 async function getStoredRefreshToken(): Promise<string | null> {
@@ -91,6 +106,7 @@ export async function refreshQBOToken(): Promise<string> {
   };
 
   await saveToken('qbo_access_token', data.access_token!, String(expiry));
+  memoryAccessToken = { token: data.access_token!, expiry };
 
   // Critical: persist new refresh token so next refresh uses it
   if (data.refresh_token) {
@@ -539,6 +555,7 @@ function mapQboEstimate(raw: Record<string, any>): QboEstimate {
 let invoiceCache: { at: number; invoices: QboInvoice[] } | null = null;
 let customerCache: { at: number; customers: QboCustomer[] } | null = null;
 let estimateCache: { at: number; estimates: QboEstimate[] } | null = null;
+let inFlightCustomersPromise: Promise<QboCustomer[]> | null = null;
 const INVOICE_CACHE_MS = 5 * 60 * 1000;
 const CUSTOMER_CACHE_MS = 10 * 60 * 1000;
 const ESTIMATE_CACHE_MS = 10 * 60 * 1000;
@@ -558,31 +575,41 @@ export async function listQboCustomers(options?: { force?: boolean }): Promise<Q
   if (!options?.force && customerCache && Date.now() - customerCache.at < CUSTOMER_CACHE_MS) {
     return customerCache.customers;
   }
-
-  try {
-    const byId = new Map<string, QboCustomer>();
-    const add = (rows: Record<string, any>[]) => {
-      for (const row of rows) {
-        const mapped = mapQboCustomer(row);
-        if (mapped.id) byId.set(mapped.id, mapped);
-      }
-    };
-    const page1 = await queryQboEntity('Customer', 'SELECT * FROM Customer MAXRESULTS 1000');
-    add(page1);
-    if (page1.length >= 1000) {
-      try {
-        add(await queryQboEntity('Customer', 'SELECT * FROM Customer STARTPOSITION 1001 MAXRESULTS 1000'));
-      } catch (error) {
-        console.error('[qbo] customer page 2 failed:', error);
-      }
-    }
-    const customers = [...byId.values()];
-    customerCache = { at: Date.now(), customers };
-    return customers;
-  } catch (error) {
-    console.error('[qbo] customer list failed:', error);
-    return customerCache?.customers || [];
+  if (!options?.force && inFlightCustomersPromise) {
+    return inFlightCustomersPromise;
   }
+
+  const run = (async () => {
+    try {
+      const byId = new Map<string, QboCustomer>();
+      const add = (rows: Record<string, any>[]) => {
+        for (const row of rows) {
+          const mapped = mapQboCustomer(row);
+          if (mapped.id) byId.set(mapped.id, mapped);
+        }
+      };
+      const page1 = await queryQboEntity('Customer', 'SELECT * FROM Customer MAXRESULTS 1000');
+      add(page1);
+      if (page1.length >= 1000) {
+        try {
+          add(await queryQboEntity('Customer', 'SELECT * FROM Customer STARTPOSITION 1001 MAXRESULTS 1000'));
+        } catch (error) {
+          console.error('[qbo] customer page 2 failed:', error);
+        }
+      }
+      const customers = [...byId.values()];
+      customerCache = { at: Date.now(), customers };
+      return customers;
+    } catch (error) {
+      console.error('[qbo] customer list failed:', error);
+      return customerCache?.customers || [];
+    }
+  })().finally(() => {
+    if (inFlightCustomersPromise === run) inFlightCustomersPromise = null;
+  });
+
+  inFlightCustomersPromise = run;
+  return run;
 }
 
 export async function listQboEstimates(options?: { force?: boolean }): Promise<QboEstimate[]> {

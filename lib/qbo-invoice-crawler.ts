@@ -2,6 +2,7 @@ import { buildJobPnl } from './job-pnl';
 import { loadCoreBoardJobs, jobDetailKey } from './production-board-jobs';
 import { listQboCustomers, listQboEstimates, listQboInvoices } from './qbo';
 import { runInvoiceAgentBatch, type CustomAgentRunner } from './qbo-invoice-agent';
+import { resolveInvoicesWithQboGraph } from './qbo-invoice-resolver';
 import {
   latestQboTxnDate,
   loadInvoiceAgentState,
@@ -99,15 +100,19 @@ export async function getInvoiceAgentStatus(): Promise<InvoiceAgentState> {
 
 export async function runInvoiceAgentCrawlPass(options: CrawlPassOptions = {}): Promise<CrawlPassResponse> {
   const now = options.now ?? new Date();
-  const limit = Math.min(10, Math.max(1, options.limit ?? 6));
+  const limit = Math.min(300, Math.max(1, options.limit ?? 250));
 
-  const [loadedJobs, invoices, customers, estimates, persisted, savedState] = await Promise.all([
+  // Fetch board jobs, persisted links, and QBO customers first (so invoices reuse cached customers)
+  const [loadedJobs, customers, persisted, savedState] = await Promise.all([
     options.jobs ? Promise.resolve(options.jobs) : loadCoreBoardJobs().then(res => res.jobs),
-    listQboInvoices({ force: options.forceQboRefresh }),
     listQboCustomers({ force: options.forceQboRefresh }),
-    listQboEstimates({ force: options.forceQboRefresh }),
     loadPersistedInvoiceLinks({ force: true }),
     loadInvoiceAgentState(),
+  ]);
+
+  const [invoices, estimates] = await Promise.all([
+    listQboInvoices({ force: options.forceQboRefresh }),
+    listQboEstimates({ force: options.forceQboRefresh }),
   ]);
 
   const qboLatestTxn = latestQboTxnDate(invoices);
@@ -164,11 +169,30 @@ export async function runInvoiceAgentCrawlPass(options: CrawlPassOptions = {}): 
     };
   }
 
-  const ran = await runInvoiceAgentBatch(
-    batch,
-    { invoices, customers, estimates, now },
-    { customRunner: options.customRunner },
-  );
+  // Preserve invoice claims already held by other persisted jobs when running an incremental/single-job pass
+  const batchKeys = new Set(batch.map(job => jobDetailKey(job)));
+  const preClaimedInvoiceIds = new Set<string>();
+  if (!options.forceAll) {
+    for (const [key, link] of persisted.entries()) {
+      if (batchKeys.has(key)) continue;
+      if (link.status === 'matched') {
+        for (const id of link.invoiceIds) preClaimedInvoiceIds.add(id);
+      }
+    }
+  }
+
+  const ran = options.customRunner
+    ? await runInvoiceAgentBatch(
+        batch,
+        { invoices, customers, estimates, now },
+        { customRunner: options.customRunner },
+      )
+    : resolveInvoicesWithQboGraph(
+        batch,
+        loadedJobs,
+        { invoices, customers, estimates, now },
+        { preClaimedInvoiceIds },
+      );
 
   if (!ran.ok) {
     const state = summarizeCoverage(loadedJobs, persisted, qboLatestTxn, {
